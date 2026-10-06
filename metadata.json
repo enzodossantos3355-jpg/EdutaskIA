@@ -1,0 +1,6 @@
+{
+  "name": "Edutask - Gestão de Tarefas Escolares",
+  "description": "Plataforma escolar completa com perfis estilo Netflix, gamificação, entrega de tarefas, gabaritos com inteligência artificial e painel administrativo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

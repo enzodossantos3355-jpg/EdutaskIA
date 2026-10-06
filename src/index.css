@@ -1,0 +1,285 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 0 0% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 4%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 4%;
+    --input: 0 0% 89%;
+    --ring: 199 89% 60%;
+    --radius: 0.75rem;
+  }
+}
+
+html,
+body {
+  margin: 0;
+  background: #fafafa;
+  color: #0a0a0a;
+  font-family: "DM Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-heading {
+  font-family: "Outfit", system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.font-body {
+  font-family: "DM Sans", system-ui, sans-serif;
+}
+
+/* Neo-brutalist primitives */
+.nb-card {
+  background: #fff;
+  border: 2px solid #0a0a0a;
+  border-radius: 0.875rem;
+  box-shadow: 4px 4px 0 0 #0a0a0a;
+  transition:
+    transform 0.15s ease-out,
+    box-shadow 0.15s ease-out;
+}
+
+.nb-card-hover:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 0 #0a0a0a;
+}
+
+.nb-btn {
+  border: 2px solid #0a0a0a;
+  border-radius: 0.625rem;
+  box-shadow: 3px 3px 0 0 #0a0a0a;
+  font-weight: 700;
+  transition:
+    transform 0.12s ease-out,
+    box-shadow 0.12s ease-out;
+}
+
+.nb-btn:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 0 #0a0a0a;
+}
+
+.nb-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.nb-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: 2px 2px 0 0 #0a0a0a;
+}
+
+.nb-input {
+  background: #fff;
+  border: 2px solid #0a0a0a;
+  border-radius: 0.625rem;
+  padding: 0.75rem 1rem;
+  width: 100%;
+  color: #0a0a0a;
+  transition: box-shadow 0.15s ease-out;
+}
+
+.nb-input:focus {
+  outline: none;
+  box-shadow: 3px 3px 0 0 #0a0a0a;
+}
+
+.nb-badge {
+  border: 2px solid #0a0a0a;
+  border-radius: 999px;
+  padding: 0.15rem 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+}
+
+/* Animation: list stagger */
+@keyframes nb-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nb-fade-in {
+  animation: nb-fade-in 0.35s ease-out both;
+}
+
+/* Profile Effects (avatar wrappers) */
+.fx-avatar-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  isolation: isolate;
+}
+
+.fx-avatar-wrapper > * {
+  position: relative;
+  z-index: 2;
+  border-radius: 50% !important;
+}
+
+/* Neon Pulse — soft blue pulsing halo */
+@keyframes fx-neon-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.6), 0 0 20px 4px rgba(59,130,246,0.35); }
+  50%      { box-shadow: 0 0 0 8px rgba(59,130,246,0.0), 0 0 30px 10px rgba(59,130,246,0.55); }
+}
+.fx-neon-pulse { animation: fx-neon-pulse 2s ease-in-out infinite; }
+
+/* Sunset — orange/pink gradient border */
+.fx-sunset {
+  padding: 3px;
+  background: conic-gradient(from 0deg, #f97316, #ec4899, #f59e0b, #f97316);
+  animation: fx-spin 6s linear infinite;
+}
+.fx-sunset > * { background: white; border-radius: 50%; }
+
+@keyframes fx-spin { to { transform: rotate(360deg); } }
+
+/* Golden — spinning gold with glow */
+.fx-golden {
+  padding: 4px;
+  background: conic-gradient(from 0deg, #fde68a, #f59e0b, #b45309, #fde68a);
+  box-shadow: 0 0 22px rgba(245,158,11,0.55);
+  animation: fx-spin 4s linear infinite;
+}
+.fx-golden > * { background: white; border-radius: 50%; }
+
+/* Rainbow — animated 7-color border */
+.fx-rainbow {
+  padding: 3px;
+  background: conic-gradient(from 0deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444);
+  animation: fx-spin 3s linear infinite;
+}
+.fx-rainbow > * { background: white; border-radius: 50%; }
+
+/* Ice — cyan frost with sparkling shadow */
+@keyframes fx-ice {
+  0%, 100% { box-shadow: 0 0 0 2px #67e8f9, 0 0 20px 4px rgba(103,232,249,0.6), inset 0 0 16px rgba(219,234,254,0.7); }
+  50%      { box-shadow: 0 0 0 3px #a5f3fc, 0 0 26px 8px rgba(103,232,249,0.85), inset 0 0 20px rgba(219,234,254,0.9); }
+}
+.fx-ice {
+  background: linear-gradient(135deg, #cffafe 0%, #e0f2fe 100%);
+  border-radius: 50%;
+  padding: 2px;
+  animation: fx-ice 2.2s ease-in-out infinite;
+}
+.fx-ice > * { background: white; border-radius: 50%; }
+
+/* Fire — red/orange dancing flame */
+@keyframes fx-fire {
+  0%   { box-shadow: 0 -2px 12px 3px #f97316, 0 -4px 20px 5px rgba(239,68,68,0.7); }
+  50%  { box-shadow: 0 -4px 18px 6px #f59e0b, 0 -8px 26px 8px rgba(220,38,38,0.85); }
+  100% { box-shadow: 0 -2px 12px 3px #ef4444, 0 -4px 22px 6px rgba(249,115,22,0.7); }
+}
+.fx-fire {
+  padding: 3px;
+  background: conic-gradient(from 180deg, #dc2626, #f59e0b, #dc2626);
+  border-radius: 50%;
+  animation: fx-fire 0.9s ease-in-out infinite;
+}
+.fx-fire > * { background: white; border-radius: 50%; }
+
+/* Hologram — iridescent cyberpunk */
+@keyframes fx-hologram-hue { to { filter: hue-rotate(360deg); } }
+.fx-hologram {
+  padding: 3px;
+  background: conic-gradient(from 45deg, #a855f7, #06b6d4, #22d3ee, #a855f7, #ec4899, #a855f7);
+  box-shadow: 0 0 24px 4px rgba(168,85,247,0.7);
+  animation: fx-spin 5s linear infinite, fx-hologram-hue 8s linear infinite;
+}
+.fx-hologram > * { background: white; border-radius: 50%; }
+
+/* Galaxy — deep purple with rotating nebula */
+.fx-galaxy {
+  padding: 4px;
+  background: conic-gradient(from 0deg, #1e1b4b, #7c3aed, #2563eb, #1e1b4b);
+  box-shadow: 0 0 26px 5px rgba(124,58,237,0.7), 0 0 60px 12px rgba(37,99,235,0.3);
+  animation: fx-spin 8s linear infinite;
+}
+.fx-galaxy > * { background: white; border-radius: 50%; }
+
+/* Electric — yellow crackling lightning */
+@keyframes fx-electric {
+  0%, 100% { box-shadow: 0 0 0 2px #fde047, 0 0 18px 4px rgba(253,224,71,0.85); }
+  25%      { box-shadow: -3px -2px 0 2px #facc15, 4px 3px 20px 6px rgba(250,204,21,0.9); }
+  50%      { box-shadow: 3px -3px 0 2px #facc15, -4px 3px 22px 6px rgba(253,224,71,0.9); }
+  75%      { box-shadow: -2px 3px 0 2px #facc15, 3px -3px 20px 6px rgba(250,204,21,0.9); }
+}
+.fx-electric {
+  padding: 2px;
+  background: #fef3c7;
+  border-radius: 50%;
+  animation: fx-electric 0.35s steps(4) infinite;
+}
+.fx-electric > * { background: white; border-radius: 50%; }
+
+/* Shadow — deep pulsing dark aura */
+@keyframes fx-shadow {
+  0%, 100% { box-shadow: 0 0 0 2px #111, 0 0 22px 4px rgba(0,0,0,0.7); }
+  50%      { box-shadow: 0 0 0 3px #1f2937, 0 0 30px 8px rgba(0,0,0,0.85); }
+}
+.fx-shadow { animation: fx-shadow 2s ease-in-out infinite; border-radius: 50%; }
+
+/* Phoenix — red/orange flame renaissance */
+@keyframes fx-phoenix {
+  0% { box-shadow: 0 0 0 3px #b91c1c, 0 0 30px 6px rgba(239,68,68,0.8), 0 -10px 30px 8px rgba(249,115,22,0.7); transform: scale(1); }
+  50% { box-shadow: 0 0 0 4px #dc2626, 0 0 40px 10px rgba(239,68,68,0.95), 0 -14px 40px 12px rgba(249,115,22,0.9); transform: scale(1.03); }
+  100% { box-shadow: 0 0 0 3px #b91c1c, 0 0 30px 6px rgba(239,68,68,0.8), 0 -10px 30px 8px rgba(249,115,22,0.7); transform: scale(1); }
+}
+.fx-phoenix {
+  padding: 3px;
+  background: conic-gradient(from 90deg, #dc2626, #f59e0b, #eab308, #f59e0b, #dc2626);
+  border-radius: 50%;
+  animation: fx-phoenix 1.6s ease-in-out infinite, fx-spin 5s linear infinite;
+}
+.fx-phoenix > * { background: white; border-radius: 50%; }
+
+/* Diamond — bright white/cyan sparkle */
+@keyframes fx-diamond {
+  0%, 100% { box-shadow: 0 0 0 3px #cbd5e1, 0 0 28px 6px rgba(191,219,254,0.8); }
+  50%      { box-shadow: 0 0 0 4px #f8fafc, 0 0 38px 10px rgba(224,242,254,1); }
+}
+.fx-diamond {
+  padding: 3px;
+  background: conic-gradient(from 0deg, #f8fafc, #bae6fd, #f0f9ff, #f8fafc, #e0f2fe, #f8fafc);
+  animation: fx-diamond 1.8s ease-in-out infinite, fx-spin 6s linear infinite;
+}
+.fx-diamond > * { background: white; border-radius: 50%; }

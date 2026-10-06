@@ -1,0 +1,276 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { ArrowLeft, ShieldCheck, User, Wrench, Lock, BookOpen, Pencil } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import api, { formatApiError } from "@/lib/api";
+import { firebaseService } from "@/lib/firebaseService";
+import Logo from "@/components/Logo";
+import Avatar from "@/components/Avatar";
+import { effectClass } from "@/lib/effects";
+
+const STATUS_META = {
+  active: { label: null, icon: null, bg: null, dim: false },
+  maintenance: { label: "Manutenção", icon: Wrench, bg: "bg-orange-300", dim: true },
+  blocked: { label: "Bloqueado", icon: Lock, bg: "bg-neutral-400", dim: true },
+};
+
+export default function LoginPage() {
+  const navigate = useNavigate();
+  const { login, user } = useAuth();
+  const [profiles, setProfiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      navigate(user.role === "admin" ? "/admin" : "/aluno", { replace: true });
+    }
+  }, [user, navigate]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data } = await api.get("/auth/profiles");
+        if (data && data.length > 0) {
+          setProfiles(data);
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.warn("API load profiles fallback to Firestore:", e?.message);
+      }
+
+      // Fallback: Read directly from Firestore
+      try {
+        const users = await firebaseService.getAllUsers();
+        if (users && users.length > 0) {
+          const mapped = users.map((u) => ({
+            id: u.id,
+            name: u.name,
+            role: u.role,
+            status: u.status || "active",
+            has_avatar: Boolean(u.avatar_data),
+            points: u.points || 0,
+            equipped_effect: u.equipped_effect || "none",
+          }));
+          setProfiles(mapped);
+          setLoading(false);
+          return;
+        }
+      } catch (e2) {
+        console.warn("Firestore profiles load fallback:", e2);
+      }
+
+      // Default Admin Profile fallback
+      setProfiles([
+        {
+          id: "admin-user-001",
+          name: "Administrador",
+          role: "admin",
+          status: "active",
+          has_avatar: false,
+          points: 0,
+          equipped_effect: "none",
+        }
+      ]);
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (!selected) return;
+    setSubmitting(true);
+    try {
+      const u = await login({ user_id: selected.id, password });
+      toast.success(`Bem-vindo, ${u.name}!`);
+      navigate(u.role === "admin" ? "/admin" : "/aluno", { replace: true });
+    } catch (err) {
+      const msg = formatApiError(err?.response?.data?.detail) || "Senha incorreta";
+      toast.error(msg);
+      setPassword("");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleProfileClick = (p) => {
+    if (p.status === "maintenance") {
+      toast.warning("Este perfil está em manutenção. Fale com o administrador.");
+      return;
+    }
+    if (p.status === "blocked") {
+      toast.error("Este perfil está bloqueado. Fale com o administrador.");
+      return;
+    }
+    setSelected(p);
+    setPassword("");
+  };
+
+  return (
+    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-[#FAFAFA]" data-testid="login-page">
+      {/* Left brand panel */}
+      <div className="hidden lg:flex lg:w-[45%] xl:w-[42%] relative border-r-2 border-black overflow-hidden bg-amber-100">
+        <img
+          src="https://images.pexels.com/photos/28503354/pexels-photo-28503354.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1200&w=900"
+          alt="Material escolar"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-tr from-amber-200/40 via-transparent to-sky-200/30" />
+        <div className="relative z-10 p-10 flex flex-col justify-between w-full">
+          <div className="flex items-center gap-3">
+            <Logo size={48} />
+            <span className="font-heading font-black text-3xl tracking-tight text-white drop-shadow-[2px_2px_0_rgba(0,0,0,0.9)]">
+              Edu<span className="text-sky-300">task</span>
+            </span>
+          </div>
+          <div className="space-y-4">
+            <div className="inline-block nb-card bg-amber-300 px-4 py-2">
+              <span className="font-heading font-bold tracking-wide text-sm">Tarefas de Casa Escolares</span>
+            </div>
+            <h1 className="font-heading font-black text-5xl xl:text-6xl leading-[1.05] text-black drop-shadow-[2px_2px_0_rgba(255,255,255,0.6)]">
+              A lição de hoje, organizada para amanhã
+            </h1>
+          </div>
+          <div className="flex gap-3">
+            <div className="nb-card bg-white px-3 py-2 flex items-center gap-2 text-sm font-bold">
+              <BookOpen className="w-4 h-4" /> Matérias
+            </div>
+            <div className="nb-card bg-white px-3 py-2 flex items-center gap-2 text-sm font-bold">
+              <Pencil className="w-4 h-4" /> Anexos
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right side */}
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-10">
+        <div className="w-full max-w-2xl">
+          <div className="flex items-center gap-3 mb-6 lg:hidden">
+            <Logo size={40} />
+            <span className="font-heading font-black text-2xl tracking-tight">
+              <span className="text-black dark:text-white">Edu</span><span className="text-sky-500">task</span>
+            </span>
+          </div>
+
+          {!selected ? (
+            <div className="nb-fade-in">
+              <h2 className="font-heading font-black text-3xl sm:text-4xl mb-2">Quem está usando?</h2>
+              <p className="text-neutral-600 mb-6 sm:mb-8">Escolha seu perfil para continuar.</p>
+              {loading ? (
+                <p className="text-neutral-500">Carregando perfis...</p>
+              ) : profiles.length === 0 ? (
+                <div className="nb-card bg-white p-8 text-center">
+                  <p className="font-bold mb-1">Nenhum perfil cadastrado</p>
+                  <p className="text-sm text-neutral-600">Aguarde o administrador criar seu perfil.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4" data-testid="profiles-grid">
+                  {profiles.map((p, i) => {
+                    const meta = STATUS_META[p.status] || STATUS_META.active;
+                    const StatusIcon = meta.icon;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => handleProfileClick(p)}
+                        className={`nb-card nb-card-hover p-4 bg-white text-center group nb-fade-in relative ${meta.dim ? "opacity-60" : ""}`}
+                        style={{ animationDelay: `${i * 50}ms` }}
+                        data-testid={`profile-${p.id}`}
+                      >
+                        <div className="mx-auto mb-3 inline-block">
+                          <Avatar
+                            userId={p.id}
+                            name={p.name}
+                            size={72}
+                            hasAvatar={p.has_avatar}
+                            bg={p.role === "admin" ? "bg-red-300" : "bg-sky-300"}
+                            className={meta.dim ? "grayscale" : ""}
+                            effect={!meta.dim ? effectClass(p.equipped_effect) : null}
+                          />
+                        </div>
+                        <div className="font-heading font-bold text-base leading-tight truncate">{p.name}</div>
+                        {meta.label ? (
+                          <span className={`nb-badge mt-2 inline-flex items-center gap-1 ${meta.bg}`} data-testid={`profile-status-${p.id}`}>
+                            {StatusIcon && <StatusIcon className="w-3 h-3" strokeWidth={2.5} />}
+                            {meta.label}
+                          </span>
+                        ) : (
+                          <span className={`nb-badge mt-2 inline-flex items-center gap-1 ${p.role === "admin" ? "bg-red-200" : "bg-sky-200"}`}>
+                            {p.role === "admin" ? <ShieldCheck className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                            {p.role === "admin" ? "Admin" : "Aluno"}
+                          </span>
+                        )}
+                        {StatusIcon && (
+                          <div className={`absolute -top-2 -right-2 w-9 h-9 nb-card flex items-center justify-center ${meta.bg}`}>
+                            <StatusIcon className="w-4 h-4" strokeWidth={3} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="max-w-md mx-auto nb-card p-6 sm:p-8 lg:p-10 bg-white nb-fade-in" data-testid="password-step">
+              <button
+                onClick={() => { setSelected(null); setPassword(""); }}
+                className="nb-btn bg-white px-3 py-1.5 text-sm flex items-center gap-1 mb-6"
+                data-testid="back-to-profiles"
+              >
+                <ArrowLeft className="w-4 h-4" /> Trocar perfil
+              </button>
+
+              <div className="text-center mb-6">
+                <div className="mx-auto inline-block mb-4">
+                  <Avatar
+                    userId={selected.id}
+                    name={selected.name}
+                    size={96}
+                    hasAvatar={selected.has_avatar}
+                    bg={selected.role === "admin" ? "bg-red-300" : "bg-sky-300"}
+                    effect={effectClass(selected.equipped_effect)}
+                  />
+                </div>
+                <h2 className="font-heading font-black text-2xl mb-1">Olá, {selected.name}!</h2>
+                <span className={`nb-badge inline-flex items-center gap-1 ${selected.role === "admin" ? "bg-red-200" : "bg-sky-200"}`}>
+                  {selected.role === "admin" ? <ShieldCheck className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                  {selected.role === "admin" ? "Admin" : "Aluno"}
+                </span>
+              </div>
+
+              <form onSubmit={onSubmit} className="space-y-5" data-testid="login-form">
+                <div>
+                  <label className="block text-sm font-bold mb-2">Senha</label>
+                  <input
+                    type="password"
+                    required
+                    autoFocus
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="nb-input"
+                    placeholder="••••••••"
+                    data-testid="login-password-input"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="nb-btn w-full bg-sky-400 hover:bg-sky-300 text-black px-6 py-3 text-base"
+                  data-testid="login-submit-button"
+                >
+                  {submitting ? "Entrando..." : "Entrar"}
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role, points, and customization",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "aluno"] },
+        "status": { "type": "string", "enum": ["active", "maintenance", "blocked"] },
+        "points": { "type": "number" },
+        "streak_count": { "type": "number" },
+        "longest_streak": { "type": "number" },
+        "equipped_effect": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "email", "name", "role"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "School assignment task",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "subject": { "type": "string" },
+        "due_date": { "type": "string" },
+        "points": { "type": "number" },
+        "created_by": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "title", "description", "subject", "due_date", "points"]
+    },
+    "Completion": {
+      "title": "Completion",
+      "description": "Student task completion record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "task_id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "completed_at": { "type": "string" },
+        "on_time": { "type": "boolean" },
+        "points_awarded": { "type": "number" }
+      },
+      "required": ["task_id", "user_id", "completed_at", "on_time"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "School announcement or notice",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "created_by": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "title", "message", "created_by", "created_at"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile collection"
+    },
+    "/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "School tasks collection"
+    },
+    "/completions/{completionId}": {
+      "schema": { "$ref": "#/entities/Completion" },
+      "description": "Task completion collection"
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Announcements collection"
+    }
+  }
+}
