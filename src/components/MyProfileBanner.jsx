@@ -71,17 +71,13 @@ export default function MyProfileBanner({ bg = null, onOpenStore = null }) {
             <div className="w-full sm:w-auto">
               <button
                 onClick={onOpenStore}
-                className="nb-btn bg-amber-300 hover:bg-amber-400 active:bg-amber-500 text-neutral-950 px-3 py-2 text-xs sm:text-sm font-bold flex items-center justify-between sm:justify-start gap-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] min-h-[40px] w-full sm:w-auto touch-manipulation active:translate-y-0.5"
+                className="nb-btn bg-amber-300 hover:bg-amber-400 active:bg-amber-500 text-neutral-950 px-3.5 py-2 text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] min-h-[40px] w-full sm:w-auto touch-manipulation active:translate-y-0.5"
                 data-testid="profile-open-store-button"
                 title="Acessar a Loja de Molduras"
               >
-                <div className="flex items-center gap-2 min-w-0 truncate">
-                  <Palette className="w-4 h-4 text-amber-950 flex-shrink-0" />
-                  <span className="font-heading font-black truncate">Loja de Molduras</span>
-                </div>
-                <span className="nb-badge bg-white text-[11px] font-black px-2 py-0.5 border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] flex-shrink-0">
-                  {user.points || 0} pts
-                </span>
+                <Palette className="w-4 h-4 text-amber-950 flex-shrink-0" />
+                <span className="font-heading font-black">Loja de Molduras</span>
+                <span className="text-sm">🖼️</span>
               </button>
             </div>
           )}

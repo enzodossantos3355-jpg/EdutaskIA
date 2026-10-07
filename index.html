@@ -12,6 +12,57 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Outfit:wght@100..900&display=swap" rel="stylesheet">
+    <script>
+      (function() {
+        window.addEventListener('unhandledrejection', function(e) {
+          var r = e && e.reason;
+          var msg = (r && (r.message || r.stack || String(r))) || '';
+          if (msg.indexOf('WebSocket') !== -1 || msg.indexOf('@vite/client') !== -1) {
+            e.preventDefault();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+          }
+        }, true);
+
+        window.addEventListener('error', function(e) {
+          var msg = (e && (e.message || e.filename || '')) || '';
+          if (msg.indexOf('WebSocket') !== -1 || msg.indexOf('@vite/client') !== -1) {
+            e.preventDefault();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+          }
+        }, true);
+
+        var NativeWS = window.WebSocket;
+        if (NativeWS) {
+          function SafeWebSocket(url, protocols) {
+            var urlStr = String(url || '');
+            if (urlStr.indexOf('vite') !== -1 || urlStr.indexOf(window.location.host) !== -1 || urlStr.indexOf('ws:') === 0 || urlStr.indexOf('wss:') === 0) {
+              var target = new EventTarget();
+              target.readyState = 1;
+              target.url = urlStr;
+              target.protocol = '';
+              target.extensions = '';
+              target.bufferedAmount = 0;
+              target.binaryType = 'blob';
+              target.send = function() {};
+              target.close = function() {};
+              setTimeout(function() {
+                var ev = new Event('open');
+                target.dispatchEvent(ev);
+                if (typeof target.onopen === 'function') target.onopen(ev);
+              }, 15);
+              return target;
+            }
+            return new NativeWS(url, protocols);
+          }
+          SafeWebSocket.prototype = NativeWS.prototype;
+          SafeWebSocket.CONNECTING = 0;
+          SafeWebSocket.OPEN = 1;
+          SafeWebSocket.CLOSING = 2;
+          SafeWebSocket.CLOSED = 3;
+          window.WebSocket = SafeWebSocket;
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
