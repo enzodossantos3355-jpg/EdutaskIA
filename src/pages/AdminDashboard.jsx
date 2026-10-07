@@ -1794,7 +1794,7 @@ function StatsPanel() {
                   {stats.ai_monthly.leader.uncompleted_count === 0 ? "Zero pendências" : `${stats.ai_monthly.leader.uncompleted_count} pendência(s)`}
                 </span>
                 <span className="nb-badge bg-white text-violet-950 text-xs font-bold">
-                  🛍️ {stats.ai_monthly.leader.points} pts (p/ molduras)
+                  🛍️ {stats.ai_monthly.leader?.points || 0} pts (p/ molduras)
                 </span>
               </div>
             </div>
@@ -1845,7 +1845,7 @@ function StatsPanel() {
                         🎯 {s.on_time_completions || 0} no prazo
                       </span>
                       <span className="nb-badge bg-amber-100 text-amber-900 text-[10px] font-bold">
-                        🛍️ {s.points} pts
+                        🛍️ {s.points || 0} pts
                       </span>
                       {s.uncompleted_tasks != null && (
                         <span className="nb-badge bg-neutral-100 text-neutral-700 text-[10px] font-bold">
@@ -2066,7 +2066,7 @@ function PrizeEditor() {
                 <p className="text-xs text-neutral-600 mt-2">
                   Restam {data.days_remaining} dia{data.days_remaining === 1 ? "" : "s"}
                   {data.leader && (
-                    <span> • Liderando: <span className="font-bold">{data.leader.name}</span> ({data.leader.points} pts)</span>
+                    <span> • Liderando: <span className="font-bold">{data.leader.name}</span> ({data.leader?.points || 0} pts)</span>
                   )}
                 </p>
               </div>

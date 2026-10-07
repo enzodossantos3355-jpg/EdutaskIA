@@ -475,25 +475,40 @@ export default function WhatsAppDispatchDialog({
         </div>
 
         {/* Footer com Ações */}
-        <div className="flex items-center justify-end gap-3 pt-2 border-t-2 border-black">
-          <button
-            type="button"
-            onClick={onClose}
-            className="nb-btn bg-white hover:bg-neutral-100 px-5 py-2.5 font-bold"
-            disabled={sending}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t-2 border-black">
+          <a
+            href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+              `📚 *${item.subject ? `${item.subject} — ` : ""}${item.title}*\n📅 Entrega: ${formattedDueDate}\n\n📝 *Orientações:*\n${group2Caption || defaultCaption || "Verifique as instruções e anexos no Edutask."}\n\n👉 Acesse o Edutask para detalhes!`
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="nb-btn bg-sky-200 hover:bg-sky-300 text-sky-950 px-4 py-2.5 font-bold text-xs sm:text-sm flex items-center gap-1.5"
+            data-testid="open-direct-whatsapp-btn"
           >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={sending || !isConnected || (!sendG1 && !sendG2)}
-            className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 px-6 py-2.5 font-heading font-black flex items-center gap-2"
-            data-testid="confirm-whatsapp-dispatch-btn"
-          >
-            <Send className={`w-4 h-4 ${sending ? "animate-spin" : ""}`} />
-            {sending ? "Disparando..." : "Disparar no WhatsApp 🚀"}
-          </button>
+            <MessageSquare className="w-4 h-4 text-emerald-700" />
+            Abrir no WhatsApp Web / Celular 📲
+          </a>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="nb-btn bg-white hover:bg-neutral-100 px-4 py-2.5 font-bold text-xs sm:text-sm"
+              disabled={sending}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={sending || (!sendG1 && !sendG2)}
+              className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 px-5 py-2.5 font-heading font-black text-xs sm:text-sm flex items-center gap-2"
+              data-testid="confirm-whatsapp-dispatch-btn"
+            >
+              <Send className={`w-4 h-4 ${sending ? "animate-spin" : ""}`} />
+              {sending ? "Disparando..." : "Disparar via Bot 🚀"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

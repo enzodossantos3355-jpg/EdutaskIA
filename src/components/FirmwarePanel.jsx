@@ -19,6 +19,8 @@ import {
   Loader2,
   Check,
   Share2,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 
@@ -209,6 +211,8 @@ export default function FirmwarePanel() {
   const [sendingWhatsapp, setSendingWhatsapp] = useState(false);
   const [whatsappTarget, setWhatsappTarget] = useState("all");
   const [customCaption, setCustomCaption] = useState("");
+  const [cleanModalOpen, setCleanModalOpen] = useState(false);
+  const [cleaningTestData, setCleaningTestData] = useState(false);
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -218,6 +222,22 @@ export default function FirmwarePanel() {
       })
       .catch(() => {});
   }, []);
+
+  const handleCleanTestData = async () => {
+    setCleaningTestData(true);
+    try {
+      const { data } = await api.post("/admin/clean-test-data");
+      toast.success(data?.message || "Vestígios de testes removidos com sucesso!");
+      setCleanModalOpen(false);
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail) || "Erro ao limpar dados de teste");
+    } finally {
+      setCleaningTestData(false);
+    }
+  };
 
   const handleDownloadFirmwareImage = () => {
     setGeneratingImage(true);
@@ -435,6 +455,96 @@ export default function FirmwarePanel() {
           ))}
         </div>
       </div>
+
+      {/* Maintenance & Test Data Purge Section */}
+      <div className="nb-card p-5 bg-rose-50 border-2 border-rose-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3.5">
+          <div className="w-11 h-11 nb-card bg-rose-200 flex items-center justify-center flex-shrink-0 text-xl font-black">
+            <Trash2 className="w-5 h-5 text-rose-900" />
+          </div>
+          <div>
+            <h3 className="font-heading font-black text-base sm:text-lg text-rose-950">
+              Limpeza de Vestígios & Dados de Teste
+            </h3>
+            <p className="text-xs sm:text-sm text-rose-900/80 mt-0.5">
+              Remove perfis de teste, tarefas simuladas, registros e redefine o prêmio do mês para que não interfiram no uso real do sistema.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => setCleanModalOpen(true)}
+          className="nb-btn bg-rose-500 hover:bg-rose-600 text-white font-black px-4 py-2 text-xs sm:text-sm flex items-center gap-2 flex-shrink-0"
+          data-testid="open-clean-test-data-btn"
+        >
+          <Trash2 className="w-4 h-4" />
+          <span>Limpar Vestígios de Teste</span>
+        </button>
+      </div>
+
+      {/* Modal: Confirm Clean Test Data */}
+      {cleanModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5" data-testid="clean-test-data-modal">
+          <div className="nb-card bg-white w-full max-w-md p-5 sm:p-6 border-3 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] space-y-4">
+            <div className="flex items-start justify-between gap-3 border-b border-black/10 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 nb-card bg-rose-100 flex items-center justify-center text-rose-700 flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-black text-lg text-neutral-900">
+                    Limpar Dados de Teste
+                  </h3>
+                  <p className="text-xs text-neutral-600">
+                    Ação administrativa de purga
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCleanModalOpen(false)}
+                className="nb-btn bg-white hover:bg-neutral-100 px-2 py-1"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs sm:text-sm text-neutral-800 leading-relaxed">
+              Tem certeza que deseja apagar todos os alunos de teste, tarefas, entregas simuladas e redefinir o prêmio do mês? 
+              <br /><br />
+              <strong>A conta de Administrador e as matérias padrão serão preservadas intactas.</strong>
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setCleanModalOpen(false)}
+                className="nb-btn bg-white px-4 py-2 text-xs sm:text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleCleanTestData}
+                disabled={cleaningTestData}
+                className="nb-btn bg-rose-500 hover:bg-rose-600 text-white font-black px-4 py-2 text-xs sm:text-sm flex items-center gap-2"
+                data-testid="confirm-clean-test-data-btn"
+              >
+                {cleaningTestData ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Limpando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Confirmar e Limpar Tudo</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Mandar no Zap a Foto do Firmware */}
       {whatsappModalOpen && (

@@ -38,6 +38,14 @@ export interface WhatsAppServiceStatus {
   enabled: boolean;
   lastError: string | null;
   lastConnectedAt: string | null;
+  hasSavedAuth?: boolean;
+  isWindowActive?: boolean;
+  activeUntil?: string | null;
+  activatedAt?: string | null;
+  remainingSeconds?: number | null;
+  remainingMinutes?: number | null;
+  activeDurationMinutes?: number | null;
+  activeReason?: string | null;
 }
 
 export interface TaskNotificationPayload {
@@ -98,6 +106,9 @@ class WhatsAppService {
   private isInitializing: boolean = false;
   private reconnectTimeout: any = null;
   private keepAliveInterval: any = null;
+  private activeUntil: number | null = null;
+  private activatedAt: number | null = null;
+  private activeReason: string | null = null;
 
   constructor() {
     if (!fs.existsSync(AUTH_DIR)) {
@@ -105,11 +116,19 @@ class WhatsAppService {
     }
   }
 
+  public hasSavedAuth(): boolean {
+    try {
+      const credsPath = path.resolve(AUTH_DIR, 'creds.json');
+      return fs.existsSync(credsPath);
+    } catch {
+      return false;
+    }
+  }
+
   public initAutoConnect() {
     if (process.env.VERCEL) return;
     try {
-      const credsPath = path.resolve(AUTH_DIR, 'creds.json');
-      if (fs.existsSync(credsPath)) {
+      if (this.hasSavedAuth()) {
         console.log('[WhatsApp] Credenciais encontradas em disco. Iniciando conexão persistente...');
         this.connect().catch((err) => {
           console.warn('[WhatsApp] Falha ao auto-reconectar no início:', err);
@@ -148,7 +167,74 @@ class WhatsAppService {
     if (config.enabled !== undefined) this.enabled = Boolean(config.enabled);
   }
 
+  public isWindowExpired(): boolean {
+    if (!this.activeUntil) return false;
+    return Date.now() >= this.activeUntil;
+  }
+
+  public async activateForDuration(durationMinutes: number = 20, reason: string = 'manual'): Promise<WhatsAppServiceStatus> {
+    // Garante que o tempo mínimo ativo seja de pelo menos 20 minutos conforme requisito
+    const validMinutes = Math.max(20, durationMinutes || 20);
+    const now = Date.now();
+    this.activatedAt = now;
+    this.activeUntil = now + validMinutes * 60 * 1000;
+    this.activeReason = reason;
+
+    console.log(`[WhatsApp] Ativado com janela de ${validMinutes} minutos (até ${new Date(this.activeUntil).toLocaleTimeString('pt-BR')}) - Motivo: ${reason}`);
+
+    if (this.status !== 'connected') {
+      await this.connect();
+    }
+    return this.getStatus();
+  }
+
+  public extendActiveDuration(addMinutes: number = 20): WhatsAppServiceStatus {
+    const validAdd = Math.max(5, addMinutes || 20);
+    const now = Date.now();
+    const currentBase = (this.activeUntil && this.activeUntil > now) ? this.activeUntil : now;
+    this.activeUntil = currentBase + validAdd * 60 * 1000;
+    if (!this.activatedAt) this.activatedAt = now;
+
+    console.log(`[WhatsApp] Janela ativa estendida em +${validAdd} minutos (nova validade: ${new Date(this.activeUntil).toLocaleTimeString('pt-BR')})`);
+    return this.getStatus();
+  }
+
+  public async pauseSocketKeepAuth(): Promise<WhatsAppServiceStatus> {
+    console.log('[WhatsApp] Pausando conexão Baileys e preservando credenciais salvas em disco...');
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    if (this.keepAliveInterval) {
+      clearInterval(this.keepAliveInterval);
+      this.keepAliveInterval = null;
+    }
+    try {
+      if (this.sock) {
+        try {
+          this.sock.end(undefined);
+        } catch (e) {
+          console.warn('[WhatsApp] Erro ao finalizar socket:', e);
+        }
+      }
+    } finally {
+      this.sock = null;
+      this.status = 'disconnected';
+      this.qrCode = null;
+      this.qrImage = null;
+      this.isInitializing = false;
+      this.activeUntil = null;
+    }
+    return this.getStatus();
+  }
+
   public getStatus(): WhatsAppServiceStatus {
+    const now = Date.now();
+    const isWindowActive = this.activeUntil !== null && this.activeUntil > now;
+    const remainingSeconds = this.activeUntil ? Math.max(0, Math.floor((this.activeUntil - now) / 1000)) : null;
+    const remainingMinutes = remainingSeconds !== null ? Math.ceil(remainingSeconds / 60) : null;
+    const activeDurationMinutes = this.activatedAt ? Math.max(0, Math.round((now - this.activatedAt) / (60 * 1000))) : null;
+
     return {
       status: this.status,
       qrCode: this.qrCode,
@@ -161,6 +247,14 @@ class WhatsAppService {
       enabled: this.enabled,
       lastError: this.lastError,
       lastConnectedAt: this.lastConnectedAt,
+      hasSavedAuth: this.hasSavedAuth(),
+      isWindowActive,
+      activeUntil: this.activeUntil ? new Date(this.activeUntil).toISOString() : null,
+      activatedAt: this.activatedAt ? new Date(this.activatedAt).toISOString() : null,
+      remainingSeconds,
+      remainingMinutes,
+      activeDurationMinutes,
+      activeReason: this.activeReason,
     };
   }
 

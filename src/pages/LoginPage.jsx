@@ -7,7 +7,8 @@ import api, { formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import Logo from "@/components/Logo";
 import Avatar from "@/components/Avatar";
-import { effectClass } from "@/lib/effects";
+import MolduraArtCenter from "@/components/MolduraArtCenter";
+import { effectClass, effectCardClass, effectBadgeClass } from "@/lib/effects";
 
 const STATUS_META = {
   active: { label: null, icon: null, bg: null, dim: false },
@@ -112,7 +113,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-[#FAFAFA]" data-testid="login-page">
+    <div
+      className="min-h-screen w-full flex flex-col lg:flex-row bg-[#FAFAFA]"
+      data-testid="login-page"
+    >
       {/* Left brand panel */}
       <div className="hidden lg:flex lg:w-[45%] xl:w-[42%] relative border-r-2 border-black overflow-hidden bg-amber-100">
         <img
@@ -173,39 +177,48 @@ export default function LoginPage() {
                   {profiles.map((p, i) => {
                     const meta = STATUS_META[p.status] || STATUS_META.active;
                     const StatusIcon = meta.icon;
+                    const cardCls = effectCardClass(p.equipped_effect);
+                    const badgeCls = effectBadgeClass(p.equipped_effect);
                     return (
                       <button
                         key={p.id}
                         onClick={() => handleProfileClick(p)}
-                        className={`nb-card nb-card-hover p-4 bg-white text-center group nb-fade-in relative ${meta.dim ? "opacity-60" : ""}`}
+                        className={`nb-card nb-card-hover p-4 text-center group nb-fade-in relative overflow-hidden transition-all duration-300 ${cardCls} ${meta.dim ? "opacity-60" : ""}`}
                         style={{ animationDelay: `${i * 50}ms` }}
                         data-testid={`profile-${p.id}`}
                       >
-                        <div className="mx-auto mb-3 inline-block">
-                          <Avatar
-                            userId={p.id}
-                            name={p.name}
-                            size={72}
-                            hasAvatar={p.has_avatar}
-                            bg={p.role === "admin" ? "bg-red-300" : "bg-sky-300"}
-                            className={meta.dim ? "grayscale" : ""}
-                            effect={!meta.dim ? effectClass(p.equipped_effect) : null}
-                          />
+                        {/* Central Moldura Artwork (Bob Esponja, Mentalista) */}
+                        <MolduraArtCenter effectId={p.equipped_effect} />
+
+                        <div className="relative z-10">
+                          <div className="mx-auto mb-3 inline-block">
+                            <Avatar
+                              userId={p.id}
+                              name={p.name}
+                              size={72}
+                              hasAvatar={p.has_avatar}
+                              bg={p.role === "admin" ? "bg-red-300" : "bg-sky-300"}
+                              className={meta.dim ? "grayscale" : ""}
+                              effect={!meta.dim ? effectClass(p.equipped_effect) : null}
+                            />
+                          </div>
+                          <div className="font-heading font-bold text-base leading-tight truncate">{p.name}</div>
+                          {meta.label ? (
+                            <span className={`nb-badge mt-2 inline-flex items-center gap-1 ${meta.bg}`} data-testid={`profile-status-${p.id}`}>
+                              {StatusIcon && <StatusIcon className="w-3 h-3" strokeWidth={2.5} />}
+                              {meta.label}
+                            </span>
+                          ) : (
+                            <div className="flex flex-col items-center gap-1 mt-2">
+                              <span className={`nb-badge inline-flex items-center gap-1 ${p.role === "admin" ? "bg-red-200 text-red-950 border-black" : badgeCls}`}>
+                                {p.role === "admin" ? <ShieldCheck className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                                {p.role === "admin" ? "Admin" : "Aluno"}
+                              </span>
+                            </div>
+                          )}
                         </div>
-                        <div className="font-heading font-bold text-base leading-tight truncate">{p.name}</div>
-                        {meta.label ? (
-                          <span className={`nb-badge mt-2 inline-flex items-center gap-1 ${meta.bg}`} data-testid={`profile-status-${p.id}`}>
-                            {StatusIcon && <StatusIcon className="w-3 h-3" strokeWidth={2.5} />}
-                            {meta.label}
-                          </span>
-                        ) : (
-                          <span className={`nb-badge mt-2 inline-flex items-center gap-1 ${p.role === "admin" ? "bg-red-200" : "bg-sky-200"}`}>
-                            {p.role === "admin" ? <ShieldCheck className="w-3 h-3" /> : <User className="w-3 h-3" />}
-                            {p.role === "admin" ? "Admin" : "Aluno"}
-                          </span>
-                        )}
                         {StatusIcon && (
-                          <div className={`absolute -top-2 -right-2 w-9 h-9 nb-card flex items-center justify-center ${meta.bg}`}>
+                          <div className={`absolute -top-2 -right-2 w-9 h-9 nb-card flex items-center justify-center z-20 ${meta.bg}`}>
                             <StatusIcon className="w-4 h-4" strokeWidth={3} />
                           </div>
                         )}
@@ -216,10 +229,10 @@ export default function LoginPage() {
               )}
             </div>
           ) : (
-            <div className="max-w-md mx-auto nb-card p-6 sm:p-8 lg:p-10 bg-white nb-fade-in" data-testid="password-step">
+            <div className="max-w-md mx-auto nb-card bg-white p-6 sm:p-8 lg:p-10 nb-fade-in" data-testid="password-step">
               <button
                 onClick={() => { setSelected(null); setPassword(""); }}
-                className="nb-btn bg-white px-3 py-1.5 text-sm flex items-center gap-1 mb-6"
+                className="nb-btn bg-white hover:bg-neutral-100 px-3 py-1.5 text-sm flex items-center gap-1 mb-6"
                 data-testid="back-to-profiles"
               >
                 <ArrowLeft className="w-4 h-4" /> Trocar perfil
@@ -236,16 +249,18 @@ export default function LoginPage() {
                     effect={effectClass(selected.equipped_effect)}
                   />
                 </div>
-                <h2 className="font-heading font-black text-2xl mb-1">Olá, {selected.name}!</h2>
-                <span className={`nb-badge inline-flex items-center gap-1 ${selected.role === "admin" ? "bg-red-200" : "bg-sky-200"}`}>
-                  {selected.role === "admin" ? <ShieldCheck className="w-3 h-3" /> : <User className="w-3 h-3" />}
-                  {selected.role === "admin" ? "Admin" : "Aluno"}
-                </span>
+                <h2 className="font-heading font-black text-2xl mb-1 text-neutral-900">Olá, {selected.name}!</h2>
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <span className={`nb-badge inline-flex items-center gap-1 ${selected.role === "admin" ? "bg-red-200 text-red-950 border-black" : "bg-sky-200 text-sky-950 border-black"}`}>
+                    {selected.role === "admin" ? <ShieldCheck className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                    {selected.role === "admin" ? "Admin" : "Aluno"}
+                  </span>
+                </div>
               </div>
 
               <form onSubmit={onSubmit} className="space-y-5" data-testid="login-form">
                 <div>
-                  <label className="block text-sm font-bold mb-2">Senha</label>
+                  <label className="block text-sm font-bold mb-2 text-neutral-900">Senha de Acesso</label>
                   <input
                     type="password"
                     required
@@ -261,10 +276,10 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="nb-btn w-full bg-sky-400 hover:bg-sky-300 text-black px-6 py-3 text-base"
+                  className="nb-btn nb-btn-primary bg-sky-400 hover:bg-sky-500 text-neutral-950 font-bold w-full px-6 py-3 text-base shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px]"
                   data-testid="login-submit-button"
                 >
-                  {submitting ? "Entrando..." : "Entrar"}
+                  {submitting ? "Entrando..." : "Entrar no EduTask"}
                 </button>
               </form>
             </div>

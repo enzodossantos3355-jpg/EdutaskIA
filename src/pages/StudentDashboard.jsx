@@ -17,6 +17,7 @@ import AIChatDialog from "@/components/AIChatDialog";
 import SpecialAnnouncementModal from "@/components/SpecialAnnouncementModal";
 import { getPriority, formatDateBR, daysUntil } from "@/lib/priority";
 import { fireConfetti } from "@/lib/celebrate";
+import { getTheme } from "@/lib/themes";
 
 const subjectColors = ["bg-sky-200", "bg-amber-200", "bg-red-200", "bg-emerald-200", "bg-violet-200", "bg-rose-200"];
 const colorFor = (s) => subjectColors[(s || "").length % subjectColors.length];
@@ -165,7 +166,7 @@ export default function StudentDashboard() {
     <div className="min-h-screen bg-[#FAFAFA]">
       <AppHeader title="Minhas tarefas" />
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-28 sm:pb-8">
-        <MyProfileBanner bg="bg-sky-100" />
+        <MyProfileBanner onOpenStore={() => setTab("store")} />
         <PrizeBanner />
         <AIDailySummary />
 
@@ -173,21 +174,27 @@ export default function StudentDashboard() {
         <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1 no-scrollbar sm:flex-wrap">
           <button
             onClick={() => setTab("tasks")}
-            className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${tab === "tasks" ? "bg-sky-400" : "bg-white"}`}
+            className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
+              tab === "tasks" ? "bg-sky-400 font-bold" : "bg-white"
+            }`}
             data-testid="student-tab-tasks"
           >
             <BookOpen className="w-4 h-4" /> Minhas tarefas
           </button>
           <button
             onClick={() => setTab("store")}
-            className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${tab === "store" ? "bg-amber-300" : "bg-white"}`}
+            className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
+              tab === "store" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"
+            }`}
             data-testid="student-tab-store"
           >
-            <ShoppingBag className="w-4 h-4" /> Loja de Molduras
+            <ShoppingBag className="w-4 h-4" /> Loja de Molduras 🖼️
           </button>
           <button
             onClick={() => setTab("stats")}
-            className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${tab === "stats" ? "bg-violet-300" : "bg-white"}`}
+            className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
+              tab === "stats" ? "bg-violet-300 font-bold" : "bg-white"
+            }`}
             data-testid="student-tab-stats"
           >
             <BarChart3 className="w-4 h-4" /> Estatísticas & Líder IA

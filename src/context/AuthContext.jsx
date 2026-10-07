@@ -9,6 +9,7 @@ const AuthContext = createContext({
   login: async () => {},
   logout: () => {},
   refreshUser: async () => {},
+  refresh: async () => {},
 });
 
 export function AuthProvider({ children }) {
@@ -35,7 +36,8 @@ export function AuthProvider({ children }) {
       const cached = localStorage.getItem("cached_user");
       if (cached) {
         try {
-          setUser(JSON.parse(cached));
+          const parsed = JSON.parse(cached);
+          setUser(parsed);
           setLoading(false);
           return;
         } catch {
@@ -63,7 +65,7 @@ export function AuthProvider({ children }) {
       }
       return data.user || data;
     } catch (apiErr) {
-      // Direct Firestore Login Fallback for Serverless / Client-only hosting
+      // Direct Firestore Login Fallback
       let users = [];
       try {
         users = await firebaseService.getAllUsers();
@@ -73,7 +75,6 @@ export function AuthProvider({ children }) {
 
       let match = users.find((u) => u.id === user_id || (email && u.email === email));
       
-      // If logging in as admin and user list was just cleaned
       if (!match && user_id === "admin-user-001") {
         match = {
           id: "admin-user-001",
@@ -82,6 +83,7 @@ export function AuthProvider({ children }) {
           role: "admin",
           password_plain: "enzo123cg",
           status: "active",
+          points: 0,
         };
       }
 
@@ -112,11 +114,13 @@ export function AuthProvider({ children }) {
         email: match.email || `${match.name.toLowerCase().replace(/\s+/g, '.')}@escola.com`,
         role: match.role || "aluno",
         status: match.status || "active",
-        points: match.points || 0,
-        streak_count: match.streak_count || 0,
-        longest_streak: match.longest_streak || 0,
+        points: match.role === "admin" ? 0 : (match.points || 0),
+        streak_count: match.role === "admin" ? 0 : (match.streak_count || 0),
+        longest_streak: match.role === "admin" ? 0 : (match.longest_streak || 0),
         equipped_effect: match.equipped_effect || "none",
         owned_effects: match.owned_effects || ["none"],
+        avatar_data: match.avatar_data || undefined,
+        has_avatar: Boolean(match.avatar_data),
       };
 
       const token = `token_${match.id}_${Date.now()}`;
@@ -135,7 +139,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser, refresh: refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

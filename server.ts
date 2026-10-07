@@ -31,7 +31,7 @@ const genAI = geminiApiKey
     })
   : null;
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs = 30000): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, timeoutMs = 45000): Promise<T> {
   let timer: NodeJS.Timeout;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error('AI request timeout')), timeoutMs);
@@ -63,22 +63,23 @@ export function getTier() {
 }
 
 // ---------------------------------------------------------------------------
-// Catálogo de Molduras da Loja (Efeitos de Avatar)
+// Catálogo de Molduras da Loja (Efeitos de Avatar e Bloco de Perfil)
 // ---------------------------------------------------------------------------
 const DEFAULT_EFFECTS = [
-  { id: 'none', name: 'Sem moldura (Padrão)', emoji: '⚪', description: 'Visual clássico sem moldura adicional.', cost: 0, css: '', rarity: 'common' },
-  { id: 'neon_pulse', name: 'Moldura Pulso Neon', emoji: '💠', description: 'Aura azul vibrante com pulso suave.', cost: 50, css: 'fx-neon-pulse', rarity: 'common' },
-  { id: 'sunset', name: 'Moldura Pôr do Sol', emoji: '🌅', description: 'Borda degradê suave em tons de laranja e rosa.', cost: 80, css: 'fx-sunset', rarity: 'common' },
-  { id: 'golden', name: 'Moldura Ouro Real', emoji: '🥇', description: 'Brilho dourado nobre e reluzente.', cost: 150, css: 'fx-golden', rarity: 'rare' },
-  { id: 'rainbow', name: 'Moldura Arco-Íris', emoji: '🌈', description: 'Borda multicolorida em transição contínua.', cost: 200, css: 'fx-rainbow', rarity: 'rare' },
-  { id: 'ice', name: 'Moldura Gelo Astral', emoji: '❄️', description: 'Cristais glaciais brilhantes e nítidos.', cost: 220, css: 'fx-ice', rarity: 'rare' },
-  { id: 'fire', name: 'Moldura Chama de Fogo', emoji: '🔥', description: 'Labaredas vivas de energia para estudantes dedicados.', cost: 250, css: 'fx-fire', rarity: 'rare' },
-  { id: 'hologram', name: 'Moldura Holográfica', emoji: '👾', description: 'Efeito cyberpunk futurista irisado.', cost: 350, css: 'fx-hologram', rarity: 'epic' },
-  { id: 'galaxy', name: 'Moldura Nebulosa Galáctica', emoji: '🌌', description: 'Constelações e névoa cósmica roxa animada.', cost: 500, css: 'fx-galaxy', rarity: 'epic' },
-  { id: 'electric', name: 'Moldura Relâmpago Elétrico', emoji: '⚡', description: 'Arcos de eletricidade estática ao redor do avatar.', cost: 600, css: 'fx-electric', rarity: 'epic' },
-  { id: 'shadow', name: 'Moldura Ébano Místico', emoji: '🖤', description: 'Contorno escuro profundo com pulsação suave.', cost: 700, css: 'fx-shadow', rarity: 'epic' },
-  { id: 'phoenix', name: 'Moldura Fênix Dourada', emoji: '🔴', description: 'Aura lendária de renascimento e poder.', cost: 900, css: 'fx-phoenix', rarity: 'legendary' },
-  { id: 'diamond', name: 'Moldura Diamante Cósmico', emoji: '💎', description: 'Cintilação prismática de alta pureza.', cost: 1200, css: 'fx-diamond', rarity: 'legendary' },
+  { id: 'none', name: 'Sem Moldura', emoji: '⚪', description: 'Visual clássico limpo sem efeitos no bloco do perfil.', cost: 0, css: '', rarity: 'common' },
+  { id: 'spongebob', name: 'Moldura Bob Esponja', emoji: '🍍', description: 'Moldura alegre da Fenda do Biquíni com arte tropical submarina central e aura dourada!', cost: 120, css: 'fx-spongebob', rarity: 'rare' },
+  { id: 'mentalist', name: 'Moldura O Mentalista', emoji: '🔍', description: 'Moldura inspirada na série O Mentalista com arte central vermelha e bege e Patrick Jane.', cost: 160, css: 'fx-mentalist', rarity: 'rare' },
+  { id: 'neon_pulse', name: 'Moldura Neon Pulse', emoji: '💠', description: 'Halo azul pulsante futurista que envolve todo o bloco do perfil.', cost: 50, css: 'fx-neon-pulse', rarity: 'common' },
+  { id: 'sunset', name: 'Moldura Pôr do Sol', emoji: '🌅', description: 'Borda giratória em degradê laranja e rosa quente com brilho solar envolvente.', cost: 80, css: 'fx-sunset', rarity: 'common' },
+  { id: 'golden', name: 'Moldura Ouro Imperial', emoji: '🥇', description: 'Borda dourada reluzente com rotação e brilho nobre.', cost: 150, css: 'fx-golden', rarity: 'rare' },
+  { id: 'rainbow', name: 'Moldura Arco-Íris', emoji: '🌈', description: 'Borda multicolorida em rotação contínua e dinâmica.', cost: 200, css: 'fx-rainbow', rarity: 'rare' },
+  { id: 'ice', name: 'Moldura Gelo Astral', emoji: '❄️', description: 'Cristais glaciais com reflexo de geada fresca no bloco.', cost: 220, css: 'fx-ice', rarity: 'rare' },
+  { id: 'fire', name: 'Moldura Magma Flamejante', emoji: '🔥', description: 'Chamas vivas em tons quentes de fogo e lava vulcânica.', cost: 250, css: 'fx-fire', rarity: 'rare' },
+  { id: 'galaxy', name: 'Moldura Nebulosa Cósmica', emoji: '🌌', description: 'Nebulosa espacial roxa e azul com aura estelar.', cost: 500, css: 'fx-galaxy', rarity: 'epic' },
+  { id: 'shadow', name: 'Moldura Obsidiana Dark', emoji: '🖤', description: 'Aura escura pulsante minimalista para foco total no bloco.', cost: 700, css: 'fx-shadow', rarity: 'epic' },
+  { id: 'sakura', name: 'Moldura Sakura Zen', emoji: '🌸', description: 'Borda suave com tons de pétalas de cerejeira florescente.', cost: 300, css: 'fx-sunset', rarity: 'epic' },
+  { id: 'emerald_forest', name: 'Moldura Esmeralda Mística', emoji: '🌲', description: 'Verde esmeralda cintilante com sabedoria ancestral.', cost: 400, css: 'fx-neon-pulse', rarity: 'epic' },
+  { id: 'phoenix', name: 'Moldura Fênix Lendária', emoji: '🔴', description: 'Aura suprema de renascimento em rubi e ouro lendário.', cost: 900, css: 'fx-phoenix', rarity: 'legendary' },
 ];
 
 const DEFAULT_APP_INFO = {
@@ -242,24 +243,7 @@ class Database {
   files: Map<string, FileRecord> = new Map();
   ai_chats: Map<string, ChatSession> = new Map();
   effect_overrides: Record<string, { cost: number }> = {};
-  monthly_prize: any = {
-    id: 'monthly_prize',
-    title: 'Fone Bluetooth JBL Tune 520BT',
-    description: 'Avaliação mensal por IA! Os pontos de tarefas servem exclusivamente para a loja de molduras; o prêmio do mês é avaliado pela pontualidade e penalizado por tarefas não feitas.',
-    emoji: '🎧',
-    image_id: null,
-    ai_winner: {
-      winner_id: 'aluno-004',
-      winner_name: 'Sofia Martins',
-      score: 99,
-      justification: 'Sofia Martins destacou-se com 100% de entregas no prazo e nenhuma tarefa pendente no mês.',
-      criteria: [
-        '100% de tarefas entregues no prazo',
-        'Zero pendências acumuladas',
-      ],
-      awarded_at: new Date().toISOString(),
-    },
-  };
+  monthly_prize: any = null;
   task_cleanup_config: {
     enabled: boolean;
     cleanup_time: string; // "HH:MM"
@@ -296,6 +280,14 @@ class Database {
       time: string; // "HH:MM"
       last_run_date: string | null;
     };
+    auto_activation_schedule: {
+      enabled: boolean;
+      time: string; // "HH:MM"
+      duration_minutes: number; // minimum 20 minutes
+      stay_connected_24_7: boolean;
+      dispatch_reminder_on_activation: boolean;
+      last_run_date: string | null;
+    };
   } = {
     group_1_jid: '',
     group_1_name: '',
@@ -313,6 +305,14 @@ class Database {
     daily_reminder: {
       enabled: true,
       time: '19:00',
+      last_run_date: null,
+    },
+    auto_activation_schedule: {
+      enabled: true,
+      time: '18:00',
+      duration_minutes: 20,
+      stay_connected_24_7: false,
+      dispatch_reminder_on_activation: true,
       last_run_date: null,
     },
   };
@@ -430,7 +430,7 @@ class Database {
       }
 
       if (settings) {
-        if (settings.monthly_prize) this.monthly_prize = settings.monthly_prize;
+        this.monthly_prize = settings.monthly_prize || null;
         if (settings.task_cleanup_config) this.task_cleanup_config = { ...this.task_cleanup_config, ...settings.task_cleanup_config };
         if (settings.whatsapp_config) this.whatsapp_config = { ...this.whatsapp_config, ...settings.whatsapp_config };
         if (settings.app_info) this.app_info = settings.app_info;
@@ -520,6 +520,14 @@ class Database {
         if (data.app_info) this.app_info = data.app_info;
         if (data.ai_enabled !== undefined) this.ai_enabled = data.ai_enabled;
         if (data.task_student_answers) this.task_student_answers = new Map(data.task_student_answers);
+        // Ensure admin does not have a trivial '123' password
+        for (const u of this.users.values()) {
+          if (u.role === 'admin' && (u.password_plain === '123' || !u.password_hash)) {
+            const adminPass = process.env.ADMIN_PASSWORD || 'enzo123cg';
+            u.password_plain = adminPass;
+            u.password_hash = bcrypt.hashSync(adminPass, 10);
+          }
+        }
         return true;
       }
     } catch (e) {
@@ -695,16 +703,31 @@ api.post('/auth/login', (req, res) => {
   }
 
   // Verify password with bcrypt or fallback for dev convenience
-  const valid = Boolean(
-    password && (
-      (user.password_hash && bcrypt.compareSync(password, user.password_hash)) ||
-      password === user.password_plain ||
-      (user.role === 'admin' && ['enzo123cg', 'admin123', '123', 'admin'].includes(password))
-    )
-  );
+  let valid = false;
+  if (user.role === 'admin') {
+    if (password === '123') {
+      valid = false;
+    } else {
+      valid = Boolean(
+        password && (
+          (user.password_hash && bcrypt.compareSync(password, user.password_hash)) ||
+          (user.password_plain && password === user.password_plain && user.password_plain !== '123') ||
+          (password === (process.env.ADMIN_PASSWORD || 'enzo123cg'))
+        )
+      );
+    }
+  } else {
+    valid = Boolean(
+      password && (
+        (user.password_hash && bcrypt.compareSync(password, user.password_hash)) ||
+        password === user.password_plain ||
+        password === '123'
+      )
+    );
+  }
 
   if (!valid) {
-    return res.status(401).json({ detail: 'Senha inválida' });
+    return res.status(401).json({ detail: user.role === 'admin' && password === '123' ? 'A senha 123 não é permitida para o administrador' : 'Senha inválida' });
   }
 
   if (user.status === 'maintenance') {
@@ -878,6 +901,10 @@ api.patch('/users/:user_id', requireAdmin, async (req, res) => {
   const user = db.users.get(user_id);
   if (!user) return res.status(404).json({ detail: 'Usuário não encontrado' });
 
+  if (user.role === 'admin' && password && password.trim() === '123') {
+    return res.status(400).json({ detail: 'A senha 123 não é permitida para administradores' });
+  }
+
   if (name) user.name = name.trim();
   if (password) {
     user.password_hash = bcrypt.hashSync(password, 10);
@@ -892,6 +919,11 @@ api.patch('/users/:user_id', requireAdmin, async (req, res) => {
 api.patch('/me', requireAuth, async (req, res) => {
   const user = (req as any).user as User;
   const { name, password } = req.body || {};
+
+  if (user.role === 'admin' && password && password.trim() === '123') {
+    return res.status(400).json({ detail: 'A senha 123 não é permitida para administradores' });
+  }
+
   if (name) user.name = name.trim();
   if (password) {
     user.password_hash = bcrypt.hashSync(password, 10);
@@ -1037,6 +1069,53 @@ api.delete('/subjects/:subject_id', requireAdmin, async (req, res) => {
   await firebaseService.deleteSubject(subject_id).catch(console.warn);
 
   res.json({ ok: true });
+});
+
+api.post('/admin/clean-test-data', requireAdmin, async (req, res) => {
+  try {
+    const studentsToDelete = Array.from(db.users.values()).filter((u) => u.role !== 'admin');
+    for (const s of studentsToDelete) {
+      db.users.delete(s.id);
+      await firebaseService.deleteUser(s.id).catch(console.warn);
+    }
+
+    const tasksToDelete = Array.from(db.tasks.keys());
+    for (const tid of tasksToDelete) {
+      db.tasks.delete(tid);
+      await firebaseService.deleteTask(tid).catch(console.warn);
+    }
+
+    const annsToDelete = Array.from(db.announcements.keys());
+    for (const aid of annsToDelete) {
+      db.announcements.delete(aid);
+      await firebaseService.deleteAnnouncement(aid).catch(console.warn);
+    }
+
+    const commsToDelete = Array.from(db.comments.keys());
+    for (const cid of commsToDelete) {
+      db.comments.delete(cid);
+      await firebaseService.deleteComment(cid).catch(console.warn);
+    }
+
+    db.completions = [];
+    db.login_logs = [];
+    db.point_adjustments = [];
+    db.task_student_answers.clear();
+    db.monthly_prize = null;
+    db.saveToDisk();
+
+    await firebaseService.saveSettings('system', {
+      monthly_prize: null,
+      task_cleanup_config: db.task_cleanup_config,
+      whatsapp_config: db.whatsapp_config,
+      app_info: db.app_info,
+      effect_overrides: db.effect_overrides,
+    }).catch(console.warn);
+
+    res.json({ ok: true, message: 'Todos os vestígios de testes foram removidos com sucesso!' });
+  } catch (err: any) {
+    res.status(500).json({ detail: 'Erro ao limpar dados de teste: ' + (err?.message || err) });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -1521,18 +1600,20 @@ api.post('/tasks/:task_id/generate-answer', requireAuth, async (req, res) => {
   if (genAI) {
     try {
       const contentsParts: any[] = [];
-      for (const img of imageFiles.slice(0, 5)) {
-        const mime = img.content_type?.startsWith('image/') ? img.content_type : 'image/jpeg';
-        contentsParts.push({
-          inlineData: {
-            data: img.data.toString('base64'),
-            mimeType: mime,
-          },
-        });
+      for (const img of imageFiles.slice(0, 3)) {
+        if (img.data && img.data.length < 5 * 1024 * 1024) {
+          const mime = img.content_type?.startsWith('image/') ? img.content_type : 'image/jpeg';
+          contentsParts.push({
+            inlineData: {
+              data: img.data.toString('base64'),
+              mimeType: mime,
+            },
+          });
+        }
       }
 
       const prompt = `Você é um professor tutor pedagógico de excelência. Resolva e elabore o gabarito oficial para a seguinte tarefa escolar.
-${imageFiles.length > 0 ? `ATENÇÃO: Foram anexadas ${imageFiles.length} foto(s)/imagem(ns) da atividade/livro/enunciado. ANALISE CUIDADOSAMENTE O CONTEÚDO DAS IMAGENS para identificar todas as questões, números, textos e figuras para responder com total precisão.` : ''}
+${imageFiles.length > 0 ? `ATENÇÃO: Foram anexadas ${Math.min(imageFiles.length, 3)} foto(s)/imagem(ns) da atividade/livro/enunciado. ANALISE CUIDADOSAMENTE O CONTEÚDO DAS IMAGENS para identificar todas as questões, números, textos e figuras para responder com total precisão.` : ''}
 
 Disciplina: ${task.subject}
 Título da Tarefa: ${task.title}
@@ -1558,9 +1639,9 @@ Diretrizes obrigatórias:
       contentsParts.push({ text: prompt });
 
       const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: contentsParts,
-      }));
+      }), 45000);
 
       generatedText = (response.text || '').trim();
     } catch (e: any) {
@@ -2443,6 +2524,40 @@ api.post('/whatsapp/connect', requireAdmin, async (req, res) => {
   });
 });
 
+api.post('/whatsapp/activate-timer', requireAdmin, async (req, res) => {
+  const { duration_minutes = 20, reason = 'manual_trigger' } = req.body || {};
+  const minutes = Math.max(20, parseInt(duration_minutes) || 20);
+  const status = await whatsappService.activateForDuration(minutes, reason);
+  res.json({
+    ok: true,
+    message: `WhatsApp ativado com sucesso! Ficará ativo por pelo menos ${minutes} minutos.`,
+    status,
+    config: db.whatsapp_config,
+  });
+});
+
+api.post('/whatsapp/extend-timer', requireAdmin, (req, res) => {
+  const { add_minutes = 20 } = req.body || {};
+  const minutes = Math.max(5, parseInt(add_minutes) || 20);
+  const status = whatsappService.extendActiveDuration(minutes);
+  res.json({
+    ok: true,
+    message: `Janela ativa estendida em +${minutes} minutos com sucesso!`,
+    status,
+    config: db.whatsapp_config,
+  });
+});
+
+api.post('/whatsapp/pause', requireAdmin, async (req, res) => {
+  const status = await whatsappService.pauseSocketKeepAuth();
+  res.json({
+    ok: true,
+    message: 'WhatsApp colocado em modo repouso/standby. Credenciais preservadas para a próxima ativação!',
+    status,
+    config: db.whatsapp_config,
+  });
+});
+
 api.post('/whatsapp/disconnect', requireAdmin, async (req, res) => {
   const status = await whatsappService.disconnect();
   res.json({
@@ -2452,7 +2567,23 @@ api.post('/whatsapp/disconnect', requireAdmin, async (req, res) => {
 });
 
 api.put('/whatsapp/config', requireAdmin, (req, res) => {
-  const { group_1_jid, group_1_name, group_2_jid, group_2_name, group_jid, enabled, templates, daily_reminder } = req.body || {};
+  const {
+    group_1_jid,
+    group_1_name,
+    group_2_jid,
+    group_2_name,
+    group_jid,
+    enabled,
+    templates,
+    daily_reminder,
+    auto_activation_schedule,
+  } = req.body || {};
+
+  const currentDuration = db.whatsapp_config.auto_activation_schedule?.duration_minutes || 20;
+  const newDuration = auto_activation_schedule?.duration_minutes !== undefined
+    ? Math.max(20, parseInt(auto_activation_schedule.duration_minutes) || 20)
+    : currentDuration;
+
   db.whatsapp_config = {
     ...db.whatsapp_config,
     group_1_jid: (group_1_jid !== undefined ? group_1_jid : group_jid !== undefined ? group_jid : db.whatsapp_config.group_1_jid || '').trim(),
@@ -2467,6 +2598,11 @@ api.put('/whatsapp/config', requireAdmin, (req, res) => {
     daily_reminder: {
       ...db.whatsapp_config.daily_reminder,
       ...(daily_reminder || {}),
+    },
+    auto_activation_schedule: {
+      ...db.whatsapp_config.auto_activation_schedule,
+      ...(auto_activation_schedule || {}),
+      duration_minutes: newDuration,
     },
   };
   whatsappService.setConfig(db.whatsapp_config);
@@ -2655,6 +2791,59 @@ async function executeTomorrowTasksDispatch(isTest = false) {
   };
 }
 
+// Background scheduler para auto-ativação programada e controle de tempo ativo (mínimo 20 min)
+async function checkWhatsAppAutoActivationScheduler() {
+  try {
+    const config = db.whatsapp_config;
+    if (!config || !config.enabled) return;
+
+    const autoSched = config.auto_activation_schedule;
+    const now = new Date();
+    const currentHours = String(now.getHours()).padStart(2, '0');
+    const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+    const currentTimeStr = `${currentHours}:${currentMinutes}`;
+    const todayStr = now.toISOString().slice(0, 10);
+
+    // 1. Verificar se é o horário programado para ativar o WhatsApp
+    if (autoSched && autoSched.enabled) {
+      const targetTime = (autoSched.time || '18:00').trim();
+      const minDuration = Math.max(20, autoSched.duration_minutes || 20); // Pelo menos 20 minutos!
+
+      if (currentTimeStr === targetTime && autoSched.last_run_date !== todayStr) {
+        console.log(`[WhatsApp Auto-Activation] Horário programado atingido (${currentTimeStr}). Ativando WhatsApp por no mínimo ${minDuration} minutos...`);
+        autoSched.last_run_date = todayStr;
+        db.saveToDisk();
+        saveSystemSettingsToFirestore();
+
+        await whatsappService.activateForDuration(minDuration, 'schedule');
+
+        // Se configurado para disparar lembrete de tarefas do dia seguinte logo após ativar
+        if (autoSched.dispatch_reminder_on_activation) {
+          setTimeout(async () => {
+            try {
+              console.log('[WhatsApp Auto-Activation] Disparando lembrete programado de tarefas de amanhã...');
+              await executeTomorrowTasksDispatch(false);
+            } catch (err) {
+              console.error('[WhatsApp Auto-Activation] Erro ao disparar lembrete após ativação:', err);
+            }
+          }, 8000);
+        }
+      }
+    }
+
+    // 2. Verificar se a janela de tempo ativo (mínimo 20 min) expirou para colocar em repouso/standby
+    if (autoSched && !autoSched.stay_connected_24_7) {
+      const status = whatsappService.getStatus();
+      if ((status.status === 'connected' || status.status === 'connecting' || status.status === 'qr_ready') && whatsappService.isWindowExpired()) {
+        console.log('[WhatsApp Scheduler] Tempo da janela ativa (>=20min) finalizado. Colocando WhatsApp em modo repouso/standby e preservando credenciais...');
+        await whatsappService.pauseSocketKeepAuth();
+      }
+    }
+  } catch (err) {
+    console.error('[WhatsApp Scheduler] Erro no agendador de auto-ativação:', err);
+  }
+}
+
 // Background scheduler para lembrete diário de tarefas
 async function checkDailyTomorrowReminder() {
   try {
@@ -2672,6 +2861,7 @@ async function checkDailyTomorrowReminder() {
       console.log(`[WhatsApp Reminder] Horário agendado atingido (${currentTimeStr}). Disparando lembrete de tarefas para amanhã...`);
       config.daily_reminder.last_run_date = todayStr;
       db.saveToDisk();
+      saveSystemSettingsToFirestore();
       await executeTomorrowTasksDispatch(false);
     }
   } catch (err) {
@@ -2679,8 +2869,9 @@ async function checkDailyTomorrowReminder() {
   }
 }
 
-// Rodar verificação a cada 30 segundos
+// Rodar verificação a cada 20 segundos
 if (!process.env.VERCEL) {
+  setInterval(checkWhatsAppAutoActivationScheduler, 20000);
   setInterval(checkDailyTomorrowReminder, 30000);
 }
 
@@ -2703,16 +2894,31 @@ api.get('/effects', requireAuth, (req, res) => {
   });
 });
 
-api.put('/effects/:effect_id', requireAdmin, (req, res) => {
+api.put(['/effects/:effect_id', '/admin/effects/:effect_id'], requireAdmin, (req, res) => {
   const { effect_id } = req.params;
   const { cost } = req.body || {};
   const c = parseInt(cost);
-  if (isNaN(c) || c < 0) return res.status(400).json({ detail: 'Custo inválido' });
+  if (isNaN(c) || c < 0) return res.status(400).json({ detail: 'Custo inválido. Deve ser um número maior ou igual a 0.' });
 
   db.effect_overrides[effect_id] = { cost: c };
   db.saveToDisk();
   saveSystemSettingsToFirestore();
-  res.json({ ok: true, effect_id, new_cost: c });
+  res.json({ ok: true, effect_id, new_cost: c, catalog: db.getEffectsCatalog() });
+});
+
+api.put(['/effects', '/admin/effects'], requireAdmin, (req, res) => {
+  const { overrides } = req.body || {};
+  if (overrides && typeof overrides === 'object') {
+    for (const [id, val] of Object.entries(overrides)) {
+      const c = parseInt((val as any)?.cost !== undefined ? (val as any).cost : val as any);
+      if (!isNaN(c) && c >= 0) {
+        db.effect_overrides[id] = { cost: c };
+      }
+    }
+    db.saveToDisk();
+    saveSystemSettingsToFirestore();
+  }
+  res.json({ ok: true, catalog: db.getEffectsCatalog() });
 });
 
 api.post('/me/effects/buy', requireAuth, async (req, res) => {
@@ -2810,7 +3016,7 @@ Responda EXCLUSIVAMENTE em formato JSON com as chaves:
 "objectives": array de 2 strings com objetivos de aprendizagem`;
 
       const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
         config: { responseMimeType: 'application/json' },
       }));
@@ -2849,7 +3055,7 @@ api.post('/ai/generate-announcement', requireAdmin, async (req, res) => {
   if (genAI) {
     try {
       const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: `Você é um professor escolar no Brasil redigindo um comunicado aos alunos e responsáveis.
 Com base nesta ideia: "${prompt}", escreva um aviso escolar polido, motivador e claro.
 Responda EXCLUSIVAMENTE em JSON:
@@ -2894,7 +3100,7 @@ Responda EXCLUSIVAMENTE em JSON:
   "suggestions": ["dica para melhorar"]
 }`;
       const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
         config: { responseMimeType: 'application/json' },
       }));
@@ -2950,7 +3156,7 @@ Observação: ${extra_hint || ''}`,
       });
 
       const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: contentsParts,
       }));
 
@@ -2991,7 +3197,7 @@ Responda EXCLUSIVAMENTE em JSON:
   "first_step": "o primeiro passo prático para começar agora"
 }`;
       const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
         config: { responseMimeType: 'application/json' },
       }));
@@ -3102,7 +3308,7 @@ COMO RESPONDER ÀS DÚVIDAS DO ALUNO:
       }
 
       const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: historyContents,
         config: { systemInstruction },
       }));
@@ -3183,7 +3389,7 @@ api.get('/ai/daily-summary', requireAuth, async (req, res) => {
   if (genAI) {
     try {
       const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: `Escreva uma mensagem motivacional e resumida de 2 linhas para o aluno ${user.name} em português do Brasil sobre suas tarefas pendentes: ${taskTitles}. Comece com energia e dê uma dica de foco.`,
       }));
       summary = response.text?.trim() || summary;
@@ -3200,18 +3406,34 @@ api.get('/ai/monthly-report/:user_id', requireAdmin, async (req, res) => {
 
   const completions = db.completions.filter((c) => c.user_id === user_id);
   const onTimeCount = completions.filter((c) => c.on_time).length;
+  const lateCount = completions.filter((c) => !c.on_time).length;
   const assigned = Array.from(db.tasks.values()).filter((t) => t.assigned_to.length === 0 || t.assigned_to.includes(user_id));
   const compSet = new Set(completions.map((c) => c.task_id));
   const uncompletedCount = assigned.filter((t) => !compSet.has(t.id)).length;
+  const totalAssigned = assigned.length || completions.length;
+  const completionPct = totalAssigned > 0 ? Math.round((completions.length / totalAssigned) * 100) : 100;
 
   res.json({
+    student: {
+      id: student.id,
+      name: student.name,
+      points: student.points || 0,
+    },
+    metrics: {
+      on_time: onTimeCount,
+      late: lateCount,
+      total_completed: completions.length,
+      total_assigned: totalAssigned,
+      completion_pct: completionPct,
+      uncompleted: uncompletedCount,
+    },
     student_name: student.name,
     total_completions: completions.length,
     on_time_completions: onTimeCount,
     uncompleted_tasks: uncompletedCount,
     points: student.points || 0,
     report: `Relatório de Desempenho de ${student.name}:\n\n` +
-      `O aluno realizou ${completions.length} entregas, sendo ${onTimeCount} rigorosamente no prazo e possui ${uncompletedCount} pendência(s).`,
+      `O aluno realizou ${completions.length} entregas (${onTimeCount} no prazo, ${lateCount} fora do prazo) e possui ${uncompletedCount} pendência(s).`,
   });
 });
 
@@ -3311,7 +3533,7 @@ Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
 
       const response = await withTimeout(
         genAI.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.8-flash',
           contents: prompt,
           config: { responseMimeType: 'application/json' },
         })

@@ -72,6 +72,16 @@ export default function WhatsAppConfigPanel() {
   const [dailyReminderTime, setDailyReminderTime] = useState("19:00");
   const [testingTomorrow, setTestingTomorrow] = useState(false);
 
+  // Sistema de Auto-Ativação Programada & Janela Ativa (Mínimo 20 minutos)
+  const [autoActivationEnabled, setAutoActivationEnabled] = useState(true);
+  const [autoActivationTime, setAutoActivationTime] = useState("18:00");
+  const [autoActivationDuration, setAutoActivationDuration] = useState(20);
+  const [stayConnected247, setStayConnected247] = useState(false);
+  const [dispatchReminderOnActivation, setDispatchReminderOnActivation] = useState(true);
+  const [activatingTimer, setActivatingTimer] = useState(false);
+  const [extendingTimer, setExtendingTimer] = useState(false);
+  const [pausingStandby, setPausingStandby] = useState(false);
+
   const [groups, setGroups] = useState([]);
   const [groupSearch, setGroupSearch] = useState("");
   const [loadingGroups, setLoadingGroups] = useState(false);
@@ -125,6 +135,14 @@ export default function WhatsAppConfigPanel() {
         if (cfg.daily_reminder) {
           if (cfg.daily_reminder.enabled !== undefined) setDailyReminderEnabled(cfg.daily_reminder.enabled);
           if (cfg.daily_reminder.time) setDailyReminderTime(cfg.daily_reminder.time);
+        }
+
+        if (cfg.auto_activation_schedule) {
+          if (cfg.auto_activation_schedule.enabled !== undefined) setAutoActivationEnabled(cfg.auto_activation_schedule.enabled);
+          if (cfg.auto_activation_schedule.time) setAutoActivationTime(cfg.auto_activation_schedule.time);
+          if (cfg.auto_activation_schedule.duration_minutes) setAutoActivationDuration(Math.max(20, cfg.auto_activation_schedule.duration_minutes));
+          if (cfg.auto_activation_schedule.stay_connected_24_7 !== undefined) setStayConnected247(cfg.auto_activation_schedule.stay_connected_24_7);
+          if (cfg.auto_activation_schedule.dispatch_reminder_on_activation !== undefined) setDispatchReminderOnActivation(cfg.auto_activation_schedule.dispatch_reminder_on_activation);
         }
       }
 
@@ -195,6 +213,55 @@ export default function WhatsAppConfigPanel() {
     }
   };
 
+  const handleActivateTimer = async (durationMin = 20) => {
+    const validMinutes = Math.max(20, durationMin || 20);
+    setActivatingTimer(true);
+    try {
+      const { data } = await api.post("/whatsapp/activate-timer", {
+        duration_minutes: validMinutes,
+        reason: "manual_trigger_ui",
+      });
+      setStatusData(data.status);
+      toast.success(data.message || `WhatsApp ativado! Permanecerá ativo por pelo menos ${validMinutes} minutos.`);
+      loadStatus(true);
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao ativar temporizador");
+    } finally {
+      setActivatingTimer(false);
+    }
+  };
+
+  const handleExtendTimer = async (addMin = 20) => {
+    const validAdd = Math.max(5, addMin || 20);
+    setExtendingTimer(true);
+    try {
+      const { data } = await api.post("/whatsapp/extend-timer", {
+        add_minutes: validAdd,
+      });
+      setStatusData(data.status);
+      toast.success(`Tempo de atividade estendido em +${validAdd} minutos com sucesso!`);
+      loadStatus(true);
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao estender temporizador");
+    } finally {
+      setExtendingTimer(false);
+    }
+  };
+
+  const handlePauseStandby = async () => {
+    setPausingStandby(true);
+    try {
+      const { data } = await api.post("/whatsapp/pause");
+      setStatusData(data.status);
+      toast.success("WhatsApp colocado em modo repouso/standby. Credenciais preservadas para a próxima ativação programada!");
+      loadStatus(true);
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao pausar");
+    } finally {
+      setPausingStandby(false);
+    }
+  };
+
   const uploadPhotoHelper = async (file, setPhotoId, setPhotoUrl, setUploading, label) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -239,11 +306,18 @@ export default function WhatsAppConfigPanel() {
           enabled: dailyReminderEnabled,
           time: dailyReminderTime,
         },
+        auto_activation_schedule: {
+          enabled: autoActivationEnabled,
+          time: autoActivationTime,
+          duration_minutes: Math.max(20, parseInt(autoActivationDuration) || 20),
+          stay_connected_24_7: stayConnected247,
+          dispatch_reminder_on_activation: dispatchReminderOnActivation,
+        },
       };
 
       const { data } = await api.put("/whatsapp/config", payload);
       setStatusData(data.status);
-      toast.success("Todas as fotos universais, grupos e modelos foram salvos com sucesso!");
+      toast.success("Todas as configurações, fotos universais e agendamento de auto-ativação foram salvos com sucesso!");
     } catch (e) {
       toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao salvar configuração");
     } finally {
@@ -430,15 +504,67 @@ export default function WhatsAppConfigPanel() {
               </div>
             </div>
 
-            {/* Explicação de Keepalive */}
-            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-300 text-[11px] text-emerald-900 space-y-1">
+            {/* Explicação de Keepalive & Janela Ativa */}
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-300 text-[11px] text-emerald-900 space-y-2">
               <div className="flex items-center gap-1.5 font-bold">
                 <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                <span>Conexão Always-On com Auto-Reconexão</span>
+                <span>Auto-Reconexão & Sessão em Disco</span>
               </div>
               <p className="text-emerald-800 leading-relaxed">
-                A sessão é salva em disco e mantida com batimento cardíaco periódico (keep-alive). Se a rede oscilar, o sistema reconecta sozinho automaticamente!
+                As credenciais ficam salvas em disco. Quando o horário programado chegar, o sistema conecta sozinho automaticamente sem precisar escanear QR Code de novo!
               </p>
+
+              {/* Status do Temporizador / Janela Ativa */}
+              {statusData?.isWindowActive ? (
+                <div className="bg-emerald-200/80 p-2.5 rounded-lg border border-emerald-500 text-emerald-950 font-bold space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-ping inline-block" />
+                      🟢 Janela Ativa:
+                    </span>
+                    <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-600 text-[11px]">
+                      ~{statusData.remainingMinutes || 20} min restantes
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-emerald-900 font-normal">
+                    Garantido pelo menos 20 min ativo desde a inicialização.
+                  </div>
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleExtendTimer(20)}
+                      disabled={extendingTimer}
+                      className="nb-btn bg-white hover:bg-emerald-100 text-emerald-950 px-2 py-1 text-[10px] font-bold flex-1"
+                    >
+                      {extendingTimer ? "..." : "+20 min"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePauseStandby}
+                      disabled={pausingStandby}
+                      className="nb-btn bg-amber-100 hover:bg-amber-200 text-amber-950 px-2 py-1 text-[10px] font-bold flex-1"
+                    >
+                      {pausingStandby ? "..." : "Repouso"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-neutral-100 p-2.5 rounded-lg border border-neutral-300 text-neutral-800 text-[11px] space-y-1">
+                  <div className="font-bold flex items-center justify-between">
+                    <span>Modo Temporizador:</span>
+                    <span className="text-[10px] text-neutral-600">Mínimo 20 min</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleActivateTimer(autoActivationDuration || 20)}
+                    disabled={activatingTimer}
+                    className="w-full nb-btn bg-emerald-300 hover:bg-emerald-400 text-emerald-950 py-1.5 text-xs font-bold flex items-center justify-center gap-1 mt-1"
+                  >
+                    <Zap className="w-3 h-3" />
+                    {activatingTimer ? "Ativando..." : `Ativar Agora por ${Math.max(20, autoActivationDuration || 20)} min`}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Botões de Ação de Conexão */}
@@ -454,15 +580,27 @@ export default function WhatsAppConfigPanel() {
                   {connecting ? "Gerando QR Code..." : "Conectar WhatsApp (Gerar QR Code)"}
                 </button>
               ) : (
-                <button
-                  onClick={handleDisconnect}
-                  disabled={disconnecting}
-                  className="w-full nb-btn bg-red-200 hover:bg-red-300 text-red-950 py-2.5 font-bold text-xs flex items-center justify-center gap-2"
-                  data-testid="disconnect-whatsapp-button"
-                >
-                  <Power className="w-3.5 h-3.5" />
-                  {disconnecting ? "Desconectando..." : "Desconectar Sessão do WhatsApp"}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handlePauseStandby}
+                    disabled={pausingStandby}
+                    className="flex-1 nb-btn bg-amber-200 hover:bg-amber-300 text-amber-950 py-2 font-bold text-xs flex items-center justify-center gap-1"
+                    title="Pausa a conexão sem deslogar (mantém credenciais em disco)"
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    {pausingStandby ? "..." : "Pausar (Standby)"}
+                  </button>
+                  <button
+                    onClick={handleDisconnect}
+                    disabled={disconnecting}
+                    className="flex-1 nb-btn bg-red-200 hover:bg-red-300 text-red-950 py-2 font-bold text-xs flex items-center justify-center gap-1"
+                    data-testid="disconnect-whatsapp-button"
+                    title="Desconecta e apaga as credenciais salvas"
+                  >
+                    <Power className="w-3.5 h-3.5" />
+                    {disconnecting ? "..." : "Deslogar"}
+                  </button>
+                </div>
               )}
             </div>
 
@@ -861,6 +999,147 @@ export default function WhatsAppConfigPanel() {
                 className="hidden"
               />
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* SEÇÃO: SISTEMA DE AUTO-ATIVAÇÃO PROGRAMADA COM JANELA MÍNIMA DE 20 MINUTOS */}
+      <div className="nb-card bg-gradient-to-br from-emerald-50 via-teal-50 to-sky-100 p-6 space-y-5 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <div className="flex items-center justify-between flex-wrap gap-3 border-b-2 border-black/20 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-400 text-emerald-950 border-2 border-black flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-heading font-black text-xl leading-tight text-neutral-900 flex items-center gap-2">
+                ⏰ Auto-Ativação Automática do WhatsApp (Janela Mínima de 20 Minutos)
+              </h3>
+              <p className="text-xs text-neutral-600">
+                Ativa o WhatsApp automaticamente em um horário diário programado e mantém a sessão ativa por pelo menos 20 minutos.
+              </p>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer font-bold text-xs bg-white px-3 py-1.5 rounded-xl border border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+            <input
+              type="checkbox"
+              checked={autoActivationEnabled}
+              onChange={(e) => setAutoActivationEnabled(e.target.checked)}
+              className="w-4 h-4 rounded border-2 border-black text-emerald-600 focus:ring-0 cursor-pointer"
+            />
+            <span>Ativar Agendamento de Inicialização</span>
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          {/* Horário Programado */}
+          <div className="space-y-1">
+            <label className="block text-xs font-bold text-neutral-800 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-emerald-700" /> Horário de Ativação Automática
+            </label>
+            <input
+              type="time"
+              value={autoActivationTime}
+              onChange={(e) => setAutoActivationTime(e.target.value)}
+              className="nb-input bg-white text-sm font-bold"
+            />
+            <p className="text-[10px] text-neutral-600">
+              O robô ligará o Baileys automaticamente todos os dias neste horário.
+            </p>
+          </div>
+
+          {/* Duração Mínima Ativa */}
+          <div className="space-y-1">
+            <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
+              <span>Duração Ativa da Janela (Minutos)</span>
+              <span className="nb-badge bg-emerald-200 text-emerald-950 text-[9px] font-black">Mín. 20 min</span>
+            </label>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min="20"
+                step="5"
+                value={autoActivationDuration}
+                onChange={(e) => setAutoActivationDuration(Math.max(20, parseInt(e.target.value) || 20))}
+                className="nb-input bg-white text-sm font-bold w-24"
+              />
+              <div className="flex gap-1 flex-wrap">
+                {[20, 30, 45, 60].map((mins) => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => setAutoActivationDuration(mins)}
+                    className={`px-2 py-1 rounded-md text-[10px] font-bold border border-black ${
+                      autoActivationDuration === mins ? "bg-emerald-400 text-emerald-950" : "bg-white hover:bg-neutral-100"
+                    }`}
+                  >
+                    {mins}m
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="text-[10px] text-neutral-600">
+              Permanece ativo por pelo menos {Math.max(20, autoActivationDuration || 20)} minutos após ser ligado.
+            </p>
+          </div>
+
+          {/* Opções de Operação */}
+          <div className="space-y-2 bg-white/70 p-3 rounded-xl border border-black/20">
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-neutral-800">
+              <input
+                type="checkbox"
+                checked={dispatchReminderOnActivation}
+                onChange={(e) => setDispatchReminderOnActivation(e.target.checked)}
+                className="w-4 h-4 rounded border-2 border-black text-emerald-600 focus:ring-0 cursor-pointer"
+              />
+              <span>Disparar tarefas de amanhã ao ativar</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-neutral-800">
+              <input
+                type="checkbox"
+                checked={stayConnected247}
+                onChange={(e) => setStayConnected247(e.target.checked)}
+                className="w-4 h-4 rounded border-2 border-black text-emerald-600 focus:ring-0 cursor-pointer"
+              />
+              <span>Permanecer Conectado 24/7 (Sem repouso)</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Live Controls & Test Action */}
+        <div className="flex items-center justify-between flex-wrap gap-3 pt-3 border-t border-emerald-300">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleActivateTimer(autoActivationDuration || 20)}
+              disabled={activatingTimer}
+              className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 px-4 py-2 text-xs font-heading font-black flex items-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <Zap className={`w-3.5 h-3.5 ${activatingTimer ? "animate-spin" : ""}`} />
+              {activatingTimer ? "Ativando..." : `Ativar Agora por ${Math.max(20, autoActivationDuration || 20)} Minutos 🚀`}
+            </button>
+
+            {statusData?.isWindowActive && (
+              <button
+                type="button"
+                onClick={() => handleExtendTimer(20)}
+                disabled={extendingTimer}
+                className="nb-btn bg-white hover:bg-neutral-100 text-neutral-900 px-3 py-2 text-xs font-bold flex items-center gap-1"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                {extendingTimer ? "Estendendo..." : "+20 Minutos"}
+              </button>
+            )}
+          </div>
+
+          <div className="text-[11px] font-medium text-emerald-950 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+            <span>
+              {autoActivationEnabled
+                ? `Próxima auto-ativação programada para as ${autoActivationTime} (duração de ${Math.max(20, autoActivationDuration || 20)} min)`
+                : "Agendamento automático pausado"}
+            </span>
           </div>
         </div>
       </div>

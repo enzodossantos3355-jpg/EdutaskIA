@@ -90,6 +90,16 @@ h4,
   box-shadow: 2px 2px 0 0 #0a0a0a;
 }
 
+.nb-btn-primary {
+  background-color: #38bdf8 !important;
+  color: #0a0a0a !important;
+  border-color: #0a0a0a !important;
+}
+
+.nb-btn-primary:hover:not(:disabled) {
+  background-color: #0ea5e9 !important;
+}
+
 .nb-input {
   background: #fff;
   border: 2px solid #0a0a0a;
@@ -163,11 +173,22 @@ h4,
 }
 .fx-neon-pulse { animation: fx-neon-pulse 2s ease-in-out infinite; }
 
-/* Sunset — orange/pink gradient border */
+/* Sunset — vibrant glowing sunset orange/pink */
+@keyframes fx-sunset {
+  0%, 100% {
+    box-shadow: 0 0 0 3px #f97316, 0 0 24px 6px rgba(249,115,22,0.85), 0 0 38px 10px rgba(236,72,153,0.55);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 4px #fb923c, 0 0 34px 10px rgba(249,115,22,0.95), 0 0 52px 15px rgba(244,63,94,0.75);
+    transform: scale(1.02);
+  }
+}
 .fx-sunset {
-  padding: 3px;
-  background: conic-gradient(from 0deg, #f97316, #ec4899, #f59e0b, #f97316);
-  animation: fx-spin 6s linear infinite;
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #f97316, #ec4899, #fbbf24, #f43f5e, #f97316);
+  border-radius: 50%;
+  animation: fx-sunset 2.2s ease-in-out infinite, fx-spin 5s linear infinite;
 }
 .fx-sunset > * { background: white; border-radius: 50%; }
 
@@ -283,3 +304,139 @@ h4,
   animation: fx-diamond 1.8s ease-in-out infinite, fx-spin 6s linear infinite;
 }
 .fx-diamond > * { background: white; border-radius: 50%; }
+
+/* SpongeBob (Bob Esponja & Fenda do Biquíni) — porous sponge gold, ocean bubbles and joyful tropical aura */
+@keyframes fx-spongebob {
+  0%, 100% {
+    box-shadow: 0 0 0 3px #facc15, 0 0 24px 6px rgba(250,204,21,0.85), 0 0 40px 10px rgba(56,189,248,0.65);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 4px #fbbf24, 0 0 32px 10px rgba(250,204,21,0.95), 0 0 55px 16px rgba(56,189,248,0.85);
+    transform: scale(1.025);
+  }
+}
+.fx-spongebob {
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #fde047, #38bdf8, #f472b6, #fb923c, #fde047);
+  border-radius: 50%;
+  animation: fx-spongebob 1.8s ease-in-out infinite, fx-spin 5s linear infinite;
+}
+.fx-spongebob > * { background: white; border-radius: 50%; }
+
+/* Card-Level Molduras (Efeito na Moldura inteira do bloco do perfil) */
+@keyframes card-glow-pulse {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(250,204,21,0.4)); }
+  50%      { filter: drop-shadow(0 0 16px rgba(250,204,21,0.75)); }
+}
+
+.card-moldura-spongebob {
+  background: linear-gradient(135deg, #fef08a 0%, #fde047 50%, #facc15 100%) !important;
+  border-color: #ca8a04 !important;
+  box-shadow: 0 0 20px rgba(250,204,21,0.65), 4px 4px 0px 0px rgba(161,98,7,1) !important;
+  animation: card-glow-pulse 2.5s ease-in-out infinite;
+}
+
+.card-moldura-neon {
+  background: #0f172a !important;
+  border-color: #22d3ee !important;
+  color: #ecfeff !important;
+  box-shadow: 0 0 22px rgba(34,211,238,0.55), 4px 4px 0px 0px rgba(6,182,212,1) !important;
+}
+
+.card-moldura-golden {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #fef08a 100%) !important;
+  border-color: #d97706 !important;
+  color: #78350f !important;
+  box-shadow: 0 0 22px rgba(245,158,11,0.6), 4px 4px 0px 0px rgba(180,83,9,1) !important;
+}
+
+.card-moldura-rainbow {
+  border-color: #ec4899 !important;
+  box-shadow: 0 0 20px rgba(236,72,153,0.5), 4px 4px 0px 0px rgba(168,85,247,1) !important;
+}
+
+.card-moldura-ice {
+  background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%) !important;
+  border-color: #38bdf8 !important;
+  color: #082f49 !important;
+  box-shadow: 0 0 20px rgba(56,189,248,0.55), 4px 4px 0px 0px rgba(2,132,199,1) !important;
+}
+
+.card-moldura-fire {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%) !important;
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 20px rgba(239,68,68,0.55), 4px 4px 0px 0px rgba(220,38,38,1) !important;
+}
+
+.card-moldura-galaxy {
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%) !important;
+  border-color: #c084fc !important;
+  color: #f3e8ff !important;
+  box-shadow: 0 0 25px rgba(192,132,252,0.6), 4px 4px 0px 0px rgba(147,51,234,1) !important;
+}
+
+.card-moldura-shadow {
+  background: #171717 !important;
+  border-color: #525252 !important;
+  color: #fafafa !important;
+  box-shadow: 0 0 16px rgba(0,0,0,0.85), 4px 4px 0px 0px rgba(64,64,64,1) !important;
+}
+
+.card-moldura-phoenix {
+  background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%) !important;
+  border-color: #e11d48 !important;
+  color: #881337 !important;
+  box-shadow: 0 0 25px rgba(225,29,72,0.65), 4px 4px 0px 0px rgba(159,18,57,1) !important;
+}
+
+.card-moldura-sakura {
+  background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%) !important;
+  border-color: #f472b6 !important;
+  color: #831843 !important;
+  box-shadow: 0 0 18px rgba(244,114,182,0.55), 4px 4px 0px 0px rgba(219,39,119,1) !important;
+}
+
+.card-moldura-emerald {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  border-color: #10b981 !important;
+  color: #064e3b !important;
+  box-shadow: 0 0 18px rgba(16,185,129,0.55), 4px 4px 0px 0px rgba(5,150,105,1) !important;
+}
+
+.card-moldura-sunset {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 40%, #fed7aa 80%, #fbcfe8 100%) !important;
+  border-color: #ea580c !important;
+  color: #7c2d12 !important;
+  box-shadow: 0 0 24px rgba(249,115,22,0.7), 4px 4px 0px 0px rgba(194,65,12,1) !important;
+  animation: card-glow-pulse 2.8s ease-in-out infinite;
+}
+
+/* Mentalist — crimson analytical aura */
+@keyframes fx-mentalist {
+  0%, 100% {
+    box-shadow: 0 0 0 3px #b91c1c, 0 0 24px 6px rgba(185,28,28,0.85), 0 0 36px 8px rgba(153,27,27,0.5);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 4.5px #dc2626, 0 0 34px 10px rgba(220,38,38,0.95), 0 0 50px 14px rgba(153,27,27,0.75);
+    transform: scale(1.025);
+  }
+}
+.fx-mentalist {
+  padding: 3.5px;
+  background: conic-gradient(from 45deg, #991b1b, #dc2626, #fef3c7, #7f1d1d, #991b1b);
+  border-radius: 50%;
+  animation: fx-mentalist 2s ease-in-out infinite, fx-spin 6s linear infinite;
+}
+.fx-mentalist > * { background: white; border-radius: 50%; }
+
+.card-moldura-mentalist {
+  background: #7f1d1d !important;
+  border-color: #991b1b !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 24px rgba(185,28,28,0.75), 4px 4px 0px 0px rgba(69,10,10,1) !important;
+}
+
+
+

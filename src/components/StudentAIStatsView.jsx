@@ -116,7 +116,7 @@ export default function StudentAIStatsView() {
                   </span>
                   <span className="nb-badge bg-white text-violet-950 text-xs font-bold flex items-center gap-1">
                     <ShoppingBag className="w-3.5 h-3.5 text-violet-600" />
-                    {leader.points} pts (molduras)
+                    {leader.points || 0} pts (molduras)
                   </span>
                 </div>
               </div>

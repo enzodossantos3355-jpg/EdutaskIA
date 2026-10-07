@@ -1,22 +1,25 @@
 import { useEffect, useState } from "react";
-import { Pencil, ShoppingBag } from "lucide-react";
+import { Pencil, ShoppingBag, Palette } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 import AvatarUploader from "@/components/AvatarUploader";
-import { effectClass } from "@/lib/effects";
+import { effectClass, getTheme } from "@/lib/themes";
 import EditProfileDialog from "@/components/EditProfileDialog";
 import StatsCard from "@/components/StatsCard";
 import Avatar from "@/components/Avatar";
 
 /**
  * Banner shown at top of admin and student dashboards letting the user
- * change their own avatar, name and password. Also shows stats for alunos.
+ * change their own avatar, name and password. Also shows stats for alunos and active theme.
  */
-export default function MyProfileBanner({ bg = "bg-amber-200", onOpenStore = null }) {
+export default function MyProfileBanner({ bg = null, onOpenStore = null }) {
   const { user, refresh } = useAuth();
   const [hasAvatar, setHasAvatar] = useState(Boolean(user?.has_avatar));
   const [editing, setEditing] = useState(false);
   const [stats, setStats] = useState(null);
+
+  const currentTheme = getTheme(user?.equipped_effect);
+  const bannerBg = bg || currentTheme.dashboardBannerClass || "bg-amber-200 border-2 border-black";
 
   useEffect(() => {
     if (user?.role === "aluno") {
@@ -28,7 +31,7 @@ export default function MyProfileBanner({ bg = "bg-amber-200", onOpenStore = nul
   const isAluno = user.role === "aluno";
 
   return (
-    <div className={`nb-card p-3.5 sm:p-5 mb-4 sm:mb-8 ${bg}`} data-testid="my-profile-banner">
+    <div className={`nb-card p-3.5 sm:p-5 mb-4 sm:mb-8 transition-all duration-300 ${bannerBg}`} data-testid="my-profile-banner">
       <div className="flex items-start justify-between flex-wrap gap-3 sm:gap-5">
         <div className="flex items-center gap-3 sm:gap-4">
           <AvatarUploader
@@ -45,10 +48,10 @@ export default function MyProfileBanner({ bg = "bg-amber-200", onOpenStore = nul
             effect={effectClass(user.equipped_effect)}
           />
           <div className="min-w-0">
-            <p className="font-heading font-bold text-base sm:text-lg leading-tight flex items-center gap-2">
+            <p className="font-heading font-bold text-base sm:text-lg leading-tight flex items-center gap-2 flex-wrap">
               <span className="truncate">{user.name}</span>
             </p>
-            <p className="text-xs text-neutral-700">{user.role === "admin" ? "Administrador" : "Aluno"}</p>
+            <p className="text-xs opacity-85 font-medium">{user.role === "admin" ? "Administrador" : "Aluno"}</p>
             {user.role === "admin" && (
               <button
                 onClick={() => setEditing(true)}
@@ -62,11 +65,11 @@ export default function MyProfileBanner({ bg = "bg-amber-200", onOpenStore = nul
             {isAluno && onOpenStore && (
               <button
                 onClick={onOpenStore}
-                className="nb-btn bg-amber-300 hover:bg-amber-400 text-neutral-950 px-2.5 py-1 text-xs font-bold flex items-center gap-1.5 mt-1.5"
+                className="nb-btn bg-amber-300 hover:bg-amber-400 text-neutral-950 px-2.5 py-1 text-xs font-bold flex items-center gap-1.5 mt-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                 data-testid="profile-open-store-button"
                 title="Acessar a Loja de Molduras"
               >
-                <ShoppingBag className="w-3.5 h-3.5 text-amber-950" />
+                <Palette className="w-3.5 h-3.5 text-amber-950" />
                 <span>Loja de Molduras</span>
                 <span className="nb-badge bg-white text-[10px] ml-0.5">{user.points || 0} pts</span>
               </button>

@@ -299,12 +299,21 @@ export default function AIAdminPanel() {
 
 function MonthlyReportDialog({ open, onClose, student, data, loading }) {
   if (!open) return null;
+
+  const points = data?.student?.points ?? data?.points ?? student?.points ?? 0;
+  const onTime = data?.metrics?.on_time ?? data?.on_time_completions ?? 0;
+  const totalCompleted = data?.metrics?.total_completed ?? data?.total_completions ?? 0;
+  const totalAssigned = data?.metrics?.total_assigned ?? ((data?.total_completions ?? 0) + (data?.uncompleted_tasks ?? 0));
+  const completionPct = data?.metrics?.completion_pct ?? (totalAssigned > 0 ? Math.round((totalCompleted / totalAssigned) * 100) : 100);
+  const late = data?.metrics?.late ?? Math.max(0, totalCompleted - onTime);
+  const reportText = data?.report ?? "";
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-3 sm:p-4" data-testid="monthly-report-dialog">
       <div className="nb-card bg-white w-full max-w-2xl max-h-[92vh] overflow-auto p-5 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="min-w-0">
-            <h3 className="font-heading font-black text-xl sm:text-2xl">Relatório de {student.name}</h3>
+            <h3 className="font-heading font-black text-xl sm:text-2xl">Relatório de {student?.name || data?.student_name || "Aluno"}</h3>
             <p className="text-xs text-neutral-500">Gerado por IA — revise antes de compartilhar</p>
           </div>
           <button onClick={onClose} className="nb-btn bg-white px-2 py-2"><X className="w-4 h-4" /></button>
@@ -317,22 +326,22 @@ function MonthlyReportDialog({ open, onClose, student, data, loading }) {
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <StatBox label="Pontos (loja)" value={data.student.points} />
-              <StatBox label="No prazo" value={data.metrics.on_time} good />
-              <StatBox label="Concluídas / total" value={`${data.metrics.total_completed}/${data.metrics.total_assigned}`} />
-              <StatBox label="% conclusão" value={`${data.metrics.completion_pct}%`} />
+              <StatBox label="Pontos (loja)" value={points} />
+              <StatBox label="No prazo" value={onTime} good />
+              <StatBox label="Concluídas / total" value={`${totalCompleted}/${totalAssigned}`} />
+              <StatBox label="% conclusão" value={`${completionPct}%`} />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <StatBox label="No prazo (mês)" value={data.metrics.on_time} good />
-              <StatBox label="Atrasadas (mês)" value={data.metrics.late} bad />
+              <StatBox label="No prazo (mês)" value={onTime} good />
+              <StatBox label="Atrasadas (mês)" value={late} bad />
             </div>
             <div className="nb-card bg-amber-50 p-4">
               <p className="text-xs font-bold uppercase tracking-wider mb-2">Bilhete pedagógico</p>
-              <p className="text-sm whitespace-pre-wrap" data-testid="monthly-report-text">{data.report}</p>
+              <p className="text-sm whitespace-pre-wrap" data-testid="monthly-report-text">{reportText}</p>
             </div>
             <button
               onClick={() => {
-                navigator.clipboard.writeText(data.report);
+                navigator.clipboard.writeText(reportText);
                 toast.success("Copiado! ✓");
               }}
               className="nb-btn w-full bg-emerald-300 hover:bg-emerald-400 py-2.5"
