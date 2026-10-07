@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { Calendar as CalendarIcon, Paperclip, Check, BookOpen, Filter, Megaphone, LayoutGrid, CalendarDays, Sparkles, ShoppingBag, BarChart3, HelpCircle, Star, ExternalLink, Image as ImageIcon, Loader2, Copy, CheckCheck, FileText, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
+import { firebaseService } from "@/lib/firebaseService";
 import { useAuth } from "@/context/AuthContext";
 import { useAIStatus } from "@/context/AIStatusContext";
 import AppHeader from "@/components/AppHeader";
@@ -44,11 +45,33 @@ export default function StudentDashboard() {
       setTasks(t);
       setAnnouncements(a);
     } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail));
+      try {
+        const [allTasks, allAnnouncements, allCompletions] = await Promise.all([
+          firebaseService.getAllTasks(),
+          firebaseService.getAllAnnouncements(),
+          firebaseService.getAllCompletions(),
+        ]);
+        const currentUserId = user?.id;
+        const mapped = (allTasks || [])
+          .filter((t) => !t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(currentUserId))
+          .map((t) => {
+            const comp = (allCompletions || []).find((c) => c.task_id === t.id && c.user_id === currentUserId);
+            return {
+              ...t,
+              completed: Boolean(comp),
+              completed_at: comp?.completed_at,
+              points_awarded: comp?.points_awarded,
+            };
+          });
+        setTasks(mapped);
+        setAnnouncements(allAnnouncements || []);
+      } catch (e2) {
+        toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao carregar tarefas");
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -116,7 +139,25 @@ export default function StudentDashboard() {
       }
       load();
     } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail));
+      try {
+        if (task.completed) {
+          await firebaseService.deleteCompletion(user.id, task.id);
+          toast("Tarefa desmarcada");
+        } else {
+          await firebaseService.saveCompletion({
+            user_id: user.id,
+            task_id: task.id,
+            completed_at: new Date().toISOString(),
+            points_awarded: task.points || 10,
+            on_time: true,
+          });
+          toast.success("Tarefa concluída! 🎉");
+          fireConfetti();
+        }
+        load();
+      } catch (e2) {
+        toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao atualizar status");
+      }
     }
   };
 

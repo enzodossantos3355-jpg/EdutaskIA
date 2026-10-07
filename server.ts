@@ -816,7 +816,7 @@ api.get('/users', requireAuth, (req, res) => {
   res.json(users);
 });
 
-api.post('/users', requireAdmin, (req, res) => {
+api.post('/users', requireAdmin, async (req, res) => {
   const { name, password } = req.body || {};
   if (!name || !password) {
     return res.status(400).json({ detail: 'Nome e senha são obrigatórios' });
@@ -844,7 +844,7 @@ api.post('/users', requireAdmin, (req, res) => {
 
   db.users.set(id, newUser);
   db.saveToDisk();
-  firebaseService.saveUser(newUser).catch(console.warn);
+  await firebaseService.saveUser(newUser).catch(console.warn);
 
   res.json({
     id: newUser.id,
@@ -857,7 +857,7 @@ api.post('/users', requireAdmin, (req, res) => {
   });
 });
 
-api.patch('/users/:user_id/status', requireAdmin, (req, res) => {
+api.patch('/users/:user_id/status', requireAdmin, async (req, res) => {
   const { user_id } = req.params;
   const { status } = req.body || {};
   const user = db.users.get(user_id);
@@ -867,12 +867,12 @@ api.patch('/users/:user_id/status', requireAdmin, (req, res) => {
   }
   user.status = status;
   db.saveToDisk();
-  firebaseService.saveUser(user).catch(console.warn);
+  await firebaseService.saveUser(user).catch(console.warn);
 
   res.json({ ok: true, status: user.status });
 });
 
-api.patch('/users/:user_id', requireAdmin, (req, res) => {
+api.patch('/users/:user_id', requireAdmin, async (req, res) => {
   const { user_id } = req.params;
   const { name, password } = req.body || {};
   const user = db.users.get(user_id);
@@ -884,12 +884,12 @@ api.patch('/users/:user_id', requireAdmin, (req, res) => {
     user.password_plain = password;
   }
   db.saveToDisk();
-  firebaseService.saveUser(user).catch(console.warn);
+  await firebaseService.saveUser(user).catch(console.warn);
 
   res.json({ ok: true, user: { id: user.id, name: user.name } });
 });
 
-api.patch('/me', requireAuth, (req, res) => {
+api.patch('/me', requireAuth, async (req, res) => {
   const user = (req as any).user as User;
   const { name, password } = req.body || {};
   if (name) user.name = name.trim();
@@ -898,12 +898,12 @@ api.patch('/me', requireAuth, (req, res) => {
     user.password_plain = password;
   }
   db.saveToDisk();
-  firebaseService.saveUser(user).catch(console.warn);
+  await firebaseService.saveUser(user).catch(console.warn);
 
   res.json({ ok: true });
 });
 
-api.delete('/users/:user_id', requireAdmin, (req, res) => {
+api.delete('/users/:user_id', requireAdmin, async (req, res) => {
   const { user_id } = req.params;
   const user = db.users.get(user_id);
   if (!user) return res.status(404).json({ detail: 'Usuário não encontrado' });
@@ -912,12 +912,12 @@ api.delete('/users/:user_id', requireAdmin, (req, res) => {
   }
   db.users.delete(user_id);
   db.saveToDisk();
-  firebaseService.deleteUser(user_id).catch(console.warn);
+  await firebaseService.deleteUser(user_id).catch(console.warn);
 
   res.json({ ok: true });
 });
 
-api.post('/users/:user_id/points', requireAdmin, (req, res) => {
+api.post('/users/:user_id/points', requireAdmin, async (req, res) => {
   const { user_id } = req.params;
   const { delta, reason } = req.body || {};
   const user = db.users.get(user_id);
@@ -939,7 +939,7 @@ api.post('/users/:user_id/points', requireAdmin, (req, res) => {
   });
 
   db.saveToDisk();
-  firebaseService.saveUser(user).catch(console.warn);
+  await firebaseService.saveUser(user).catch(console.warn);
 
   res.json({ ok: true, total_points: user.points, delta: d });
 });
@@ -947,29 +947,29 @@ api.post('/users/:user_id/points', requireAdmin, (req, res) => {
 // ---------------------------------------------------------------------------
 // Avatars
 // ---------------------------------------------------------------------------
-api.post('/me/avatar', requireAuth, upload.single('file'), (req, res) => {
+api.post('/me/avatar', requireAuth, upload.single('file'), async (req, res) => {
   const user = (req as any).user as User;
   if (!req.file) return res.status(400).json({ detail: 'Nenhum arquivo enviado' });
 
   user.avatar_data = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
   user.avatar_content_type = req.file.mimetype;
   db.saveToDisk();
-  firebaseService.saveUser(user).catch(console.warn);
+  await firebaseService.saveUser(user).catch(console.warn);
 
   res.json({ ok: true });
 });
 
-api.delete('/me/avatar', requireAuth, (req, res) => {
+api.delete('/me/avatar', requireAuth, async (req, res) => {
   const user = (req as any).user as User;
   user.avatar_data = undefined;
   user.avatar_content_type = undefined;
   db.saveToDisk();
-  firebaseService.saveUser(user).catch(console.warn);
+  await firebaseService.saveUser(user).catch(console.warn);
 
   res.json({ ok: true });
 });
 
-api.post('/users/:user_id/avatar', requireAdmin, upload.single('file'), (req, res) => {
+api.post('/users/:user_id/avatar', requireAdmin, upload.single('file'), async (req, res) => {
   const { user_id } = req.params;
   const user = db.users.get(user_id);
   if (!user) return res.status(404).json({ detail: 'Usuário não encontrado' });
@@ -978,12 +978,12 @@ api.post('/users/:user_id/avatar', requireAdmin, upload.single('file'), (req, re
   user.avatar_data = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
   user.avatar_content_type = req.file.mimetype;
   db.saveToDisk();
-  firebaseService.saveUser(user).catch(console.warn);
+  await firebaseService.saveUser(user).catch(console.warn);
 
   res.json({ ok: true });
 });
 
-api.delete('/users/:user_id/avatar', requireAdmin, (req, res) => {
+api.delete('/users/:user_id/avatar', requireAdmin, async (req, res) => {
   const { user_id } = req.params;
   const user = db.users.get(user_id);
   if (!user) return res.status(404).json({ detail: 'Usuário não encontrado' });
@@ -991,7 +991,7 @@ api.delete('/users/:user_id/avatar', requireAdmin, (req, res) => {
   user.avatar_data = undefined;
   user.avatar_content_type = undefined;
   db.saveToDisk();
-  firebaseService.saveUser(user).catch(console.warn);
+  await firebaseService.saveUser(user).catch(console.warn);
 
   res.json({ ok: true });
 });
@@ -1018,23 +1018,23 @@ api.get('/subjects', requireAuth, (req, res) => {
   res.json(Array.from(db.subjects.values()));
 });
 
-api.post('/subjects', requireAdmin, (req, res) => {
+api.post('/subjects', requireAdmin, async (req, res) => {
   const { name } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ detail: 'Nome obrigatório' });
   const id = `subj-${Date.now()}`;
   const subj = { id, name: name.trim() };
   db.subjects.set(id, subj);
   db.saveToDisk();
-  firebaseService.saveSubject(subj).catch(console.warn);
+  await firebaseService.saveSubject(subj).catch(console.warn);
 
   res.json(subj);
 });
 
-api.delete('/subjects/:subject_id', requireAdmin, (req, res) => {
+api.delete('/subjects/:subject_id', requireAdmin, async (req, res) => {
   const { subject_id } = req.params;
   db.subjects.delete(subject_id);
   db.saveToDisk();
-  firebaseService.deleteSubject(subject_id).catch(console.warn);
+  await firebaseService.deleteSubject(subject_id).catch(console.warn);
 
   res.json({ ok: true });
 });
@@ -1067,7 +1067,7 @@ api.post('/files/upload', requireAdmin, upload.single('file'), async (req, res) 
   db.files.set(id, record);
   db.saveToDisk();
 
-  firebaseService.saveFile({
+  await firebaseService.saveFile({
     id,
     original_filename: record.original_filename,
     content_type: record.content_type,
@@ -1245,7 +1245,7 @@ api.get('/tasks', requireAuth, (req, res) => {
   res.json(filtered.map((t) => buildTaskResponseForStudent(t, user.id)));
 });
 
-api.post('/tasks', requireAdmin, (req, res) => {
+api.post('/tasks', requireAdmin, async (req, res) => {
   const { title, description, subject, due_date, points, assigned_to, attachments, admin_photos, answer, answer_source } = req.body || {};
   if (!title || !description || !subject || !due_date) {
     return res.status(400).json({ detail: 'Campos obrigatórios ausentes' });
@@ -1271,8 +1271,8 @@ api.post('/tasks', requireAdmin, (req, res) => {
   db.tasks.set(id, newTask);
   db.saveToDisk();
 
-  // Sincronizar criação na coleção tasks do Firebase Firestore (assíncrono / não bloqueante)
-  firebaseService.saveTask(newTask).catch((err) => {
+  // Sincronizar criação na coleção tasks do Firebase Firestore
+  await firebaseService.saveTask(newTask).catch((err) => {
     console.warn('[Firebase] Erro ao salvar tarefa no Firestore:', err);
   });
 
@@ -1439,7 +1439,7 @@ api.post('/tasks/:task_id/send-whatsapp', requireAdmin, async (req, res) => {
   });
 });
 
-api.put('/tasks/:task_id', requireAdmin, (req, res) => {
+api.put('/tasks/:task_id', requireAdmin, async (req, res) => {
   const { task_id } = req.params;
   const task = db.tasks.get(task_id);
   if (!task) return res.status(404).json({ detail: 'Tarefa não encontrada' });
@@ -1459,7 +1459,7 @@ api.put('/tasks/:task_id', requireAdmin, (req, res) => {
   db.saveToDisk();
 
   // Sincronizar edição na coleção tasks do Firebase Firestore
-  firebaseService.saveTask(task).catch((err) => {
+  await firebaseService.saveTask(task).catch((err) => {
     console.warn(`[Firebase] Erro ao atualizar tarefa ${task_id} no Firestore:`, err);
   });
 
@@ -1593,12 +1593,12 @@ Diretrizes obrigatórias:
   res.json(record);
 });
 
-api.delete('/tasks/:task_id', requireAdmin, (req, res) => {
+api.delete('/tasks/:task_id', requireAdmin, async (req, res) => {
   const { task_id } = req.params;
   const completionsToDelete = db.completions.filter((c) => c.task_id === task_id);
-  completionsToDelete.forEach((c) => {
-    firebaseService.deleteCompletion(c.user_id, task_id).catch(console.warn);
-  });
+  for (const c of completionsToDelete) {
+    await firebaseService.deleteCompletion(c.user_id, task_id).catch(console.warn);
+  }
 
   db.tasks.delete(task_id);
   db.completions = db.completions.filter((c) => c.task_id !== task_id);
@@ -1611,7 +1611,7 @@ api.delete('/tasks/:task_id', requireAdmin, (req, res) => {
 
   db.saveToDisk();
 
-  firebaseService.deleteTask(task_id).catch((err) => {
+  await firebaseService.deleteTask(task_id).catch((err) => {
     console.warn(`[Firebase] Erro ao remover tarefa ${task_id} do Firestore:`, err);
   });
 
@@ -1817,7 +1817,7 @@ api.post('/tasks/:task_id/complete', requireAuth, async (req, res) => {
   res.json({ ok: true, points_awarded: awarded, on_time: onTime, new_total: user.points });
 });
 
-api.post('/tasks/:task_id/uncomplete', requireAuth, (req, res) => {
+api.post('/tasks/:task_id/uncomplete', requireAuth, async (req, res) => {
   const { task_id } = req.params;
   const user = (req as any).user as User;
 
@@ -1826,10 +1826,10 @@ api.post('/tasks/:task_id/uncomplete', requireAuth, (req, res) => {
     const comp = db.completions[idx];
     if (user.role === 'aluno') {
       user.points = Math.max(0, (user.points || 0) - comp.points_awarded);
-      firebaseService.saveUser(user).catch(console.warn);
+      await firebaseService.saveUser(user).catch(console.warn);
     }
     db.completions.splice(idx, 1);
-    firebaseService.deleteCompletion(user.id, task_id).catch(console.warn);
+    await firebaseService.deleteCompletion(user.id, task_id).catch(console.warn);
     db.saveToDisk();
   }
 
@@ -2016,7 +2016,7 @@ api.get('/announcements/:ann_id/comments', requireAuth, (req, res) => {
   res.json(comments);
 });
 
-api.post('/announcements/:ann_id/comments', requireAuth, (req, res) => {
+api.post('/announcements/:ann_id/comments', requireAuth, async (req, res) => {
   const { ann_id } = req.params;
   const { text } = req.body || {};
   if (!text || !text.trim()) return res.status(400).json({ detail: 'Comentário vazio' });
@@ -2035,12 +2035,12 @@ api.post('/announcements/:ann_id/comments', requireAuth, (req, res) => {
 
   db.comments.set(id, comment);
   db.saveToDisk();
-  firebaseService.saveComment(comment).catch(console.warn);
+  await firebaseService.saveComment(comment).catch(console.warn);
 
   res.json(comment);
 });
 
-api.delete('/announcements/:ann_id/comments/:comment_id', requireAuth, (req, res) => {
+api.delete('/announcements/:ann_id/comments/:comment_id', requireAuth, async (req, res) => {
   const { comment_id } = req.params;
   const user = (req as any).user as User;
   const comment = db.comments.get(comment_id);
@@ -2052,7 +2052,7 @@ api.delete('/announcements/:ann_id/comments/:comment_id', requireAuth, (req, res
 
   db.comments.delete(comment_id);
   db.saveToDisk();
-  firebaseService.deleteComment(comment_id).catch(console.warn);
+  await firebaseService.deleteComment(comment_id).catch(console.warn);
 
   res.json({ ok: true });
 });
@@ -2715,7 +2715,7 @@ api.put('/effects/:effect_id', requireAdmin, (req, res) => {
   res.json({ ok: true, effect_id, new_cost: c });
 });
 
-api.post('/me/effects/buy', requireAuth, (req, res) => {
+api.post('/me/effects/buy', requireAuth, async (req, res) => {
   const user = (req as any).user as User;
   const { effect_id } = req.body || {};
   const catalog = db.getEffectsCatalog();
@@ -2737,7 +2737,7 @@ api.post('/me/effects/buy', requireAuth, (req, res) => {
   user.points -= cost;
   user.owned_effects.push(effect.id);
   db.saveToDisk();
-  firebaseService.saveUser(user).catch(console.warn);
+  await firebaseService.saveUser(user).catch(console.warn);
 
   res.json({
     ok: true,
@@ -2746,7 +2746,7 @@ api.post('/me/effects/buy', requireAuth, (req, res) => {
   });
 });
 
-api.post('/me/effects/equip', requireAuth, (req, res) => {
+api.post('/me/effects/equip', requireAuth, async (req, res) => {
   const user = (req as any).user as User;
   const { effect_id } = req.body || {};
   const effId = effect_id || 'none';
@@ -2760,7 +2760,7 @@ api.post('/me/effects/equip', requireAuth, (req, res) => {
 
   user.equipped_effect = effId;
   db.saveToDisk();
-  firebaseService.saveUser(user).catch(console.warn);
+  await firebaseService.saveUser(user).catch(console.warn);
   res.json({ ok: true, equipped: effId });
 });
 

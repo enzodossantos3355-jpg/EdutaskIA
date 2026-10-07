@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
+import { firebaseService } from "@/lib/firebaseService";
 import AppHeader from "@/components/AppHeader";
 import RecipientSelector from "@/components/RecipientSelector";
 import MyProfileBanner from "@/components/MyProfileBanner";
@@ -177,7 +178,14 @@ function TasksPanel() {
       setTasks(t);
       if (c) setCleanupData(c);
     } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail));
+      try {
+        const firestoreTasks = await firebaseService.getAllTasks();
+        if (firestoreTasks) {
+          setTasks(firestoreTasks);
+        }
+      } catch (e2) {
+        toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao carregar tarefas");
+      }
     } finally {
       setLoading(false);
     }
@@ -193,7 +201,14 @@ function TasksPanel() {
       setConfirmDelete(null);
       load();
     } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail));
+      try {
+        await firebaseService.deleteTask(confirmDelete.id);
+        toast.success("Tarefa excluída");
+        setConfirmDelete(null);
+        load();
+      } catch (e2) {
+        toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao excluir tarefa");
+      }
     }
   };
 
@@ -572,7 +587,19 @@ function TaskDialog({ task, onClose, onSaved }) {
       }
       onSaved();
     } catch (err) {
-      toast.error(formatApiError(err?.response?.data?.detail));
+      try {
+        const taskId = currentTask?.id || `task-${Date.now()}`;
+        const taskDoc = {
+          id: taskId,
+          ...payload,
+          created_at: currentTask?.created_at || new Date().toISOString(),
+        };
+        await firebaseService.saveTask(taskDoc);
+        toast.success(currentTask?.id ? "Tarefa atualizada!" : "Tarefa criada!");
+        onSaved();
+      } catch (err2) {
+        toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao salvar tarefa");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -822,7 +849,16 @@ function StudentsPanel() {
       const { data } = await api.get("/users");
       setStudents(data);
     } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail));
+      try {
+        const firestoreUsers = await firebaseService.getAllUsers();
+        if (firestoreUsers && firestoreUsers.length > 0) {
+          setStudents(firestoreUsers.filter((u) => u.role === "aluno"));
+        } else {
+          setStudents([]);
+        }
+      } catch (e2) {
+        toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao carregar alunos");
+      }
     } finally {
       setLoading(false);
     }
@@ -838,7 +874,14 @@ function StudentsPanel() {
       setConfirmDelete(null);
       load();
     } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao remover");
+      try {
+        await firebaseService.deleteUser(confirmDelete.id);
+        toast.success("Aluno removido");
+        setConfirmDelete(null);
+        load();
+      } catch (e2) {
+        toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao remover");
+      }
     }
   };
 
@@ -1029,7 +1072,24 @@ function CreateStudentDialog({ onClose, onCreated }) {
       toast.success(`Aluno ${name} criado`);
       onCreated();
     } catch (err) {
-      toast.error(formatApiError(err?.response?.data?.detail));
+      try {
+        const id = `aluno-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const email = `${name.toLowerCase().replace(/\s+/g, '.')}-${Date.now().toString().slice(-4)}@escola.com`;
+        await firebaseService.saveUser({
+          id,
+          name: name.trim(),
+          email,
+          role: "aluno",
+          status: "active",
+          password_plain: password,
+          points: 0,
+          created_at: new Date().toISOString(),
+        });
+        toast.success(`Aluno ${name} criado`);
+        onCreated();
+      } catch (err2) {
+        toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao criar aluno");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -1093,7 +1153,14 @@ function SubjectsPanel() {
       const { data } = await api.get("/subjects");
       setSubjects(data);
     } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail));
+      try {
+        const firestoreSubjects = await firebaseService.getAllSubjects();
+        if (firestoreSubjects && firestoreSubjects.length > 0) {
+          setSubjects(firestoreSubjects);
+        }
+      } catch (e2) {
+        toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao carregar matérias");
+      }
     } finally {
       setLoading(false);
     }
@@ -1111,7 +1178,15 @@ function SubjectsPanel() {
       setNewName("");
       load();
     } catch (err) {
-      toast.error(formatApiError(err?.response?.data?.detail));
+      try {
+        const id = `subj-${Date.now()}`;
+        await firebaseService.saveSubject({ id, name: newName.trim() });
+        toast.success("Matéria adicionada");
+        setNewName("");
+        load();
+      } catch (err2) {
+        toast.error(formatApiError(err?.response?.data?.detail) || "Erro ao adicionar matéria");
+      }
     } finally {
       setAdding(false);
     }
@@ -1125,7 +1200,14 @@ function SubjectsPanel() {
       setConfirmDelete(null);
       load();
     } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail));
+      try {
+        await firebaseService.deleteSubject(confirmDelete.id);
+        toast.success("Matéria removida");
+        setConfirmDelete(null);
+        load();
+      } catch (e2) {
+        toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao remover matéria");
+      }
     }
   };
 
@@ -1439,7 +1521,21 @@ function AnnouncementDialog({ announcement, students, onClose, onSaved }) {
       }
       onSaved();
     } catch (err) {
-      toast.error(formatApiError(err?.response?.data?.detail));
+      try {
+        const annId = announcement?.id || `ann-${Date.now()}`;
+        await firebaseService.saveAnnouncement({
+          id: annId,
+          title,
+          message,
+          assigned_to: assignedTo,
+          is_special: isSpecial,
+          created_at: announcement?.created_at || new Date().toISOString(),
+        });
+        toast.success(isEdit ? "Aviso atualizado!" : "Aviso publicado!");
+        onSaved();
+      } catch (err2) {
+        toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao salvar aviso");
+      }
     } finally {
       setSubmitting(false);
     }
