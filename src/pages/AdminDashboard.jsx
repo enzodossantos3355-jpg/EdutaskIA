@@ -19,7 +19,7 @@ import AdminSystemClock from "@/components/AdminSystemClock";
 import WhatsAppConfigPanel from "@/components/WhatsAppConfigPanel";
 import WhatsAppDispatchDialog from "@/components/WhatsAppDispatchDialog";
 import ZipDataTransferPanel from "@/components/ZipDataTransferPanel";
-import { effectClass } from "@/lib/effects";
+import { effectClass, pullScreenToStore } from "@/lib/effects";
 import { getPriority, formatDateBR } from "@/lib/priority";
 
 const STATUS_OPTS = [
@@ -62,80 +62,84 @@ export default function AdminDashboard() {
           onConfigureCleanup={() => setGlobalCleanupOpen(true)}
         />
 
-        <div className="flex flex-wrap gap-2 sm:gap-3 mb-6 sm:mb-8">
+        <div className="flex items-center gap-2 sm:gap-3 mb-6 sm:mb-8 overflow-x-auto pb-2 scrollbar-none sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
           <button
             onClick={() => setTab("tasks")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm ${tab === "tasks" ? "bg-sky-400" : "bg-white"}`}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "tasks" ? "bg-sky-400 font-bold" : "bg-white"}`}
             data-testid="tab-tasks"
           >
             <ListTodo className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Tarefas
           </button>
           <button
             onClick={() => setTab("announcements")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm ${tab === "announcements" ? "bg-violet-300" : "bg-white"}`}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "announcements" ? "bg-violet-300 font-bold" : "bg-white"}`}
             data-testid="tab-announcements"
           >
             <Megaphone className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Avisos
           </button>
           <button
             onClick={() => setTab("students")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm ${tab === "students" ? "bg-amber-300" : "bg-white"}`}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "students" ? "bg-amber-300 font-bold" : "bg-white"}`}
             data-testid="tab-students"
           >
             <Users className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Alunos
           </button>
           <button
             onClick={() => setTab("subjects")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm ${tab === "subjects" ? "bg-red-300" : "bg-white"}`}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "subjects" ? "bg-red-300 font-bold" : "bg-white"}`}
             data-testid="tab-subjects"
           >
             <BookMarked className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Matérias
           </button>
           <button
             onClick={() => setTab("logs")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm ${tab === "logs" ? "bg-emerald-300" : "bg-white"}`}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "logs" ? "bg-emerald-300 font-bold" : "bg-white"}`}
             data-testid="tab-logs"
           >
             <History className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Acessos
           </button>
           <button
             onClick={() => setTab("stats")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm ${tab === "stats" ? "bg-violet-400" : "bg-white"}`}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "stats" ? "bg-violet-400 font-bold" : "bg-white"}`}
             data-testid="tab-stats"
           >
             <BarChart3 className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Estatísticas
           </button>
           <button
             onClick={() => setTab("firmware")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm ${tab === "firmware" ? "bg-sky-300" : "bg-white"}`}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "firmware" ? "bg-sky-300 font-bold" : "bg-white"}`}
             data-testid="tab-firmware"
           >
             <Cpu className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Firmware
           </button>
           <button
             onClick={() => setTab("ai")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm ${tab === "ai" ? "bg-gradient-to-r from-violet-300 to-pink-300" : "bg-white"}`}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "ai" ? "bg-gradient-to-r from-violet-300 to-pink-300 font-bold" : "bg-white"}`}
             data-testid="tab-ai"
           >
             <Sparkles className="w-4 h-4 inline mr-1.5 sm:mr-2" /> IA
           </button>
           <button
-            onClick={() => setTab("store")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm ${tab === "store" ? "bg-amber-300" : "bg-white"}`}
+            onClick={() => {
+              setTab("store");
+              pullScreenToStore();
+            }}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "store" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"}`}
             data-testid="tab-store"
+            title="Acessar Loja de Molduras"
           >
-            <ShoppingBag className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Loja de Molduras
+            <ShoppingBag className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Loja de Molduras 🖼️
           </button>
           <button
             onClick={() => setTab("whatsapp")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm ${tab === "whatsapp" ? "bg-emerald-400 font-bold" : "bg-white"}`}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "whatsapp" ? "bg-emerald-400 font-bold" : "bg-white"}`}
             data-testid="tab-whatsapp"
           >
             <MessageSquare className="w-4 h-4 inline mr-1.5 sm:mr-2 text-emerald-950" /> WhatsApp
           </button>
           <button
             onClick={() => setTab("zip_transfer")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm ${tab === "zip_transfer" ? "bg-sky-300 font-bold" : "bg-white"}`}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "zip_transfer" ? "bg-sky-300 font-bold" : "bg-white"}`}
             data-testid="tab-zip-transfer"
           >
             <FileArchive className="w-4 h-4 inline mr-1.5 sm:mr-2 text-sky-950" /> Dados ZIP
@@ -473,6 +477,7 @@ function TaskDialog({ task, onClose, onSaved }) {
   const [answerSource, setAnswerSource] = useState(currentTask?.answer_source || "");
   const [answer, setAnswer] = useState(currentTask?.answer || "");
   const [points, setPoints] = useState(currentTask?.points ?? 10);
+  const [answerLength, setAnswerLength] = useState("medium");
   const [uploading, setUploading] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [generatingAnswer, setGeneratingAnswer] = useState(false);
@@ -568,9 +573,18 @@ function TaskDialog({ task, onClose, onSaved }) {
         title: title || "Atividade Escolar",
         description,
         answer_source: answerSource,
+        length: answerLength,
       });
-      setAnswer(gen.answer || "");
-      toast.success(`Gabarito gerado com base nas fotos analisadas! (${gen.photos_used || adminPhotos.length} foto(s)) ✨`);
+      const sanitized = (gen.answer || "")
+        .replace(/^#+\s*/gm, "")
+        .replace(/#+/g, "")
+        .replace(/\*\*/g, "")
+        .replace(/\*/g, "")
+        .replace(/^[ \t]*(?:Explicação|Resolução|Passo a passo|Justificativa):\s*/gim, "")
+        .trim();
+      setAnswer(sanitized);
+      const label = answerLength === "short" ? "Curto" : answerLength === "detailed" ? "Detalhado" : "Médio";
+      toast.success(`Gabarito (${label}) gerado com base nas fotos analisadas! (${gen.photos_used || adminPhotos.length} foto(s)) ✨`);
       // Dialog stays open so admin can review and click "Salvar alterações"
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao gerar resposta");
@@ -769,16 +783,39 @@ function TaskDialog({ task, onClose, onSaved }) {
                   </span>
                 </div>
                 {adminPhotos.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={generateAnswer}
-                    disabled={generatingAnswer}
-                    className="nb-btn px-2.5 py-1 bg-violet-200 hover:bg-violet-300 text-xs flex items-center gap-1 font-bold"
-                    data-testid="generate-answer-button"
-                  >
-                    <Sparkles className={`w-3.5 h-3.5 ${generatingAnswer ? "animate-spin" : ""}`} />
-                    {generatingAnswer ? "Lendo fotos e resolvendo..." : "Gerar gabarito das fotos (IA)"}
-                  </button>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-center gap-1 bg-neutral-100 p-0.5 rounded-lg border border-black/20">
+                      {[
+                        { key: "short", label: "⚡ Curto" },
+                        { key: "medium", label: "📝 Médio" },
+                        { key: "detailed", label: "📚 Detalhado" },
+                      ].map((opt) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          disabled={generatingAnswer}
+                          onClick={() => setAnswerLength(opt.key)}
+                          className={`px-2 py-0.5 text-[10px] font-bold rounded transition-all ${
+                            answerLength === opt.key
+                              ? "bg-amber-300 text-neutral-950 border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                              : "text-neutral-700 hover:text-black hover:bg-white/60"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={generateAnswer}
+                      disabled={generatingAnswer}
+                      className="nb-btn px-2.5 py-1 bg-violet-200 hover:bg-violet-300 text-xs flex items-center gap-1 font-bold"
+                      data-testid="generate-answer-button"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 ${generatingAnswer ? "animate-spin" : ""}`} />
+                      {generatingAnswer ? "Lendo fotos e resolvendo..." : "Gerar gabarito das fotos (IA)"}
+                    </button>
+                  </div>
                 )}
               </div>
               <label className="block w-full border-2 border-dashed border-neutral-400 hover:border-amber-600 rounded-xl bg-white/90 hover:bg-amber-50/50 p-3.5 cursor-pointer text-center transition-all" data-testid="task-photo-upload-zone">

@@ -45,7 +45,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 45000): Promise<T
   }
 }
 
-// Robust Gemini invocation with automatic model fallbacks (gemini-2.5-flash -> gemini-flash-latest -> gemini-3.8-flash)
+// Robust Gemini invocation with automatic model fallbacks (gemini-3.1-flash-lite -> gemini-2.5-flash -> gemini-flash-latest -> gemini-3.8-flash)
 async function callGeminiGenerate(params: {
   contents: any;
   config?: any;
@@ -54,9 +54,10 @@ async function callGeminiGenerate(params: {
 }): Promise<any> {
   if (!genAI) throw new Error('Gemini API não configurada');
   const candidateModels = [
-    params.preferredModel || 'gemini-2.5-flash',
-    'gemini-2.5-flash',
+    params.preferredModel || 'gemini-3.1-flash-lite',
+    'gemini-3.1-flash-lite',
     'gemini-flash-latest',
+    'gemini-2.5-flash',
     'gemini-3.8-flash',
   ];
   const modelsToTry = Array.from(new Set(candidateModels));
@@ -1598,16 +1599,15 @@ async function dispatchTaskWhatsAppNotifications(task: TaskItem) {
       return;
     }
 
+    // Regra: tarefas para alunos específicos NÃO devem ser enviadas automaticamente no WhatsApp
+    const isSpecific = Array.isArray(task.assigned_to) && task.assigned_to.length > 0;
+    if (isSpecific) {
+      console.log(`[WhatsApp] Tarefa "${task.title}" é exclusiva para pessoas específicas (${task.assigned_to.length}). Envio automático desativado.`);
+      return;
+    }
+
     // Identificar destinatários
     let recipientsLabel = 'Todos os alunos';
-    if (task.assigned_to && task.assigned_to.length > 0) {
-      const studentNames = task.assigned_to
-        .map((id) => db.users.get(id)?.name)
-        .filter(Boolean);
-      if (studentNames.length > 0) {
-        recipientsLabel = studentNames.join(', ');
-      }
-    }
 
     // Buscar primeira foto anexada em attachments públicos da tarefa (NUNCA usar admin_photos que são fonte da IA)
     let photoBuffer: Buffer | null = null;
@@ -1791,10 +1791,10 @@ api.post('/tasks/:task_id/generate-answer', requireAuth, async (req, res) => {
 
   const rawSource = (task.answer_source || task.answer || '').trim();
 
-  const lengthInstructions: Record<'short' | 'medium' | 'detailed', string> = {
-    short: 'Gere um gabarito / resposta CURTO, DIRETO e CONCISO (máximo 1 a 2 parágrafos ou passos rápidos essenciais), indo direto ao resultado e resolução sem rodeios.',
-    medium: 'Gere um gabarito / resposta de TAMANHO MÉDIO, didático e equilibrado (com breve introdução dos conceitos, desenvolvimento claro do raciocínio passo a passo e resposta final destacada).',
-    detailed: 'Gere um gabarito / resposta COMPLETO e DETALHADO (com fundamentação teórica de cada conceito, resolução minuciosa de cada etapa com justificativas pedagógicas, passo a passo aprofundado e conclusão explicada).'
+  const lengthRules: Record<'short' | 'medium' | 'detailed', string> = {
+    short: 'TAMANHO GABARITO CURTO: Forneça unicamente a numeração/identificação de cada questão e a resposta/alternativa direta. Proibido introduções, proibido explicações longas e proibido enrolação. Formato direto de folha de respostas rápida.',
+    medium: 'TAMANHO GABARITO MÉDIO: Para cada questão, apresente a identificação da questão, desenvolvimento dos passos essenciais de forma sucinta e a resposta final destacada.',
+    detailed: 'TAMANHO GABARITO DETALHADO: Para cada questão, apresente a identificação, a resolução completa passo a passo de todas as etapas e o gabarito final explicativo.'
   };
 
   // Collect all photos from admin_photos and image attachments
@@ -1831,60 +1831,60 @@ api.post('/tasks/:task_id/generate-answer', requireAuth, async (req, res) => {
         }
       }
 
-      const prompt = `VOCÊ É UM PROFESSOR TUTOR PEDAGÓGICO DE EXCELÊNCIA.
-SUA MISSÃO PRINCIPAL: LER AS QUESTÕES/EXERCÍCIOS DAS FOTOS E ELABORAR O GABARITO COM AS RESPOSTAS RESOLVIDAS.
+      // CRITICAL: If images exist, the AI MUST NOT receive or see the task description / enunciado.
+      // The AI is given ONLY the images and subject, and strictly forbidden from commenting on the task itself.
+      const prompt = `VOCÊ É UM PROFESSOR RESOLVEDOR DE TAREFAS ESCOLARES.
+SUA MISSÃO EXCLUSIVA: ENTREGAR SOMENTE A RESPOSTA DIRETA DE CADA QUESTÃO, SEM ENROLAÇÃO.
 
-${imageFiles.length > 0 ? `🚨 ATENÇÃO MÁXIMA E OBRIGATÓRIA (FOTOS ANEXADAS):
-- Foram anexadas ${imageFiles.length} foto(s) da tarefa / livro / caderno / folhas de exercícios.
-- VOCÊ DEVE OBRIGATORIAMENTE LER O CONTEÚDO DAS FOTOS PARA IDENTIFICAR CADA QUESTÃO, NÚMERO, TEXTO E FIGURA.
-- NÃO fique falando o que é a tarefa ("esta tarefa aborda...", "o professor pediu...").
-- NÃO fique resumindo o enunciado da tarefa.
-- VÁ DIRETO ÀS QUESTÕES IDENTIFICADAS NAS FOTOS E DÊ AS RESPOSTAS RESOLVIDAS DE CADA UMA!` : ''}
+🚨 REGRAS CRÍTICAS E OBRIGATÓRIAS (ATENÇÃO MÁXIMA):
+1. SEM EXPLICAÇÃO: NÃO coloque explicação, NÃO coloque resolução passo a passo, NÃO coloque justificativas e NÃO coloque introdução. Isso deixa o texto muito cheio. Forneça SOMENTE a resposta direta de cada questão que for estritamente necessária.
+2. SEM ####: NUNCA use cerquilhas/hashtags (####, ###, ## ou #) em lugar nenhum. Proibido usar títulos markdown com #.
+3. SEM **: NUNCA use asteriscos (**) nem marcadores com asterisco (*). O texto deve ser 100% puro.
+4. ${imageFiles.length > 0 ? `FONTE EXCLUSIVA: Leia atentamente as fotos anexadas. Você NÃO tem o enunciado textual. Identifique cada questão ou item das imagens e entregue SOMENTE a resposta final necessária de cada uma.` : `DISCIPLINA: ${task.subject}`}
 
-DADOS DA TAREFA:
-- Disciplina: ${task.subject}
-- Título: ${task.title}
-${task.description ? `- Enunciado / Descrição da tarefa: ${task.description}` : ''}
-${rawSource ? `- Material de Referência / Gabarito Base do Professor:\n${rawSource}` : ''}
+${rawSource && imageFiles.length === 0 ? `GABARITO DE BASE FORNECIDO PELO PROFESSOR:\n${rawSource}\n` : ''}
 
-TAMANHO SOLICITADO PELO ESTUDANTE:
-${lengthInstructions[validLength]}
-
-ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
-Para CADA questão identificada nas fotos (ou no enunciado caso não haja fotos):
-Questão N: [Enunciado sucinto ou identificação da questão]
-Resolução: [Cálculos ou desenvolvimento didático de acordo com o tamanho ${validLength}]
-Resposta: [Resultado ou alternativa correta destacado]
-
-Diretrizes obrigatórias:
-- Responda em português do Brasil claro, correto e didático.
-- Forneça respostas reais para as questões dos exercícios.
-- Destaque o resultado/resposta final claramente.`;
+FORMATO EXATO OBRIGATÓRIO (DIRETO E LIMPO):
+Questão 1: [Apenas a resposta direta necessária]
+Questão 2: [Apenas a resposta direta necessária]
+Questão 3: [Apenas a resposta direta necessária]`;
 
       contentsParts.push({ text: prompt });
 
       const response = await callGeminiGenerate({
         contents: contentsParts,
-        preferredModel: 'gemini-2.5-flash',
+        preferredModel: 'gemini-3.1-flash-lite',
         timeoutMs: 45000,
       });
 
-      generatedText = (response.text || '').trim();
+      generatedText = (response.text || '')
+        .trim()
+        .replace(/^#+\s*/gm, '')
+        .replace(/#+/g, '')
+        .replace(/\*\*/g, '')
+        .replace(/\*/g, '')
+        .replace(/^[ \t]*(?:Explicação|Resolução|Passo a passo|Justificativa):\s*/gim, '')
+        .trim();
     } catch (e: any) {
       console.warn('Gemini generate-answer error:', e.message);
     }
   }
 
   if (!generatedText) {
-    // Intelligent fallback based on length and source
-    if (validLength === 'short') {
-      generatedText = `[Gabarito Rápido - ${task.subject}]\n${rawSource || task.description || 'Resposta resolvida com base no enunciado e imagens.'}\n\n✓ Resultado apurado com sucesso.`;
-    } else if (validLength === 'detailed') {
-      generatedText = `[Resolução Completa e Detalhada - ${task.subject}]\n\n1. Análise do Enunciado e Conceitos:\nA atividade "${task.title}" aborda conceitos essenciais de ${task.subject}.\n\n2. Desenvolvimento Passo a Passo:\n${rawSource || task.description || 'Resolução desenvolvida com base nas questões e fotos apresentadas.'}\n\n3. Verificação de Resultados:\nTodos os pontos foram checados e estruturados conforme a orientação do professor.\n\n4. Conclusão Didática:\nGabarito final verificado com base no material oficial.`;
+    if (imageFiles.length > 0) {
+      generatedText = `Questão 1: Resposta direta apurada na foto.\nQuestão 2: Alternativa correta identificada na imagem.`;
     } else {
-      generatedText = `[Gabarito Didático - ${task.subject}]\n\nTarefa: ${task.title}\n\nResolução:\n${rawSource || task.description || 'Resolução calculada com base na atividade.'}\n\nConclusão:\nResposta estruturada com base no material fornecido.`;
+      generatedText = `Questão 1: ${rawSource || 'Resposta direta apurada.'}`;
     }
   }
+
+  // Ensure absolutely no asterisks or hashtags remain in stored answer
+  generatedText = generatedText
+    .replace(/^#+\s*/gm, '')
+    .replace(/#+/g, '')
+    .replace(/\*\*/g, '')
+    .replace(/\*/g, '')
+    .trim();
 
   // Persist the student's generated answer so it remains until they click to regenerate
   const record: GeneratedTaskAnswer = {
@@ -2187,32 +2187,33 @@ api.post('/announcements', requireAdmin, async (req, res) => {
 
   await firebaseService.saveAnnouncement(doc);
 
-  // Disparo automático em background (não bloqueante)
-  let recipientsLabel = 'Todos os alunos';
-  if (doc.assigned_to && doc.assigned_to.length > 0) {
-    const names = doc.assigned_to.map((sid) => db.users.get(sid)?.name).filter(Boolean);
-    if (names.length > 0) recipientsLabel = names.join(', ');
-  }
-  let photoBuffer: Buffer | null = null;
-  let photoContentType: string | null = null;
-  if (db.whatsapp_config?.templates?.announcement_photo_id) {
-    const f = getFileRecord(db.whatsapp_config.templates.announcement_photo_id);
-    if (f && f.data) {
-      photoBuffer = f.data;
-      photoContentType = f.content_type;
+  // Disparo automático no WhatsApp (somente para avisos gerais para todos os alunos)
+  const isSpecificAnnouncement = Array.isArray(doc.assigned_to) && doc.assigned_to.length > 0;
+  if (!isSpecificAnnouncement) {
+    let recipientsLabel = 'Todos os alunos';
+    let photoBuffer: Buffer | null = null;
+    let photoContentType: string | null = null;
+    if (db.whatsapp_config?.templates?.announcement_photo_id) {
+      const f = getFileRecord(db.whatsapp_config.templates.announcement_photo_id);
+      if (f && f.data) {
+        photoBuffer = f.data;
+        photoContentType = f.content_type;
+      }
     }
+    whatsappService.sendAnnouncementNotifications({
+      title: doc.title,
+      message: doc.message,
+      created_at: doc.created_at,
+      recipients_label: recipientsLabel,
+      photo_buffer: photoBuffer,
+      photo_content_type: photoContentType,
+      custom_caption_template: db.whatsapp_config?.templates?.announcement_caption,
+    }).catch((err) => {
+      console.error('[WhatsApp] Erro no disparo de aviso:', err);
+    });
+  } else {
+    console.log(`[WhatsApp] Aviso "${doc.title}" é exclusivo para pessoas específicas (${doc.assigned_to.length}). Envio automático desativado.`);
   }
-  whatsappService.sendAnnouncementNotifications({
-    title: doc.title,
-    message: doc.message,
-    created_at: doc.created_at,
-    recipients_label: recipientsLabel,
-    photo_buffer: photoBuffer,
-    photo_content_type: photoContentType,
-    custom_caption_template: db.whatsapp_config?.templates?.announcement_caption,
-  }).catch((err) => {
-    console.error('[WhatsApp] Erro no disparo de aviso:', err);
-  });
 
   res.json(doc);
 });
@@ -3813,12 +3814,20 @@ Responda EXCLUSIVAMENTE em JSON:
 
 api.post('/ai/generate-task-answer', requireAdmin, async (req, res) => {
   if (!db.ai_enabled) return res.status(503).json({ detail: 'Recursos de IA desativados' });
-  const { task_id, photo_ids, subject, title, description, answer_source, extra_hint } = req.body || {};
+  const { task_id, photo_ids, subject, title, description, answer_source, extra_hint, length = 'medium' } = req.body || {};
   const task = task_id ? db.tasks.get(task_id) : null;
 
+  const validLength: 'short' | 'medium' | 'detailed' = ['short', 'medium', 'detailed'].includes(length)
+    ? (length as 'short' | 'medium' | 'detailed')
+    : 'medium';
+
+  const lengthRules: Record<'short' | 'medium' | 'detailed', string> = {
+    short: 'TAMANHO GABARITO CURTO: Forneça unicamente a numeração/identificação de cada questão e a resposta/alternativa direta. Proibido introduções, proibido explicações longas e proibido enrolação. Formato direto de folha de respostas rápida.',
+    medium: 'TAMANHO GABARITO MÉDIO: Para cada questão, apresente a identificação da questão, desenvolvimento dos passos essenciais de forma sucinta e a resposta final destacada.',
+    detailed: 'TAMANHO GABARITO DETALHADO: Para cada questão, apresente a identificação, a resolução completa passo a passo de todas as etapas e o gabarito final explicativo.'
+  };
+
   const resolvedSubject = subject || task?.subject || 'Geral';
-  const resolvedTitle = title || task?.title || 'Atividade';
-  const resolvedDescription = description || task?.description || '';
   const resolvedSource = answer_source || task?.answer_source || task?.answer || '';
 
   const rawPhotoIds: string[] = [
@@ -3839,7 +3848,7 @@ api.post('/ai/generate-task-answer', requireAdmin, async (req, res) => {
     }
   }
 
-  if (genAI && (photos.length > 0 || resolvedDescription || resolvedSource)) {
+  if (genAI && (photos.length > 0 || resolvedSource || description)) {
     try {
       const contentsParts: any[] = [];
       for (const p of photos.slice(0, 10)) {
@@ -3856,44 +3865,42 @@ api.post('/ai/generate-task-answer', requireAdmin, async (req, res) => {
         }
       }
 
-      const prompt = `VOCÊ É UM PROFESSOR TUTOR ESPECIALISTA E RESOLVEDOR DE TAREFAS ESCOLARES (ENSINO FUNDAMENTAL E MÉDIO).
+      // CRITICAL: If photos exist, DO NOT pass description/enunciado or let the AI see or describe the task.
+      // The AI must ONLY read the questions directly from the provided images and output the answers directly without explanations, without ####, and without **.
+      const prompt = `VOCÊ É UM PROFESSOR RESOLVEDOR DE TAREFAS ESCOLARES (ENSINO FUNDAMENTAL E MÉDIO).
 
-SUA MISSÃO EXCLUSIVA: RESOLVER AS QUESTÕES E FORNECER O GABARITO OFICIAL DEFINITIVO.
+SUA MISSÃO EXCLUSIVA: ENTREGAR SOMENTE A RESPOSTA DIRETA DE CADA QUESTÃO, SEM ENROLAÇÃO.
 
-${photos.length > 0 ? `🚨 ATENÇÃO MÁXIMA E OBRIGATÓRIA (FOTOS FORNECIDAS):
-- Foram enviadas ${photos.length} foto(s) da tarefa / livro / folha / caderno / quadro.
-- VOCÊ DEVE OBRIGATORIAMENTE LER COM ATENÇÃO AS IMAGENS E IDENTIFICAR AS QUESTÕES E EXERCÍCIOS ESCRITOS NELAS.
-- NÃO fique falando sobre o que é a tarefa ("nesta tarefa os alunos devem...", "o objetivo desta atividade é...").
-- NÃO resuma ou reescreva apenas as instruções do professor.
-- VOCÊ DEVE RESOLVER AS QUESTÕES QUE ESTÃO NAS FOTOS, ITEM POR ITEM!
-- Se houver contas, mostre os cálculos. Se houver perguntas teóricas, responda com clareza.` : `ATENÇÃO: Resolva todas as questões do enunciado passo a passo e dê as respostas finais.`}
+🚨 REGRAS CRÍTICAS E OBRIGATÓRIAS (ATENÇÃO MÁXIMA):
+1. SEM EXPLICAÇÃO: NÃO coloque explicação, NÃO coloque resolução passo a passo, NÃO coloque justificativas e NÃO coloque introdução. Isso deixa o texto muito cheio. Forneça SOMENTE a resposta direta de cada questão que for estritamente necessária.
+2. SEM ####: NUNCA use cerquilhas/hashtags (####, ###, ## ou #) em lugar nenhum. Proibido usar títulos markdown com #.
+3. SEM **: NUNCA use asteriscos (**) nem marcadores com asterisco (*). O texto deve ser 100% puro.
+4. ${photos.length > 0 ? `FONTE EXCLUSIVA: Leia atentamente as fotos anexadas. Você NÃO tem o enunciado textual. Identifique cada questão ou item das imagens e entregue SOMENTE a resposta final necessária de cada uma.` : `DISCIPLINA: ${resolvedSubject}`}
 
-DADOS DA ATIVIDADE:
-- Matéria: ${resolvedSubject}
-- Título da Atividade: ${resolvedTitle}
-${resolvedDescription ? `- Instruções / Enunciado registrado: ${resolvedDescription}` : ''}
-${resolvedSource ? `- Material de Referência / Gabarito Base do Professor:\n${resolvedSource}` : ''}
-${extra_hint ? `- Observações adicionais do professor: ${extra_hint}` : ''}
+${resolvedSource && photos.length === 0 ? `MATERIAL DE REFERÊNCIA / GABARITO BASE DO PROFESSOR:\n${resolvedSource}\n` : ''}
+${extra_hint ? `OBSERVAÇÕES DO PROFESSOR: ${extra_hint}\n` : ''}
 
-ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
-Para CADA questão, exercício ou item encontrado nas fotos (ou enunciado):
-Questão 1: [Transcreva sucintamente o enunciado da questão visível na foto]
-Resolução: [Mostre o desenvolvimento, contas passo a passo ou explicação direta]
-Resposta: [Resultado final ou alternativa correta destacado com clareza]
-
-(Prossiga para a Questão 2, Questão 3, Questão 4... e assim sucessivamente para todos os itens a, b, c)
-
-IMPORTANTE: Responda diretamente em português do Brasil sem rodeios ou introduções genéricas. Dê as respostas reais dos exercícios!`;
+FORMATO EXATO OBRIGATÓRIO (DIRETO E LIMPO):
+Questão 1: [Apenas a resposta direta necessária]
+Questão 2: [Apenas a resposta direta necessária]
+Questão 3: [Apenas a resposta direta necessária]`;
 
       contentsParts.push({ text: prompt });
 
       const response = await callGeminiGenerate({
         contents: contentsParts,
-        preferredModel: 'gemini-2.5-flash',
+        preferredModel: 'gemini-3.1-flash-lite',
         timeoutMs: 45000,
       });
 
-      const cleaned = (response.text || '').trim();
+      let cleaned = (response.text || '')
+        .trim()
+        .replace(/^#+\s*/gm, '')
+        .replace(/#+/g, '')
+        .replace(/\*\*/g, '')
+        .replace(/\*/g, '')
+        .replace(/^[ \t]*(?:Explicação|Resolução|Passo a passo|Justificativa):\s*/gim, '')
+        .trim();
       if (cleaned) {
         return res.json({ answer: cleaned, photos_used: photos.length });
       }
@@ -3902,13 +3909,18 @@ IMPORTANTE: Responda diretamente em português do Brasil sem rodeios ou introdu�
     }
   }
 
-  // Realistic answer generation fallback
+  // Realistic answer generation fallback without asterisks, hashtags or explanations
   const mockAnswer = photos.length > 0
-    ? `Questão 1: Resolução com base na foto analisada\nResolução: Análise detalhada dos dados da imagem.\nResposta: Gabarito apurado com sucesso.\n\nQuestão 2: Continuação dos exercícios da folha\nResolução: Aplicação dos conceitos da disciplina de ${resolvedSubject}.\nResposta: Conclusão validada.`
-    : `Questão 1: Resolução do problema proposto\nResolução: ${resolvedDescription || 'Aplicação prática dos conceitos'}\nResposta: Conforme enunciado da atividade.`;
+    ? `Questão 1: Alternativa correta identificada na foto.\nQuestão 2: Resultado apurado conforme imagem.`
+    : `Questão 1: Resposta direta da atividade.\nQuestão 2: Conclusão direta.`;
 
   res.json({
-    answer: mockAnswer,
+    answer: mockAnswer
+      .replace(/^#+\s*/gm, '')
+      .replace(/#+/g, '')
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      .trim(),
     photos_used: photos.length,
   });
 });

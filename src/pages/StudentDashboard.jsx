@@ -18,6 +18,7 @@ import SpecialAnnouncementModal from "@/components/SpecialAnnouncementModal";
 import { getPriority, formatDateBR, daysUntil } from "@/lib/priority";
 import { fireConfetti } from "@/lib/celebrate";
 import { getTheme } from "@/lib/themes";
+import { pullScreenToStore } from "@/lib/effects";
 
 const subjectColors = ["bg-sky-200", "bg-amber-200", "bg-red-200", "bg-emerald-200", "bg-violet-200", "bg-rose-200"];
 const colorFor = (s) => subjectColors[(s || "").length % subjectColors.length];
@@ -162,16 +163,21 @@ export default function StudentDashboard() {
     }
   };
 
+  const handleOpenStore = () => {
+    setTab("store");
+    pullScreenToStore();
+  };
+
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
       <AppHeader title="Minhas tarefas" />
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-28 sm:pb-8">
-        <MyProfileBanner onOpenStore={() => setTab("store")} />
+        <MyProfileBanner onOpenStore={handleOpenStore} />
         <PrizeBanner />
         <AIDailySummary />
 
         {/* Dynamic & responsive navigation bar */}
-        <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1 no-scrollbar sm:flex-wrap">
+        <div className="flex items-center gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2 scrollbar-none sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
           <button
             onClick={() => setTab("tasks")}
             className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
@@ -182,7 +188,7 @@ export default function StudentDashboard() {
             <BookOpen className="w-4 h-4" /> Minhas tarefas
           </button>
           <button
-            onClick={() => setTab("store")}
+            onClick={handleOpenStore}
             className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
               tab === "store" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"
             }`}
@@ -558,10 +564,23 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, index }) {
   );
 }
 
+const cleanAnswerText = (text) => {
+  if (!text) return "";
+  return text
+    .replace(/^#+\s*/gm, "")
+    .replace(/#+/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/\*/g, "")
+    .replace(/^[ \t]*(?:Explicação|Resolução|Passo a passo|Justificativa):\s*/gim, "")
+    .trim();
+};
+
 function StudentAnswerSection({ task, aiEnabled = true }) {
   const [open, setOpen] = useState(false);
   const [selectedLength, setSelectedLength] = useState(task.generated_answer?.length || "medium");
-  const [answer, setAnswer] = useState(task.generated_answer?.answer || task.answer || "");
+  const [answer, setAnswer] = useState(
+    cleanAnswerText(task.generated_answer?.answer || task.answer || "")
+  );
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -579,7 +598,8 @@ function StudentAnswerSection({ task, aiEnabled = true }) {
     setGenerating(true);
     try {
       const { data } = await api.post(`/tasks/${task.id}/generate-answer`, { length: len });
-      setAnswer(data.answer || "");
+      const sanitized = cleanAnswerText(data.answer || "");
+      setAnswer(sanitized);
       setSelectedLength(data.length || len);
       toast.success(`Gabarito (${lengthLabels[len] || len}) gerado! ✨`);
     } catch (e) {

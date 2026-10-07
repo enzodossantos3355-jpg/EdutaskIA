@@ -189,3 +189,26 @@ export function effectBadgeClass(effectId) {
 
 export const getTheme = getEffect;
 
+/**
+ * Puxa a tela da pessoa suavemente até a exibição da Loja de Molduras.
+ * Funciona tanto se a aba da loja já estiver aberta quanto se estiver acabando de montar.
+ */
+export function pullScreenToStore() {
+  const tryScroll = (attempts = 0) => {
+    const el = document.getElementById("store-section");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      const headerOffset = 70;
+      const elementPosition = el.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({
+        top: Math.max(0, offsetPosition),
+        behavior: "smooth"
+      });
+    } else if (attempts < 20) {
+      setTimeout(() => tryScroll(attempts + 1), 35);
+    }
+  };
+  requestAnimationFrame(() => tryScroll());
+}
+

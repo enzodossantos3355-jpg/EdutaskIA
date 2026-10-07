@@ -104,12 +104,12 @@ export default function StoreEffects() {
   };
 
   return (
-    <div className="space-y-6 nb-fade-in" data-testid="store-effects">
+    <div id="store-section" className="space-y-6 nb-fade-in scroll-mt-20 sm:scroll-mt-24" data-testid="store-effects">
       {/* Header */}
       <div className="flex items-end justify-between flex-wrap gap-4 border-b-2 border-black pb-5">
         <div>
-          <h1 className="font-heading font-black text-3xl sm:text-5xl tracking-tight flex items-center gap-3">
-            <Palette className="w-8 h-8 sm:w-11 sm:h-11 text-amber-500" strokeWidth={2.2} />
+          <h1 className="font-heading font-black text-2xl sm:text-5xl tracking-tight flex items-center gap-2.5 sm:gap-3">
+            <Palette className="w-7 h-7 sm:w-11 sm:h-11 text-amber-500" strokeWidth={2.2} />
             Loja de Molduras de Perfil
           </h1>
           <p className="text-neutral-600 mt-1 max-w-2xl text-sm sm:text-base">
