@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import AppHeader from "@/components/AppHeader";
@@ -18,6 +18,7 @@ import TaskCleanupDialog from "@/components/TaskCleanupDialog";
 import AdminSystemClock from "@/components/AdminSystemClock";
 import WhatsAppConfigPanel from "@/components/WhatsAppConfigPanel";
 import WhatsAppDispatchDialog from "@/components/WhatsAppDispatchDialog";
+import ZipDataTransferPanel from "@/components/ZipDataTransferPanel";
 import { effectClass } from "@/lib/effects";
 import { getPriority, formatDateBR } from "@/lib/priority";
 
@@ -132,6 +133,13 @@ export default function AdminDashboard() {
           >
             <MessageSquare className="w-4 h-4 inline mr-1.5 sm:mr-2 text-emerald-950" /> WhatsApp
           </button>
+          <button
+            onClick={() => setTab("zip_transfer")}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm ${tab === "zip_transfer" ? "bg-sky-300 font-bold" : "bg-white"}`}
+            data-testid="tab-zip-transfer"
+          >
+            <FileArchive className="w-4 h-4 inline mr-1.5 sm:mr-2 text-sky-950" /> Dados ZIP
+          </button>
         </div>
         {tab === "tasks" && <TasksPanel />}
         {tab === "announcements" && <AnnouncementsPanel />}
@@ -143,6 +151,7 @@ export default function AdminDashboard() {
         {tab === "ai" && <AIAdminPanel />}
         {tab === "store" && <StoreEffects />}
         {tab === "whatsapp" && <WhatsAppConfigPanel />}
+        {tab === "zip_transfer" && <ZipDataTransferPanel />}
 
         {globalCleanupOpen && (
           <TaskCleanupDialog

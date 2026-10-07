@@ -8,6 +8,7 @@ import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
+import AdmZip from 'adm-zip';
 import { whatsappService } from './whatsapp-service';
 import { firebaseService } from './src/lib/firebaseService';
 
@@ -2983,6 +2984,459 @@ api.get('/integrations/webhook-logs', requireAdmin, (req, res) => {
 
 api.post('/integrations/webhook-test', requireAdmin, (req, res) => {
   res.json({ ok: true, status: 200 });
+});
+
+// ---------------------------------------------------------------------------
+// ZIP Data Transfer & Backup / Restore System
+// ---------------------------------------------------------------------------
+
+// Helper: UTF-8 BOM for CSV to open cleanly in Excel
+const UTF8_BOM = '\uFEFF';
+
+function escapeCsvField(field: any): string {
+  if (field === null || field === undefined) return '""';
+  const str = String(field).replace(/"/g, '""');
+  return `"${str}"`;
+}
+
+api.get('/admin/zip/export', requireAdmin, (req, res) => {
+  try {
+    const { include_uploads = 'true', type = 'full' } = req.query;
+    const shouldIncludeUploads = include_uploads !== 'false';
+    const zip = new AdmZip();
+
+    const students = Array.from(db.users.values()).filter((u) => u.role === 'aluno');
+    const tasks = Array.from(db.tasks.values());
+    const subjects = Array.from(db.subjects.values());
+
+    // 1. edutask_backup.json
+    const backupData = {
+      app: 'EduTask',
+      version: db.app_info?.version || '1.2.0',
+      exported_at: new Date().toISOString(),
+      type,
+      data: {
+        users: Array.from(db.users.values()).map((u) => ({
+          ...u,
+          // If admin, protect from leaking raw password_plain if unsafe
+          password_plain: u.role === 'admin' ? undefined : u.password_plain,
+        })),
+        subjects,
+        tasks,
+        completions: db.completions,
+        announcements: Array.from(db.announcements.values()),
+        comments: Array.from(db.comments.values()),
+        login_logs: db.login_logs.slice(0, 1000),
+        point_adjustments: db.point_adjustments,
+        effect_overrides: db.effect_overrides,
+        monthly_prize: db.monthly_prize,
+        task_cleanup_config: db.task_cleanup_config,
+        whatsapp_config: db.whatsapp_config,
+        app_info: db.app_info,
+        ai_enabled: db.ai_enabled,
+        task_student_answers: Array.from(db.task_student_answers.entries()),
+      },
+    };
+    zip.addFile('edutask_backup.json', Buffer.from(JSON.stringify(backupData, null, 2), 'utf8'));
+
+    // 2. manifest.json
+    const manifest = {
+      app: 'EduTask',
+      version: db.app_info?.version || '1.2.0',
+      exported_at: new Date().toISOString(),
+      counts: {
+        users: db.users.size,
+        students: students.length,
+        tasks: tasks.length,
+        subjects: subjects.length,
+        completions: db.completions.length,
+        announcements: db.announcements.size,
+        comments: db.comments.size,
+        uploads: 0,
+      },
+    };
+
+    // 3. Human readable CSVs
+    // 3a. Alunos & Pontos CSV
+    let csvAlunos = `${UTF8_BOM}ID;Nome;Email;Função;Status;Pontos;MolduraEquipada;CriadoEm\n`;
+    db.users.forEach((u) => {
+      csvAlunos += [
+        escapeCsvField(u.id),
+        escapeCsvField(u.name),
+        escapeCsvField(u.email),
+        escapeCsvField(u.role === 'admin' ? 'Administrador' : 'Aluno'),
+        escapeCsvField(u.status),
+        escapeCsvField(u.points || 0),
+        escapeCsvField(u.equipped_effect || 'none'),
+        escapeCsvField(u.created_at || ''),
+      ].join(';') + '\n';
+    });
+    zip.addFile('csv/alunos_e_usuarios.csv', Buffer.from(csvAlunos, 'utf8'));
+
+    // 3b. Tarefas CSV
+    let csvTarefas = `${UTF8_BOM}ID;Título;Matéria;DataEntrega;Pontos;AtribuídoPara;CriadoEm\n`;
+    tasks.forEach((t) => {
+      csvTarefas += [
+        escapeCsvField(t.id),
+        escapeCsvField(t.title),
+        escapeCsvField(t.subject),
+        escapeCsvField(t.due_date),
+        escapeCsvField(t.points),
+        escapeCsvField(t.assigned_to?.length ? t.assigned_to.join(', ') : 'Todos'),
+        escapeCsvField(t.created_at || ''),
+      ].join(';') + '\n';
+    });
+    zip.addFile('csv/tarefas.csv', Buffer.from(csvTarefas, 'utf8'));
+
+    // 3c. Entregas e Conclusões CSV
+    let csvEntregas = `${UTF8_BOM}IDTarefa;IDAluno;NomeAluno;DataConclusão;NoPrazo;PontosRecebidos\n`;
+    db.completions.forEach((c) => {
+      const studentName = db.users.get(c.user_id)?.name || 'Aluno';
+      csvEntregas += [
+        escapeCsvField(c.task_id),
+        escapeCsvField(c.user_id),
+        escapeCsvField(studentName),
+        escapeCsvField(c.completed_at),
+        escapeCsvField(c.on_time ? 'Sim' : 'Não'),
+        escapeCsvField(c.points_awarded || 0),
+      ].join(';') + '\n';
+    });
+    zip.addFile('csv/entregas_concluidas.csv', Buffer.from(csvEntregas, 'utf8'));
+
+    // 4. Attachments / Uploads directory
+    let uploadFilesCount = 0;
+    if (shouldIncludeUploads && fs.existsSync(UPLOAD_DIR)) {
+      try {
+        const files = fs.readdirSync(UPLOAD_DIR);
+        files.forEach((file) => {
+          const filePath = path.join(UPLOAD_DIR, file);
+          const stat = fs.statSync(filePath);
+          if (stat.isFile()) {
+            const data = fs.readFileSync(filePath);
+            zip.addFile(`uploads/${file}`, data);
+            uploadFilesCount++;
+          }
+        });
+      } catch (err) {
+        console.warn('[ZIP Export] Erro ao ler arquivos de uploads:', err);
+      }
+    }
+    manifest.counts.uploads = uploadFilesCount;
+    zip.addFile('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'));
+
+    // 5. Readme
+    const readme = `================================================
+EDUTASK — PACOTE OFICIAL DE DADOS & BACKUP (ZIP)
+================================================
+Data de Exportação: ${new Date().toLocaleString('pt-BR')}
+Versão: ${db.app_info?.version || '1.2.0'}
+
+Conteúdo do Pacote:
+1. edutask_backup.json -> Banco de dados com todos os registros
+2. manifest.json       -> Metadados e contagem de itens
+3. csv/                -> Planilhas em Excel/CSV de alunos, tarefas e entregas
+4. uploads/            -> Fotos de perfis e anexos de tarefas (${uploadFilesCount} arquivos)
+
+Como Importar:
+Acesse o Painel do Administrador > Aba "Dados ZIP" > Envie este arquivo .zip
+`;
+    zip.addFile('LEIA-ME.txt', Buffer.from(readme, 'utf8'));
+
+    const zipBuffer = zip.toBuffer();
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const timeStr = new Date().toISOString().slice(11, 16).replace(':', '');
+    const filename = `edutask-backup-${dateStr}-${timeStr}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', zipBuffer.length);
+    res.send(zipBuffer);
+  } catch (err: any) {
+    console.error('[ZIP Export Error]:', err);
+    res.status(500).json({ detail: 'Erro ao gerar arquivo ZIP: ' + (err.message || String(err)) });
+  }
+});
+
+api.post('/admin/zip/preview', requireAdmin, upload.single('file'), (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ detail: 'Nenhum arquivo ZIP enviado' });
+    }
+
+    const zip = new AdmZip(req.file.buffer);
+    const zipEntries = zip.getEntries();
+
+    let backupData: any = null;
+    let manifestData: any = null;
+    const uploadFiles: string[] = [];
+
+    zipEntries.forEach((entry) => {
+      if (entry.entryName === 'edutask_backup.json' || entry.entryName === 'db.json' || entry.entryName.endsWith('backup.json')) {
+        try {
+          const content = entry.getData().toString('utf8');
+          backupData = JSON.parse(content);
+        } catch (e) {
+          console.warn('[ZIP Preview] Erro ao parsear JSON:', e);
+        }
+      } else if (entry.entryName === 'manifest.json') {
+        try {
+          manifestData = JSON.parse(entry.getData().toString('utf8'));
+        } catch (e) {}
+      } else if (entry.entryName.startsWith('uploads/') && !entry.isDirectory) {
+        uploadFiles.push(entry.entryName.replace('uploads/', ''));
+      }
+    });
+
+    // Support root or legacy formats
+    const actualData = backupData?.data || backupData;
+    const usersList: any[] = Array.isArray(actualData?.users)
+      ? actualData.users.map((u: any) => (Array.isArray(u) ? u[1] : u))
+      : [];
+    const tasksList: any[] = Array.isArray(actualData?.tasks)
+      ? actualData.tasks.map((t: any) => (Array.isArray(t) ? t[1] : t))
+      : [];
+    const subjectsList: any[] = Array.isArray(actualData?.subjects)
+      ? actualData.subjects.map((s: any) => (Array.isArray(s) ? s[1] : s))
+      : [];
+    const completionsList: any[] = Array.isArray(actualData?.completions) ? actualData.completions : [];
+
+    const preview = {
+      valid: Boolean(backupData || uploadFiles.length > 0),
+      filename: req.file.originalname,
+      sizeBytes: req.file.size,
+      manifest: manifestData,
+      counts: {
+        users: usersList.length,
+        students: usersList.filter((u: any) => u.role === 'aluno').length,
+        tasks: tasksList.length,
+        subjects: subjectsList.length,
+        completions: completionsList.length,
+        uploads: uploadFiles.length,
+      },
+      previewUsers: usersList.slice(0, 5).map((u: any) => ({ id: u.id, name: u.name, role: u.role, points: u.points })),
+      previewTasks: tasksList.slice(0, 5).map((t: any) => ({ id: t.id, title: t.title, subject: t.subject, points: t.points })),
+      previewUploads: uploadFiles.slice(0, 8),
+    };
+
+    res.json(preview);
+  } catch (err: any) {
+    console.error('[ZIP Preview Error]:', err);
+    res.status(400).json({ detail: 'Arquivo ZIP inválido ou corrompido: ' + (err.message || String(err)) });
+  }
+});
+
+api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ detail: 'Nenhum arquivo ZIP enviado' });
+    }
+
+    const {
+      mode = 'merge', // 'merge' | 'overwrite'
+      import_users = 'true',
+      import_tasks = 'true',
+      import_subjects = 'true',
+      import_completions = 'true',
+      import_announcements = 'true',
+      import_uploads = 'true',
+      import_effects = 'true',
+    } = req.body || {};
+
+    const zip = new AdmZip(req.file.buffer);
+    const zipEntries = zip.getEntries();
+
+    let backupData: any = null;
+    let extractedFilesCount = 0;
+
+    // 1. Extrair uploads para a pasta UPLOAD_DIR do servidor
+    if (import_uploads !== 'false') {
+      if (!fs.existsSync(UPLOAD_DIR)) {
+        fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+      }
+      zipEntries.forEach((entry) => {
+        if (entry.entryName.startsWith('uploads/') && !entry.isDirectory) {
+          const fileName = path.basename(entry.entryName);
+          if (fileName) {
+            const destPath = path.join(UPLOAD_DIR, fileName);
+            fs.writeFileSync(destPath, entry.getData());
+            extractedFilesCount++;
+          }
+        }
+      });
+    }
+
+    // 2. Encontrar dados do JSON
+    zipEntries.forEach((entry) => {
+      if (entry.entryName === 'edutask_backup.json' || entry.entryName === 'db.json' || entry.entryName.endsWith('backup.json')) {
+        try {
+          const content = entry.getData().toString('utf8');
+          backupData = JSON.parse(content);
+        } catch (e) {
+          console.warn('[ZIP Import] Erro ao parsear JSON:', e);
+        }
+      }
+    });
+
+    const actualData = backupData?.data || backupData;
+    let importedUsersCount = 0;
+    let importedTasksCount = 0;
+    let importedSubjectsCount = 0;
+    let importedCompletionsCount = 0;
+
+    if (actualData) {
+      // Import Subjects
+      if (import_subjects !== 'false' && actualData.subjects) {
+        const subjList: any[] = Array.isArray(actualData.subjects)
+          ? actualData.subjects.map((s: any) => (Array.isArray(s) ? s[1] : s))
+          : [];
+        if (mode === 'overwrite' && subjList.length > 0) {
+          db.subjects.clear();
+        }
+        subjList.forEach((s) => {
+          if (s && s.id && s.name) {
+            db.subjects.set(s.id, s);
+            importedSubjectsCount++;
+          }
+        });
+      }
+
+      // Import Users
+      if (import_users !== 'false' && actualData.users) {
+        const usersList: any[] = Array.isArray(actualData.users)
+          ? actualData.users.map((u: any) => (Array.isArray(u) ? u[1] : u))
+          : [];
+
+        // Save current logged in admin user to ensure admin never gets locked out
+        const currentAdmin = (req as any).user as User;
+
+        if (mode === 'overwrite' && usersList.length > 0) {
+          db.users.clear();
+          if (currentAdmin) {
+            db.users.set(currentAdmin.id, currentAdmin);
+          }
+        }
+
+        usersList.forEach((u) => {
+          if (u && u.id && u.name) {
+            // Guarantee admin accounts never have password 123
+            let plainPass = u.password_plain;
+            let passHash = u.password_hash;
+            if (u.role === 'admin' && (plainPass === '123' || !passHash)) {
+              plainPass = process.env.ADMIN_PASSWORD || 'enzo123cg';
+              passHash = bcrypt.hashSync(plainPass, 10);
+            }
+
+            const cleanUser: User = {
+              id: u.id,
+              name: u.name,
+              email: u.email || `${u.id}@escola.com`,
+              password_hash: passHash || bcrypt.hashSync('123', 10),
+              password_plain: plainPass,
+              role: u.role || 'aluno',
+              status: u.status || 'active',
+              points: typeof u.points === 'number' ? u.points : 0,
+              streak_count: typeof u.streak_count === 'number' ? u.streak_count : 0,
+              longest_streak: typeof u.longest_streak === 'number' ? u.longest_streak : 0,
+              owned_effects: Array.isArray(u.owned_effects) ? u.owned_effects : ['none'],
+              equipped_effect: u.equipped_effect || 'none',
+              avatar_data: u.avatar_data,
+              avatar_content_type: u.avatar_content_type,
+              created_at: u.created_at || new Date().toISOString(),
+            };
+            db.users.set(u.id, cleanUser);
+            importedUsersCount++;
+            firebaseService.saveUser(cleanUser).catch(console.warn);
+          }
+        });
+      }
+
+      // Import Tasks
+      if (import_tasks !== 'false' && actualData.tasks) {
+        const tasksList: any[] = Array.isArray(actualData.tasks)
+          ? actualData.tasks.map((t: any) => (Array.isArray(t) ? t[1] : t))
+          : [];
+        if (mode === 'overwrite' && tasksList.length > 0) {
+          db.tasks.clear();
+        }
+        tasksList.forEach((t) => {
+          if (t && t.id && t.title) {
+            db.tasks.set(t.id, {
+              id: t.id,
+              title: t.title,
+              description: t.description || '',
+              subject: t.subject || 'Geral',
+              due_date: t.due_date || new Date().toISOString().slice(0, 10),
+              points: typeof t.points === 'number' ? t.points : 50,
+              assigned_to: Array.isArray(t.assigned_to) ? t.assigned_to : [],
+              attachments: Array.isArray(t.attachments) ? t.attachments : (Array.isArray(t.files) ? t.files : []),
+              admin_photos: Array.isArray(t.admin_photos) ? t.admin_photos : [],
+              answer: t.answer || '',
+              created_by: t.created_by || 'admin-user-001',
+              created_at: t.created_at || new Date().toISOString(),
+            });
+            importedTasksCount++;
+          }
+        });
+      }
+
+      // Import Completions
+      if (import_completions !== 'false' && actualData.completions) {
+        if (mode === 'overwrite') {
+          db.completions = [];
+        }
+        const existingKeys = new Set(db.completions.map((c) => `${c.task_id}-${c.user_id}`));
+        actualData.completions.forEach((c: any) => {
+          const key = `${c?.task_id}-${c?.user_id}`;
+          if (c && c.task_id && c.user_id && (!existingKeys.has(key) || mode === 'overwrite')) {
+            db.completions.push({
+              task_id: c.task_id,
+              user_id: c.user_id,
+              completed_at: c.completed_at || new Date().toISOString(),
+              on_time: Boolean(c.on_time),
+              points_awarded: typeof c.points_awarded === 'number' ? c.points_awarded : 50,
+            });
+            importedCompletionsCount++;
+          }
+        });
+      }
+
+      // Import Announcements
+      if (import_announcements !== 'false' && actualData.announcements) {
+        const annList: any[] = Array.isArray(actualData.announcements)
+          ? actualData.announcements.map((a: any) => (Array.isArray(a) ? a[1] : a))
+          : [];
+        if (mode === 'overwrite') {
+          db.announcements.clear();
+        }
+        annList.forEach((a) => {
+          if (a && a.id) db.announcements.set(a.id, a);
+        });
+      }
+
+      // Import Effect Overrides / Store Prices
+      if (import_effects !== 'false' && actualData.effect_overrides) {
+        db.effect_overrides = { ...db.effect_overrides, ...actualData.effect_overrides };
+      }
+    }
+
+    db.saveToDisk();
+    saveSystemSettingsToFirestore();
+
+    res.json({
+      ok: true,
+      message: 'Arquivo ZIP processado e dados importados com sucesso!',
+      imported: {
+        users: importedUsersCount,
+        tasks: importedTasksCount,
+        subjects: importedSubjectsCount,
+        completions: importedCompletionsCount,
+        files: extractedFilesCount,
+      },
+    });
+  } catch (err: any) {
+    console.error('[ZIP Import Error]:', err);
+    res.status(500).json({ detail: 'Erro ao importar arquivo ZIP: ' + (err.message || String(err)) });
+  }
 });
 
 // ---------------------------------------------------------------------------
