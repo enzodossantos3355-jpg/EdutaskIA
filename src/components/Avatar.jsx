@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { firebaseService } from "@/lib/firebaseService";
+import { API } from "@/lib/api";
 
 /**
  * Circular avatar. Optional `effect` renders a decorative wrapper (frame).
- * Loads image directly from Firestore / memory cache without network /api requests.
+ * Legacy `tierBorderColor` prop is accepted but ignored (tier system removed).
  */
 export default function Avatar({
   userId,
@@ -22,42 +22,12 @@ export default function Avatar({
   const [errored, setErrored] = useState(false);
 
   useEffect(() => {
-    let active = true;
-    if (hasAvatar && userId) {
-      // Check cached user in localStorage
-      const cached = localStorage.getItem("cached_user");
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (parsed.id === userId && parsed.avatar_data) {
-            setSrc(parsed.avatar_data);
-            setErrored(false);
-            return;
-          }
-        } catch {}
-      }
-
-      // Fetch from Firestore directly
-      firebaseService
-        .getUserById(userId)
-        .then((user) => {
-          if (!active) return;
-          if (user && user.avatar_data) {
-            setSrc(user.avatar_data);
-            setErrored(false);
-          } else {
-            setSrc(null);
-          }
-        })
-        .catch(() => {
-          if (active) setSrc(null);
-        });
+    if (hasAvatar) {
+      setSrc(`${API}/avatars/${userId}?v=${version}`);
+      setErrored(false);
     } else {
       setSrc(null);
     }
-    return () => {
-      active = false;
-    };
   }, [userId, hasAvatar, version]);
 
   const showImage = src && !errored;
