@@ -112,11 +112,11 @@ export default function AvatarUploader({
 
     setUploading(true);
     try {
-      const processed = await processImageFile(file);
       const fd = new FormData();
-      fd.append("file", processed);
-      await api.post(path, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      setVersion((v) => v + 1);
+      fd.append("file", file);
+      await api.post(path, fd);
+      const newVer = Date.now();
+      setVersion(newVer);
       setLocalHasAvatar(true);
       toast.success("Foto atualizada com sucesso!");
       onChanged?.(true);
@@ -132,9 +132,10 @@ export default function AvatarUploader({
     setUploading(true);
     try {
       await api.delete(path);
-      setVersion((v) => v + 1);
+      const newVer = Date.now();
+      setVersion(newVer);
       setLocalHasAvatar(false);
-      toast.success("Foto removida!");
+      toast.success("Foto removida com sucesso!");
       onChanged?.(false);
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao remover foto");

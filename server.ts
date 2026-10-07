@@ -9,6 +9,7 @@ import os from 'os';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import AdmZip from 'adm-zip';
+import sharp from 'sharp';
 import { whatsappService } from './whatsapp-service';
 import { firebaseService } from './src/lib/firebaseService';
 
@@ -42,6 +43,42 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 45000): Promise<T
   } finally {
     clearTimeout(timer!);
   }
+}
+
+// Robust Gemini invocation with automatic model fallbacks (gemini-2.5-flash -> gemini-flash-latest -> gemini-3.8-flash)
+async function callGeminiGenerate(params: {
+  contents: any;
+  config?: any;
+  preferredModel?: string;
+  timeoutMs?: number;
+}): Promise<any> {
+  if (!genAI) throw new Error('Gemini API não configurada');
+  const candidateModels = [
+    params.preferredModel || 'gemini-2.5-flash',
+    'gemini-2.5-flash',
+    'gemini-flash-latest',
+    'gemini-3.8-flash',
+  ];
+  const modelsToTry = Array.from(new Set(candidateModels));
+  let lastError: any = null;
+
+  for (const model of modelsToTry) {
+    try {
+      const response = await withTimeout(
+        genAI.models.generateContent({
+          model,
+          contents: params.contents,
+          ...(params.config ? { config: params.config } : {}),
+        }),
+        params.timeoutMs || 45000
+      );
+      return response;
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[Gemini] Falha com modelo ${model} (${err?.message || err}), tentando próximo...`);
+    }
+  }
+  throw lastError || new Error('Todos os modelos Gemini falharam');
 }
 
 // Multer memory storage
@@ -258,6 +295,7 @@ const BASE_DIR = process.env.VERCEL || process.env.NODE_ENV === 'production' ? o
 const DATA_DIR = path.resolve(BASE_DIR, 'data');
 const DB_FILE = path.resolve(DATA_DIR, 'db.json');
 const UPLOAD_DIR = path.resolve(BASE_DIR, 'uploads');
+const AVATAR_DIR = path.resolve(BASE_DIR, 'avatars');
 
 try {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -269,6 +307,54 @@ try {
   if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 } catch (e) {
   console.warn('[Storage] Não foi possível criar UPLOAD_DIR:', e);
+}
+
+try {
+  if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true });
+} catch (e) {
+  console.warn('[Storage] Não foi possível criar AVATAR_DIR:', e);
+}
+
+async function processAndSaveAvatar(userId: string, buffer: Buffer): Promise<{ dataUrl: string; contentType: string }> {
+  try {
+    const processedBuffer = await sharp(buffer)
+      .rotate() // auto-orient based on EXIF
+      .resize(512, 512, { fit: 'cover', position: 'center' })
+      .jpeg({ quality: 88, mozjpeg: true })
+      .toBuffer();
+
+    const contentType = 'image/jpeg';
+    const dataUrl = `data:${contentType};base64,${processedBuffer.toString('base64')}`;
+
+    try {
+      if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true });
+      fs.writeFileSync(path.resolve(AVATAR_DIR, `${userId}.jpg`), processedBuffer);
+    } catch (err) {
+      console.warn(`[Avatar] Erro ao salvar avatar no disco para ${userId}:`, err);
+    }
+
+    return { dataUrl, contentType };
+  } catch (err) {
+    console.warn('[Avatar] Sharp processing fallback to original buffer:', err);
+    const contentType = 'image/jpeg';
+    const dataUrl = `data:${contentType};base64,${buffer.toString('base64')}`;
+    try {
+      if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true });
+      fs.writeFileSync(path.resolve(AVATAR_DIR, `${userId}.jpg`), buffer);
+    } catch {}
+    return { dataUrl, contentType };
+  }
+}
+
+function removeAvatarFile(userId: string) {
+  try {
+    const filePath = path.resolve(AVATAR_DIR, `${userId}.jpg`);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (err) {
+    console.warn(`[Avatar] Erro ao deletar arquivo de avatar para ${userId}:`, err);
+  }
 }
 
 class Database {
@@ -1031,9 +1117,9 @@ api.post('/me/avatar', requireAuth, upload.single('file'), async (req, res) => {
   const user = (req as any).user as User;
   if (!req.file) return res.status(400).json({ detail: 'Nenhum arquivo enviado' });
 
-  const mime = resolveImageMime(req.file);
-  user.avatar_data = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
-  user.avatar_content_type = mime;
+  const { dataUrl, contentType } = await processAndSaveAvatar(user.id, req.file.buffer);
+  user.avatar_data = dataUrl;
+  user.avatar_content_type = contentType;
   db.saveToDisk();
   await firebaseService.saveUser(user).catch(console.warn);
 
@@ -1042,6 +1128,7 @@ api.post('/me/avatar', requireAuth, upload.single('file'), async (req, res) => {
 
 api.delete('/me/avatar', requireAuth, async (req, res) => {
   const user = (req as any).user as User;
+  removeAvatarFile(user.id);
   user.avatar_data = undefined;
   user.avatar_content_type = undefined;
   db.saveToDisk();
@@ -1056,9 +1143,9 @@ api.post('/users/:user_id/avatar', requireAdmin, upload.single('file'), async (r
   if (!user) return res.status(404).json({ detail: 'Usuário não encontrado' });
   if (!req.file) return res.status(400).json({ detail: 'Nenhum arquivo enviado' });
 
-  const mime = resolveImageMime(req.file);
-  user.avatar_data = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
-  user.avatar_content_type = mime;
+  const { dataUrl, contentType } = await processAndSaveAvatar(user.id, req.file.buffer);
+  user.avatar_data = dataUrl;
+  user.avatar_content_type = contentType;
   db.saveToDisk();
   await firebaseService.saveUser(user).catch(console.warn);
 
@@ -1070,6 +1157,7 @@ api.delete('/users/:user_id/avatar', requireAdmin, async (req, res) => {
   const user = db.users.get(user_id);
   if (!user) return res.status(404).json({ detail: 'Usuário não encontrado' });
 
+  removeAvatarFile(user.id);
   user.avatar_data = undefined;
   user.avatar_content_type = undefined;
   db.saveToDisk();
@@ -1081,17 +1169,38 @@ api.delete('/users/:user_id/avatar', requireAdmin, async (req, res) => {
 api.get('/avatars/:user_id', (req, res) => {
   const { user_id } = req.params;
   const user = db.users.get(user_id);
-  if (!user || !user.avatar_data) {
-    return res.status(404).json({ detail: 'Avatar não encontrado' });
+
+  if (user && user.avatar_data) {
+    const parts = user.avatar_data.split(',');
+    const headerMime = parts[0] ? parts[0].replace(/^data:/, '').replace(/;base64$/, '') : '';
+    const mime = user.avatar_content_type || headerMime || 'image/jpeg';
+    const imgBuffer = Buffer.from(parts[1] || '', 'base64');
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.send(imgBuffer);
   }
 
-  const parts = user.avatar_data.split(',');
-  const headerMime = parts[0] ? parts[0].replace(/^data:/, '').replace(/;base64$/, '') : '';
-  const mime = user.avatar_content_type || headerMime || 'image/png';
-  const imgBuffer = Buffer.from(parts[1] || '', 'base64');
-  res.setHeader('Content-Type', mime);
-  res.setHeader('Cache-Control', 'no-cache');
-  res.send(imgBuffer);
+  // Fallback: check AVATAR_DIR on disk
+  try {
+    const diskPath = path.resolve(AVATAR_DIR, `${user_id}.jpg`);
+    if (fs.existsSync(diskPath)) {
+      const buffer = fs.readFileSync(diskPath);
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return res.send(buffer);
+    }
+  } catch {}
+
+  return res.status(404).json({ detail: 'Avatar não encontrado' });
+});
+
+api.get('/users/:user_id/avatar', (req, res) => {
+  res.redirect(`/api/avatars/${req.params.user_id}`);
+});
+
+api.get('/me/avatar', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  res.redirect(`/api/avatars/${user.id}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -1318,6 +1427,34 @@ export function getFileRecord(fileId: string | null | undefined): FileRecord | n
     console.warn(`[Storage] Erro ao carregar arquivo ${fileId} do disco:`, e);
   }
   return file || null;
+}
+
+export async function resolveFileRecordAsync(fileId: string | null | undefined): Promise<FileRecord | null> {
+  if (!fileId) return null;
+  const syncRecord = getFileRecord(fileId);
+  if (syncRecord && syncRecord.data && syncRecord.data.length > 0) {
+    return syncRecord;
+  }
+  try {
+    const remoteFile = await firebaseService.getFile(fileId);
+    if (remoteFile && remoteFile.base64) {
+      const buffer = Buffer.from(remoteFile.base64, 'base64');
+      const record: FileRecord = {
+        id: fileId,
+        original_filename: remoteFile.original_filename || fileId,
+        content_type: remoteFile.content_type && remoteFile.content_type !== 'application/octet-stream' ? remoteFile.content_type : 'image/jpeg',
+        size: remoteFile.size || buffer.length,
+        data: buffer,
+        uploaded_by: remoteFile.uploaded_by || 'system',
+        created_at: remoteFile.created_at || new Date().toISOString(),
+      };
+      db.files.set(fileId, record);
+      return record;
+    }
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao carregar arquivo remoto ${fileId}:`, err);
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1661,11 +1798,16 @@ api.post('/tasks/:task_id/generate-answer', requireAuth, async (req, res) => {
   };
 
   // Collect all photos from admin_photos and image attachments
-  const photoIds = [...(task.admin_photos || []), ...(task.attachments || [])];
+  const rawPhotoIds: string[] = [
+    ...(task.admin_photos || []),
+    ...(task.attachments || []),
+  ].map((p: any) => (typeof p === 'string' ? p : p?.id)).filter(Boolean);
+  const uniquePhotoIds = Array.from(new Set(rawPhotoIds));
+
   const imageFiles: FileRecord[] = [];
-  for (const pid of photoIds) {
-    const f = getFileRecord(pid);
-    if (f && f.data && (f.content_type?.startsWith('image/') || f.original_filename?.match(/\.(jpe?g|png|webp|gif|bmp|jfif)$/i))) {
+  for (const pid of uniquePhotoIds) {
+    const f = await resolveFileRecordAsync(pid);
+    if (f && f.data && (f.content_type?.startsWith('image/') || f.original_filename?.match(/\.(jpe?g|png|webp|gif|bmp|jfif|heic|heif)$/i))) {
       imageFiles.push(f);
     }
   }
@@ -1675,7 +1817,7 @@ api.post('/tasks/:task_id/generate-answer', requireAuth, async (req, res) => {
   if (genAI) {
     try {
       const contentsParts: any[] = [];
-      for (const img of imageFiles.slice(0, 5)) {
+      for (const img of imageFiles.slice(0, 10)) {
         if (img.data && img.data.length < 20 * 1024 * 1024) {
           const mime = img.content_type?.startsWith('image/') && img.content_type !== 'application/octet-stream'
             ? img.content_type
@@ -1689,36 +1831,43 @@ api.post('/tasks/:task_id/generate-answer', requireAuth, async (req, res) => {
         }
       }
 
-      const prompt = `Você é um professor tutor pedagógico de excelência. Resolva e elabore o gabarito oficial para a seguinte tarefa escolar.
-${imageFiles.length > 0 ? `ATENÇÃO: Foram anexadas ${Math.min(imageFiles.length, 3)} foto(s)/imagem(ns) da atividade/livro/enunciado. ANALISE CUIDADOSAMENTE O CONTEÚDO DAS IMAGENS para identificar todas as questões, números, textos e figuras para responder com total precisão.` : ''}
+      const prompt = `VOCÊ É UM PROFESSOR TUTOR PEDAGÓGICO DE EXCELÊNCIA.
+SUA MISSÃO PRINCIPAL: LER AS QUESTÕES/EXERCÍCIOS DAS FOTOS E ELABORAR O GABARITO COM AS RESPOSTAS RESOLVIDAS.
 
-Disciplina: ${task.subject}
-Título da Tarefa: ${task.title}
-Enunciado / Descrição:
-"""
-${task.description || 'Consulte o material e imagens anexadas.'}
-"""
+${imageFiles.length > 0 ? `🚨 ATENÇÃO MÁXIMA E OBRIGATÓRIA (FOTOS ANEXADAS):
+- Foram anexadas ${imageFiles.length} foto(s) da tarefa / livro / caderno / folhas de exercícios.
+- VOCÊ DEVE OBRIGATORIAMENTE LER O CONTEÚDO DAS FOTOS PARA IDENTIFICAR CADA QUESTÃO, NÚMERO, TEXTO E FIGURA.
+- NÃO fique falando o que é a tarefa ("esta tarefa aborda...", "o professor pediu...").
+- NÃO fique resumindo o enunciado da tarefa.
+- VÁ DIRETO ÀS QUESTÕES IDENTIFICADAS NAS FOTOS E DÊ AS RESPOSTAS RESOLVIDAS DE CADA UMA!` : ''}
 
-${rawSource ? `FONTE / MATERIAL DE REFERÊNCIA DO PROFESSOR:
-"""
-${rawSource}
-"""` : ''}
+DADOS DA TAREFA:
+- Disciplina: ${task.subject}
+- Título: ${task.title}
+${task.description ? `- Enunciado / Descrição da tarefa: ${task.description}` : ''}
+${rawSource ? `- Material de Referência / Gabarito Base do Professor:\n${rawSource}` : ''}
 
 TAMANHO SOLICITADO PELO ESTUDANTE:
 ${lengthInstructions[validLength]}
 
+ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
+Para CADA questão identificada nas fotos (ou no enunciado caso não haja fotos):
+Questão N: [Enunciado sucinto ou identificação da questão]
+Resolução: [Cálculos ou desenvolvimento didático de acordo com o tamanho ${validLength}]
+Resposta: [Resultado ou alternativa correta destacado]
+
 Diretrizes obrigatórias:
 - Responda em português do Brasil claro, correto e didático.
-- Se houver contas ou cálculos, mostre os passos de acordo com o tamanho solicitado.
-- Destaque o resultado/resposta final claramente.
-- Formate a resposta de maneira limpa e organizada com tópicos ou parágrafos legíveis.`;
+- Forneça respostas reais para as questões dos exercícios.
+- Destaque o resultado/resposta final claramente.`;
 
       contentsParts.push({ text: prompt });
 
-      const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const response = await callGeminiGenerate({
         contents: contentsParts,
-      }), 45000);
+        preferredModel: 'gemini-2.5-flash',
+        timeoutMs: 45000,
+      });
 
       generatedText = (response.text || '').trim();
     } catch (e: any) {
@@ -3558,11 +3707,11 @@ Responda EXCLUSIVAMENTE em formato JSON com as chaves:
 "tips": array de 3 strings com dicas práticas para o aluno
 "objectives": array de 2 strings com objetivos de aprendizagem`;
 
-      const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const response = await callGeminiGenerate({
         contents: prompt,
         config: { responseMimeType: 'application/json' },
-      }));
+        preferredModel: 'gemini-2.5-flash',
+      });
 
       const parsed = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '{}');
       return res.json({
@@ -3597,8 +3746,7 @@ api.post('/ai/generate-announcement', requireAdmin, async (req, res) => {
 
   if (genAI) {
     try {
-      const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const response = await callGeminiGenerate({
         contents: `Você é um professor escolar no Brasil redigindo um comunicado aos alunos e responsáveis.
 Com base nesta ideia: "${prompt}", escreva um aviso escolar polido, motivador e claro.
 Responda EXCLUSIVAMENTE em JSON:
@@ -3607,7 +3755,8 @@ Responda EXCLUSIVAMENTE em JSON:
   "message": "mensagem formatada em 1 ou 2 parágrafos amigáveis"
 }`,
         config: { responseMimeType: 'application/json' },
-      }));
+        preferredModel: 'gemini-2.5-flash',
+      });
       const parsed = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '{}');
       return res.json({
         title: (parsed.title || 'Aviso Escolar').slice(0, 80),
@@ -3642,11 +3791,11 @@ Responda EXCLUSIVAMENTE em JSON:
   "feedback": "feedback construtivo e encorajador em português",
   "suggestions": ["dica para melhorar"]
 }`;
-      const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const response = await callGeminiGenerate({
         contents: prompt,
         config: { responseMimeType: 'application/json' },
-      }));
+        preferredModel: 'gemini-2.5-flash',
+      });
       const parsed = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '{}');
       return res.json(parsed);
     } catch (e: any) {
@@ -3672,14 +3821,20 @@ api.post('/ai/generate-task-answer', requireAdmin, async (req, res) => {
   const resolvedDescription = description || task?.description || '';
   const resolvedSource = answer_source || task?.answer_source || task?.answer || '';
 
-  const rawPhotoIds: string[] = Array.isArray(photo_ids) && photo_ids.length > 0
-    ? photo_ids
-    : (task?.admin_photos || []);
+  const rawPhotoIds: string[] = [
+    ...(Array.isArray(photo_ids) ? photo_ids : []),
+    ...(Array.isArray(task?.admin_photos) ? task.admin_photos : []),
+    ...(Array.isArray(task?.attachments) ? task.attachments : []),
+  ]
+    .map((p: any) => (typeof p === 'string' ? p : p?.id))
+    .filter((id): id is string => Boolean(id && typeof id === 'string'));
+
+  const uniquePhotoIds = Array.from(new Set(rawPhotoIds));
 
   const photos: FileRecord[] = [];
-  for (const pid of rawPhotoIds) {
-    const f = getFileRecord(pid);
-    if (f && f.data && (f.content_type?.startsWith('image/') || f.original_filename?.match(/\.(jpe?g|png|webp|gif|bmp|jfif)$/i))) {
+  for (const pid of uniquePhotoIds) {
+    const f = await resolveFileRecordAsync(pid);
+    if (f && f.data && (f.content_type?.startsWith('image/') || f.original_filename?.match(/\.(jpe?g|png|webp|gif|bmp|jfif|heic|heif)$/i))) {
       photos.push(f);
     }
   }
@@ -3687,8 +3842,8 @@ api.post('/ai/generate-task-answer', requireAdmin, async (req, res) => {
   if (genAI && (photos.length > 0 || resolvedDescription || resolvedSource)) {
     try {
       const contentsParts: any[] = [];
-      for (const p of photos.slice(0, 5)) {
-        if (p.data && p.data.length > 0) {
+      for (const p of photos.slice(0, 10)) {
+        if (p.data && p.data.length > 0 && p.data.length < 20 * 1024 * 1024) {
           const mime = p.content_type?.startsWith('image/') && p.content_type !== 'application/octet-stream'
             ? p.content_type
             : 'image/jpeg';
@@ -3701,30 +3856,42 @@ api.post('/ai/generate-task-answer', requireAdmin, async (req, res) => {
         }
       }
 
-      const prompt = `Você é um professor tutor especialista no ensino fundamental e médio.
-${photos.length > 0 ? `ATENÇÃO: Foram enviadas ${photos.length} foto(s) da tarefa/livro/enunciado. LEIA CUIDADOSAMENTE O CONTEÚDO DAS IMAGENS, transcreva cada questão identificada e resolva-a com total precisão passo a passo.` : ''}
+      const prompt = `VOCÊ É UM PROFESSOR TUTOR ESPECIALISTA E RESOLVEDOR DE TAREFAS ESCOLARES (ENSINO FUNDAMENTAL E MÉDIO).
 
-Disciplina: ${resolvedSubject}
-Título da Atividade: ${resolvedTitle}
-${resolvedDescription ? `Enunciado/Instruções: ${resolvedDescription}` : ''}
-${resolvedSource ? `Material de Referência / Gabarito Base do Professor: ${resolvedSource}` : ''}
-${extra_hint ? `Instruções adicionais: ${extra_hint}` : ''}
+SUA MISSÃO EXCLUSIVA: RESOLVER AS QUESTÕES E FORNECER O GABARITO OFICIAL DEFINITIVO.
 
-Diretrizes obrigatórias para o gabarito oficial:
-1. Resolva TODAS as questões e itens visíveis nas imagens ou descritas no enunciado.
-2. Para cada questão, estruture claramente:
-   - Questão N: <enunciado ou identificação do item>
-   - Resolução: <cálculo, raciocínio ou desenvolvimento didático>
-   - Resposta: <resultado final destacado>
-3. Responda em português do Brasil correto, claro e pedagógico.
-4. Mantenha formatação limpa e organizada.`;
+${photos.length > 0 ? `🚨 ATENÇÃO MÁXIMA E OBRIGATÓRIA (FOTOS FORNECIDAS):
+- Foram enviadas ${photos.length} foto(s) da tarefa / livro / folha / caderno / quadro.
+- VOCÊ DEVE OBRIGATORIAMENTE LER COM ATENÇÃO AS IMAGENS E IDENTIFICAR AS QUESTÕES E EXERCÍCIOS ESCRITOS NELAS.
+- NÃO fique falando sobre o que é a tarefa ("nesta tarefa os alunos devem...", "o objetivo desta atividade é...").
+- NÃO resuma ou reescreva apenas as instruções do professor.
+- VOCÊ DEVE RESOLVER AS QUESTÕES QUE ESTÃO NAS FOTOS, ITEM POR ITEM!
+- Se houver contas, mostre os cálculos. Se houver perguntas teóricas, responda com clareza.` : `ATENÇÃO: Resolva todas as questões do enunciado passo a passo e dê as respostas finais.`}
+
+DADOS DA ATIVIDADE:
+- Matéria: ${resolvedSubject}
+- Título da Atividade: ${resolvedTitle}
+${resolvedDescription ? `- Instruções / Enunciado registrado: ${resolvedDescription}` : ''}
+${resolvedSource ? `- Material de Referência / Gabarito Base do Professor:\n${resolvedSource}` : ''}
+${extra_hint ? `- Observações adicionais do professor: ${extra_hint}` : ''}
+
+ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
+Para CADA questão, exercício ou item encontrado nas fotos (ou enunciado):
+Questão 1: [Transcreva sucintamente o enunciado da questão visível na foto]
+Resolução: [Mostre o desenvolvimento, contas passo a passo ou explicação direta]
+Resposta: [Resultado final ou alternativa correta destacado com clareza]
+
+(Prossiga para a Questão 2, Questão 3, Questão 4... e assim sucessivamente para todos os itens a, b, c)
+
+IMPORTANTE: Responda diretamente em português do Brasil sem rodeios ou introduções genéricas. Dê as respostas reais dos exercícios!`;
 
       contentsParts.push({ text: prompt });
 
-      const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const response = await callGeminiGenerate({
         contents: contentsParts,
-      }), 45000);
+        preferredModel: 'gemini-2.5-flash',
+        timeoutMs: 45000,
+      });
 
       const cleaned = (response.text || '').trim();
       if (cleaned) {
@@ -3766,11 +3933,11 @@ Responda EXCLUSIVAMENTE em JSON:
   "tips": ["dica para começar 1", "dica 2"],
   "first_step": "o primeiro passo prático para começar agora"
 }`;
-      const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const response = await callGeminiGenerate({
         contents: prompt,
         config: { responseMimeType: 'application/json' },
-      }));
+        preferredModel: 'gemini-2.5-flash',
+      });
       const parsed = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '{}');
       return res.json({
         explanation: parsed.explanation || task.description,
@@ -3877,11 +4044,11 @@ COMO RESPONDER ÀS DÚVIDAS DO ALUNO:
         systemInstruction = 'Você é um assistente pedagógico no Edutask para o professor. Ajude com sugestões de aula, rubricas e ideias educacionais.';
       }
 
-      const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const response = await callGeminiGenerate({
         contents: historyContents,
         config: { systemInstruction },
-      }));
+        preferredModel: 'gemini-2.5-flash',
+      });
       reply = response.text || '';
     } catch (e: any) {
       console.warn('Gemini chat fallback:', e.message);
@@ -3958,10 +4125,10 @@ api.get('/ai/daily-summary', requireAuth, async (req, res) => {
 
   if (genAI) {
     try {
-      const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const response = await callGeminiGenerate({
         contents: `Escreva uma mensagem motivacional e resumida de 2 linhas para o aluno ${user.name} em português do Brasil sobre suas tarefas pendentes: ${taskTitles}. Comece com energia e dê uma dica de foco.`,
-      }));
+        preferredModel: 'gemini-2.5-flash',
+      });
       summary = response.text?.trim() || summary;
     } catch {}
   }
@@ -4101,13 +4268,11 @@ Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
   ]
 }`;
 
-      const response = await withTimeout(
-        genAI.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: { responseMimeType: 'application/json' },
-        })
-      );
+      const response = await callGeminiGenerate({
+        contents: prompt,
+        config: { responseMimeType: 'application/json' },
+        preferredModel: 'gemini-2.5-flash',
+      });
 
       const parsed = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '{}');
       if (parsed.winner_name) {

@@ -563,14 +563,14 @@ function TaskDialog({ task, onClose, onSaved }) {
       }
       const { data: gen } = await api.post("/ai/generate-task-answer", {
         task_id: currentTaskId,
-        photo_ids: adminPhotos.map((f) => f.id),
-        subject,
-        title,
+        photo_ids: adminPhotos.map((f) => f.id || f),
+        subject: subject || "Geral",
+        title: title || "Atividade Escolar",
         description,
         answer_source: answerSource,
       });
       setAnswer(gen.answer || "");
-      toast.success(`Gabarito gerado a partir de ${gen.photos_used || adminPhotos.length} foto(s) analisada(s)! ✨`);
+      toast.success(`Gabarito gerado com base nas fotos analisadas! (${gen.photos_used || adminPhotos.length} foto(s)) ✨`);
       // Dialog stays open so admin can review and click "Salvar alterações"
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao gerar resposta");
@@ -772,12 +772,12 @@ function TaskDialog({ task, onClose, onSaved }) {
                   <button
                     type="button"
                     onClick={generateAnswer}
-                    disabled={generatingAnswer || !title.trim()}
+                    disabled={generatingAnswer}
                     className="nb-btn px-2.5 py-1 bg-violet-200 hover:bg-violet-300 text-xs flex items-center gap-1 font-bold"
                     data-testid="generate-answer-button"
                   >
                     <Sparkles className={`w-3.5 h-3.5 ${generatingAnswer ? "animate-spin" : ""}`} />
-                    {generatingAnswer ? "Gerando..." : "Pré-gerar das fotos"}
+                    {generatingAnswer ? "Lendo fotos e resolvendo..." : "Gerar gabarito das fotos (IA)"}
                   </button>
                 )}
               </div>

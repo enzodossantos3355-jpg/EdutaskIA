@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore } from 'firebase/firestore';
 
 const defaultConfig = {
   apiKey: "AIzaSyDsAo1hTSOe6Q21QcNeHmGNt650rkzBBmc",
@@ -23,5 +23,17 @@ const config = {
 };
 
 const app = getApps().length === 0 ? initializeApp(config) : getApps()[0];
-export const db = getFirestore(app, config.firestoreDatabaseId || '(default)');
+
+// Use initializeFirestore with experimentalForceLongPolling to eliminate WebChannel RPC 'Listen' transport stream errors in web/proxy environments
+let firestoreInstance;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+  }, config.firestoreDatabaseId || '(default)');
+} catch (e) {
+  firestoreInstance = getFirestore(app, config.firestoreDatabaseId || '(default)');
+}
+
+export const db = firestoreInstance;
 export const auth = getAuth(app);
+
