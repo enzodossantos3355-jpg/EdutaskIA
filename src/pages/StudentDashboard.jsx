@@ -77,6 +77,16 @@ export default function StudentDashboard() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Listener para evento customizado do botão superior da Loja no AppHeader
+  useEffect(() => {
+    const handleStoreTabEvent = () => {
+      setTab("store");
+      pullScreenToStore();
+    };
+    window.addEventListener("open-store-tab", handleStoreTabEvent);
+    return () => window.removeEventListener("open-store-tab", handleStoreTabEvent);
+  }, []);
+
   // Automatic one-time pop-up trigger on app launch for special announcements
   useEffect(() => {
     if (!user?.id || !announcements || announcements.length === 0) return;

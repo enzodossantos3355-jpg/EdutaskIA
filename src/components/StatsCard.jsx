@@ -24,9 +24,9 @@ export default function StatsCard({ stats, onOpenStore = null }) {
             <ShoppingBag className="w-4 h-4 text-amber-950" strokeWidth={2.5} />
           </div>
           <div className="min-w-0">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-900 opacity-80 flex items-center justify-between">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-900 opacity-80 flex items-center justify-between gap-1 flex-wrap">
               <span>Pontos p/ Molduras</span>
-              {onOpenStore && <span className="text-[9px] font-bold text-amber-950 underline">Abrir Loja →</span>}
+              {onOpenStore && <span className="text-[9px] font-bold text-amber-950 underline whitespace-nowrap">Abrir Loja →</span>}
             </div>
             <div className="font-heading font-black text-xl sm:text-2xl leading-tight text-neutral-900">{points}</div>
             <div className="text-[10px] text-amber-950 font-medium truncate">Saldo para a loja</div>

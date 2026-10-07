@@ -49,11 +49,24 @@ export default function AdminDashboard() {
     loadGlobalCleanup();
   }, [loadGlobalCleanup]);
 
+  // Listener para evento customizado do botão superior da Loja no AppHeader
+  useEffect(() => {
+    const handleOpenStore = () => {
+      setTab("store");
+      pullScreenToStore();
+    };
+    window.addEventListener("open-store-tab", handleOpenStore);
+    return () => window.removeEventListener("open-store-tab", handleOpenStore);
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
       <AppHeader title="Painel do Administrador" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-8 pb-24 sm:pb-8">
-        <MyProfileBanner />
+        <MyProfileBanner onOpenStore={() => {
+          setTab("store");
+          pullScreenToStore();
+        }} />
 
         {/* Relógio do Sistema (Garante a hora exata do servidor para auto-exclusão e rotinas) */}
         <AdminSystemClock

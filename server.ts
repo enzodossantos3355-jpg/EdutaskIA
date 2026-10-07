@@ -45,7 +45,9 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 45000): Promise<T
   }
 }
 
-// Robust Gemini invocation with automatic model fallbacks (gemini-3.1-flash-lite -> gemini-2.5-flash -> gemini-flash-latest -> gemini-3.8-flash)
+const quotaExhaustedModels = new Map<string, number>();
+
+// Robust Gemini invocation with automatic model fallbacks (gemini-3.1-flash-lite as primary)
 async function callGeminiGenerate(params: {
   contents: any;
   config?: any;
@@ -53,14 +55,28 @@ async function callGeminiGenerate(params: {
   timeoutMs?: number;
 }): Promise<any> {
   if (!genAI) throw new Error('Gemini API não configurada');
-  const candidateModels = [
-    params.preferredModel || 'gemini-3.1-flash-lite',
+  const now = Date.now();
+
+  for (const [model, exp] of quotaExhaustedModels.entries()) {
+    if (now > exp) quotaExhaustedModels.delete(model);
+  }
+
+  // gemini-3.1-flash-lite is the active, stable model with available quota
+  const defaultModels = [
     'gemini-3.1-flash-lite',
     'gemini-flash-latest',
     'gemini-2.5-flash',
     'gemini-3.8-flash',
   ];
-  const modelsToTry = Array.from(new Set(candidateModels));
+
+  const candidateModels = [
+    params.preferredModel || 'gemini-3.1-flash-lite',
+    ...defaultModels,
+  ];
+
+  // Prioritize models that are not in 429 quota exhaustion
+  const nonExhausted = candidateModels.filter((m) => !quotaExhaustedModels.has(m));
+  const modelsToTry = Array.from(new Set(nonExhausted.length > 0 ? nonExhausted : candidateModels));
   let lastError: any = null;
 
   for (const model of modelsToTry) {
@@ -76,7 +92,12 @@ async function callGeminiGenerate(params: {
       return response;
     } catch (err: any) {
       lastError = err;
-      console.warn(`[Gemini] Falha com modelo ${model} (${err?.message || err}), tentando próximo...`);
+      const errMsg = err?.message || String(err);
+      if (errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota exceeded')) {
+        quotaExhaustedModels.set(model, Date.now() + 15 * 60 * 1000);
+      } else {
+        console.warn(`[Gemini] Falha com modelo ${model} (${errMsg}), tentando próximo...`);
+      }
     }
   }
   throw lastError || new Error('Todos os modelos Gemini falharam');
@@ -3711,7 +3732,7 @@ Responda EXCLUSIVAMENTE em formato JSON com as chaves:
       const response = await callGeminiGenerate({
         contents: prompt,
         config: { responseMimeType: 'application/json' },
-        preferredModel: 'gemini-2.5-flash',
+        preferredModel: 'gemini-3.1-flash-lite',
       });
 
       const parsed = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '{}');
@@ -3756,7 +3777,7 @@ Responda EXCLUSIVAMENTE em JSON:
   "message": "mensagem formatada em 1 ou 2 parágrafos amigáveis"
 }`,
         config: { responseMimeType: 'application/json' },
-        preferredModel: 'gemini-2.5-flash',
+        preferredModel: 'gemini-3.1-flash-lite',
       });
       const parsed = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '{}');
       return res.json({
@@ -3795,7 +3816,7 @@ Responda EXCLUSIVAMENTE em JSON:
       const response = await callGeminiGenerate({
         contents: prompt,
         config: { responseMimeType: 'application/json' },
-        preferredModel: 'gemini-2.5-flash',
+        preferredModel: 'gemini-3.1-flash-lite',
       });
       const parsed = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '{}');
       return res.json(parsed);
@@ -3948,7 +3969,7 @@ Responda EXCLUSIVAMENTE em JSON:
       const response = await callGeminiGenerate({
         contents: prompt,
         config: { responseMimeType: 'application/json' },
-        preferredModel: 'gemini-2.5-flash',
+        preferredModel: 'gemini-3.1-flash-lite',
       });
       const parsed = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '{}');
       return res.json({
@@ -4059,7 +4080,7 @@ COMO RESPONDER ÀS DÚVIDAS DO ALUNO:
       const response = await callGeminiGenerate({
         contents: historyContents,
         config: { systemInstruction },
-        preferredModel: 'gemini-2.5-flash',
+        preferredModel: 'gemini-3.1-flash-lite',
       });
       reply = response.text || '';
     } catch (e: any) {
@@ -4139,7 +4160,7 @@ api.get('/ai/daily-summary', requireAuth, async (req, res) => {
     try {
       const response = await callGeminiGenerate({
         contents: `Escreva uma mensagem motivacional e resumida de 2 linhas para o aluno ${user.name} em português do Brasil sobre suas tarefas pendentes: ${taskTitles}. Comece com energia e dê uma dica de foco.`,
-        preferredModel: 'gemini-2.5-flash',
+        preferredModel: 'gemini-3.1-flash-lite',
       });
       summary = response.text?.trim() || summary;
     } catch {}
@@ -4283,7 +4304,7 @@ Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
       const response = await callGeminiGenerate({
         contents: prompt,
         config: { responseMimeType: 'application/json' },
-        preferredModel: 'gemini-2.5-flash',
+        preferredModel: 'gemini-3.1-flash-lite',
       });
 
       const parsed = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '{}');

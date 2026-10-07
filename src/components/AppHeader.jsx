@@ -11,14 +11,14 @@ export default function AppHeader({ title }) {
 
   return (
     <header className="border-b-2 border-black bg-white sticky top-0 z-30" data-testid="app-header">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 sm:gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-4 flex items-center justify-between gap-2 sm:gap-4">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <Logo size={36} />
+          <Logo size={34} />
           <div className="min-w-0">
             <div className="font-heading font-black text-base sm:text-lg leading-tight">
               <span>Edu</span><span className="text-sky-500">task</span>
             </div>
-            <div className="text-[11px] sm:text-xs text-neutral-600 font-medium leading-tight truncate max-w-[180px] sm:max-w-none">
+            <div className="text-[10px] sm:text-xs text-neutral-600 font-medium leading-tight truncate max-w-[130px] sm:max-w-none">
               {title}
             </div>
           </div>

@@ -133,7 +133,7 @@ export default function StoreEffects() {
             </button>
           </div>
         ) : (
-          <div className="nb-card bg-amber-200 px-4 py-2.5 flex items-center gap-2.5 border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]" data-testid="store-points">
+          <div className="nb-card bg-amber-200 px-4 py-2.5 flex items-center justify-between sm:justify-start gap-2.5 border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] w-full sm:w-auto" data-testid="store-points">
             <Coins className="w-6 h-6 text-amber-950" />
             <div>
               <div className="text-[10px] font-black uppercase tracking-wider text-amber-900">Seus Pontos para Molduras</div>

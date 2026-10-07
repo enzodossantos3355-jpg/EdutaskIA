@@ -32,49 +32,59 @@ export default function MyProfileBanner({ bg = null, onOpenStore = null }) {
 
   return (
     <div className={`nb-card p-3.5 sm:p-5 mb-4 sm:mb-8 transition-all duration-300 ${bannerBg}`} data-testid="my-profile-banner">
-      <div className="flex items-start justify-between flex-wrap gap-3 sm:gap-5">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <AvatarUploader
-            userId={user.id}
-            name={user.name}
-            hasAvatar={hasAvatar}
-            onChanged={(present) => {
-              setHasAvatar(present);
-              refresh();
-            }}
-            path="/me/avatar"
-            size={56}
-            bg={user.role === "admin" ? "bg-red-300" : "bg-sky-300"}
-            effect={effectClass(user.equipped_effect)}
-          />
-          <div className="min-w-0">
-            <p className="font-heading font-bold text-base sm:text-lg leading-tight flex items-center gap-2 flex-wrap">
-              <span className="truncate">{user.name}</span>
-            </p>
-            <p className="text-xs opacity-85 font-medium">{user.role === "admin" ? "Administrador" : "Aluno"}</p>
-            {user.role === "admin" && (
-              <button
-                onClick={() => setEditing(true)}
-                className="nb-btn bg-white hover:bg-sky-100 px-3 py-1 text-xs flex items-center gap-1.5 mt-2"
-                data-testid="open-edit-profile-button"
-              >
-                <Pencil className="w-3 h-3" />
-                Editar nome / senha
-              </button>
-            )}
-            {isAluno && onOpenStore && (
+      <div className="flex flex-col md:flex-row items-stretch md:items-start justify-between gap-3 sm:gap-5 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full md:w-auto min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <AvatarUploader
+              userId={user.id}
+              name={user.name}
+              hasAvatar={hasAvatar}
+              onChanged={(present) => {
+                setHasAvatar(present);
+                refresh();
+              }}
+              path="/me/avatar"
+              size={56}
+              bg={user.role === "admin" ? "bg-red-300" : "bg-sky-300"}
+              effect={effectClass(user.equipped_effect)}
+              compact={false}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="font-heading font-bold text-base sm:text-lg leading-tight flex items-center gap-2 flex-wrap">
+                <span className="truncate">{user.name}</span>
+              </p>
+              <p className="text-xs opacity-85 font-medium">{user.role === "admin" ? "Administrador" : "Aluno"}</p>
+              {user.role === "admin" && (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="nb-btn bg-white hover:bg-sky-100 px-3 py-1 text-xs flex items-center gap-1.5 mt-2"
+                  data-testid="open-edit-profile-button"
+                >
+                  <Pencil className="w-3 h-3" />
+                  Editar nome / senha
+                </button>
+              )}
+            </div>
+          </div>
+
+          {onOpenStore && (
+            <div className="w-full sm:w-auto">
               <button
                 onClick={onOpenStore}
-                className="nb-btn bg-amber-300 hover:bg-amber-400 text-neutral-950 px-2.5 py-1 text-xs font-bold flex items-center gap-1.5 mt-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                className="nb-btn bg-amber-300 hover:bg-amber-400 active:bg-amber-500 text-neutral-950 px-3 py-2 text-xs sm:text-sm font-bold flex items-center justify-between sm:justify-start gap-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] min-h-[40px] w-full sm:w-auto touch-manipulation active:translate-y-0.5"
                 data-testid="profile-open-store-button"
                 title="Acessar a Loja de Molduras"
               >
-                <Palette className="w-3.5 h-3.5 text-amber-950" />
-                <span>Loja de Molduras</span>
-                <span className="nb-badge bg-white text-[10px] ml-0.5">{user.points || 0} pts</span>
+                <div className="flex items-center gap-2 min-w-0 truncate">
+                  <Palette className="w-4 h-4 text-amber-950 flex-shrink-0" />
+                  <span className="font-heading font-black truncate">Loja de Molduras</span>
+                </div>
+                <span className="nb-badge bg-white text-[11px] font-black px-2 py-0.5 border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] flex-shrink-0">
+                  {user.points || 0} pts
+                </span>
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
         {isAluno && stats && (
           <div className="flex-1 min-w-full sm:min-w-[280px] max-w-2xl">
