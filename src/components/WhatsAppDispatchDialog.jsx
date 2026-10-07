@@ -58,19 +58,9 @@ export default function WhatsAppDispatchDialog({
     setUploadedPhotoData(null);
     setUploadedPhotoName(null);
 
-    // Identificar fotos existentes
+    // Identificar anexos públicos da tarefa (fotos fonte da IA admin_photos NÃO são enviadas para alunos)
     const photos = [];
     const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : "";
-
-    if (item.admin_photos && item.admin_photos.length > 0) {
-      item.admin_photos.forEach((p) => {
-        photos.push({
-          id: p.id,
-          name: p.original_filename || p.filename || "Foto da Tarefa",
-          url: `${API}/files/${p.id}/download?auth=${encodeURIComponent(token || "")}`,
-        });
-      });
-    }
 
     if (item.attachments && item.attachments.length > 0) {
       item.attachments.forEach((a) => {
@@ -425,7 +415,8 @@ export default function WhatsAppDispatchDialog({
               {/* 2. Escolha do Enunciado / Escrita para o Grupo 2 */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold uppercase tracking-wider text-neutral-700">
+                  <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-violet-600" />
                     Enunciado / Legenda da Foto (Grupo 2)
                   </label>
                   <button
@@ -433,82 +424,117 @@ export default function WhatsAppDispatchDialog({
                     onClick={() => setGroup2Caption(defaultCaption)}
                     className="text-[11px] text-neutral-600 hover:text-black underline font-medium"
                   >
-                    Restaurar original
+                    Restaurar texto original
                   </button>
                 </div>
                 <textarea
                   rows={4}
                   value={group2Caption}
                   onChange={(e) => setGroup2Caption(e.target.value)}
-                  placeholder="Digite ou ajuste o enunciado que acompanhará a foto..."
+                  placeholder="Digite ou ajuste o enunciado que acompanhará a foto no Grupo 2..."
                   className="nb-input bg-white text-xs sm:text-sm resize-y"
                   data-testid="input-group-2-caption"
                 />
                 <p className="text-[11px] text-neutral-500">
-                  Esta mensagem será enviada como legenda da imagem no Grupo 2 (ou mensagem de texto se não houver foto).
+                  Esta mensagem preencherá a tag <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{descricao}"}</code> do seu modelo de enunciado configurado na aba WhatsApp.
                 </p>
               </div>
 
-              {/* Pré-visualização do Grupo 2 */}
-              <div className="nb-card bg-neutral-900 text-white p-3 rounded-xl text-xs space-y-1 font-mono">
-                <div className="text-[10px] uppercase font-bold text-neutral-400 flex items-center justify-between">
-                  <span>📱 Pré-visualização no WhatsApp (Grupo 2):</span>
-                  {selectedPhotoId && selectedPhotoId !== "none" && (
-                    <span className="text-emerald-400">📷 Com Foto Anexada</span>
-                  )}
-                </div>
-                <p className="text-amber-300 font-bold">
-                  📚 {item.subject ? `${item.subject} — ` : ""}{item.title}
-                </p>
-                <p className="text-neutral-300">
-                  📅 Entrega: {formattedDueDate}
-                </p>
-                <div className="pt-1 text-neutral-100 whitespace-pre-wrap font-sans">
-                  <span className="font-bold font-mono text-neutral-400 block text-[10px]">
-                    📝 Enunciado:
-                  </span>
-                  {group2Caption || "—"}
-                </div>
-              </div>
+              {/* Pré-visualização Real do Grupo 2 com o Modelo Configurado */}
+              {(() => {
+                const cfg = status?.config || {};
+                const template =
+                  type === "task"
+                    ? (cfg.templates?.task_caption || "📚 *{materia} — {titulo}*\n📅 *Entrega:* {data_entrega}\n\n📝 *Enunciado:*\n{descricao}")
+                    : (cfg.templates?.announcement_caption || "📣 *{titulo}*\n\n{mensagem}");
+
+                let renderedPreview = "";
+                const rawText = group2Caption || (type === "task" ? item.description : item.message) || "";
+
+                if (rawText.includes("{materia}") || rawText.includes("{titulo}") || rawText.includes("{descricao}") || rawText.includes("{mensagem}")) {
+                  renderedPreview = rawText
+                    .replace(/\{materia\}/gi, item.subject || "")
+                    .replace(/\{subject\}/gi, item.subject || "")
+                    .replace(/\{titulo\}/gi, item.title || "")
+                    .replace(/\{title\}/gi, item.title || "")
+                    .replace(/\{data_entrega\}/gi, formattedDueDate)
+                    .replace(/\{due_date\}/gi, formattedDueDate)
+                    .replace(/\{pontos\}/gi, String(item.points || 0))
+                    .replace(/\{points\}/gi, String(item.points || 0))
+                    .replace(/\{destinatarios\}/gi, "Todos os alunos")
+                    .replace(/\{descricao\}/gi, item.description || "")
+                    .replace(/\{enunciado\}/gi, item.description || "")
+                    .replace(/\{mensagem\}/gi, item.message || "");
+                } else if (type === "task") {
+                  renderedPreview = template
+                    .replace(/\{materia\}/gi, item.subject || "")
+                    .replace(/\{subject\}/gi, item.subject || "")
+                    .replace(/\{titulo\}/gi, item.title || "")
+                    .replace(/\{title\}/gi, item.title || "")
+                    .replace(/\{data_entrega\}/gi, formattedDueDate)
+                    .replace(/\{due_date\}/gi, formattedDueDate)
+                    .replace(/\{pontos\}/gi, String(item.points || 0))
+                    .replace(/\{points\}/gi, String(item.points || 0))
+                    .replace(/\{destinatarios\}/gi, "Todos os alunos")
+                    .replace(/\{descricao\}/gi, rawText)
+                    .replace(/\{enunciado\}/gi, rawText);
+                } else {
+                  renderedPreview = template
+                    .replace(/\{titulo\}/gi, item.title || "")
+                    .replace(/\{title\}/gi, item.title || "")
+                    .replace(/\{data\}/gi, formattedDueDate)
+                    .replace(/\{created_at\}/gi, formattedDueDate)
+                    .replace(/\{destinatarios\}/gi, "Todos os alunos")
+                    .replace(/\{mensagem\}/gi, rawText)
+                    .replace(/\{comunicado\}/gi, rawText);
+                }
+
+                return (
+                  <div className="nb-card bg-neutral-900 text-white p-3.5 rounded-xl text-xs space-y-2 font-mono">
+                    <div className="text-[10px] uppercase font-bold text-neutral-400 flex items-center justify-between border-b border-neutral-700 pb-1.5">
+                      <span className="flex items-center gap-1.5 text-emerald-400">
+                        📱 Pré-visualização Real no WhatsApp (Grupo 2):
+                      </span>
+                      {selectedPhotoId && selectedPhotoId !== "none" ? (
+                        <span className="text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40">
+                          📷 Com Foto Anexada
+                        </span>
+                      ) : (
+                        <span className="text-neutral-400 bg-neutral-800 px-1.5 py-0.5 rounded">
+                          💬 Apenas Texto
+                        </span>
+                      )}
+                    </div>
+                    <div className="pt-1 text-neutral-100 whitespace-pre-wrap font-sans text-xs sm:text-sm leading-relaxed">
+                      {renderedPreview || "—"}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
 
         {/* Footer com Ações */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t-2 border-black">
-          <a
-            href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-              `📚 *${item.subject ? `${item.subject} — ` : ""}${item.title}*\n📅 Entrega: ${formattedDueDate}\n\n📝 *Orientações:*\n${group2Caption || defaultCaption || "Verifique as instruções e anexos no Edutask."}\n\n👉 Acesse o Edutask para detalhes!`
-            )}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="nb-btn bg-sky-200 hover:bg-sky-300 text-sky-950 px-4 py-2.5 font-bold text-xs sm:text-sm flex items-center gap-1.5"
-            data-testid="open-direct-whatsapp-btn"
+        <div className="flex items-center justify-end gap-3 pt-2 border-t-2 border-black">
+          <button
+            type="button"
+            onClick={onClose}
+            className="nb-btn bg-white hover:bg-neutral-100 px-5 py-2.5 font-bold"
+            disabled={sending}
           >
-            <MessageSquare className="w-4 h-4 text-emerald-700" />
-            Abrir no WhatsApp Web / Celular 📲
-          </a>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="nb-btn bg-white hover:bg-neutral-100 px-4 py-2.5 font-bold text-xs sm:text-sm"
-              disabled={sending}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={sending || (!sendG1 && !sendG2)}
-              className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 px-5 py-2.5 font-heading font-black text-xs sm:text-sm flex items-center gap-2"
-              data-testid="confirm-whatsapp-dispatch-btn"
-            >
-              <Send className={`w-4 h-4 ${sending ? "animate-spin" : ""}`} />
-              {sending ? "Disparando..." : "Disparar via Bot 🚀"}
-            </button>
-          </div>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={sending || !isConnected || (!sendG1 && !sendG2)}
+            className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 px-6 py-2.5 font-heading font-black flex items-center gap-2"
+            data-testid="confirm-whatsapp-dispatch-btn"
+          >
+            <Send className={`w-4 h-4 ${sending ? "animate-spin" : ""}`} />
+            {sending ? "Disparando..." : "Disparar no WhatsApp 🚀"}
+          </button>
         </div>
       </div>
     </div>

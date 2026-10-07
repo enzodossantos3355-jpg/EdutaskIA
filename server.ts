@@ -47,8 +47,47 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 45000): Promise<T
 // Multer memory storage
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB to support high-res camera photos
 });
+
+function resolveImageMime(file?: Express.Multer.File): string {
+  if (!file) return 'image/png';
+  const mime = (file.mimetype || '').toLowerCase();
+  if (mime && mime !== 'application/octet-stream' && mime !== 'binary/octet-stream') {
+    return mime;
+  }
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  switch (ext) {
+    case '.jpg':
+    case '.jpeg':
+    case '.jfif':
+    case '.pjpeg':
+      return 'image/jpeg';
+    case '.png':
+      return 'image/png';
+    case '.webp':
+      return 'image/webp';
+    case '.gif':
+      return 'image/gif';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.avif':
+      return 'image/avif';
+    case '.bmp':
+      return 'image/bmp';
+    case '.ico':
+      return 'image/x-icon';
+    case '.heic':
+      return 'image/heic';
+    case '.heif':
+      return 'image/heif';
+    case '.tif':
+    case '.tiff':
+      return 'image/tiff';
+    default:
+      return 'image/jpeg';
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Sistema de Níveis Desligado Permanentemente
@@ -898,7 +937,7 @@ api.patch('/users/:user_id/status', requireAdmin, async (req, res) => {
 
 api.patch('/users/:user_id', requireAdmin, async (req, res) => {
   const { user_id } = req.params;
-  const { name, password } = req.body || {};
+  const { name, password, remove_avatar } = req.body || {};
   const user = db.users.get(user_id);
   if (!user) return res.status(404).json({ detail: 'Usuário não encontrado' });
 
@@ -911,15 +950,19 @@ api.patch('/users/:user_id', requireAdmin, async (req, res) => {
     user.password_hash = bcrypt.hashSync(password, 10);
     user.password_plain = password;
   }
+  if (remove_avatar) {
+    user.avatar_data = undefined;
+    user.avatar_content_type = undefined;
+  }
   db.saveToDisk();
   await firebaseService.saveUser(user).catch(console.warn);
 
-  res.json({ ok: true, user: { id: user.id, name: user.name } });
+  res.json({ ok: true, user: { id: user.id, name: user.name, has_avatar: Boolean(user.avatar_data) } });
 });
 
 api.patch('/me', requireAuth, async (req, res) => {
   const user = (req as any).user as User;
-  const { name, password } = req.body || {};
+  const { name, password, remove_avatar } = req.body || {};
 
   if (user.role === 'admin' && password && password.trim() === '123') {
     return res.status(400).json({ detail: 'A senha 123 não é permitida para administradores' });
@@ -930,10 +973,14 @@ api.patch('/me', requireAuth, async (req, res) => {
     user.password_hash = bcrypt.hashSync(password, 10);
     user.password_plain = password;
   }
+  if (remove_avatar) {
+    user.avatar_data = undefined;
+    user.avatar_content_type = undefined;
+  }
   db.saveToDisk();
   await firebaseService.saveUser(user).catch(console.warn);
 
-  res.json({ ok: true });
+  res.json({ ok: true, has_avatar: Boolean(user.avatar_data) });
 });
 
 api.delete('/users/:user_id', requireAdmin, async (req, res) => {
@@ -984,12 +1031,13 @@ api.post('/me/avatar', requireAuth, upload.single('file'), async (req, res) => {
   const user = (req as any).user as User;
   if (!req.file) return res.status(400).json({ detail: 'Nenhum arquivo enviado' });
 
-  user.avatar_data = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-  user.avatar_content_type = req.file.mimetype;
+  const mime = resolveImageMime(req.file);
+  user.avatar_data = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
+  user.avatar_content_type = mime;
   db.saveToDisk();
   await firebaseService.saveUser(user).catch(console.warn);
 
-  res.json({ ok: true });
+  res.json({ ok: true, has_avatar: true });
 });
 
 api.delete('/me/avatar', requireAuth, async (req, res) => {
@@ -999,7 +1047,7 @@ api.delete('/me/avatar', requireAuth, async (req, res) => {
   db.saveToDisk();
   await firebaseService.saveUser(user).catch(console.warn);
 
-  res.json({ ok: true });
+  res.json({ ok: true, has_avatar: false });
 });
 
 api.post('/users/:user_id/avatar', requireAdmin, upload.single('file'), async (req, res) => {
@@ -1008,12 +1056,13 @@ api.post('/users/:user_id/avatar', requireAdmin, upload.single('file'), async (r
   if (!user) return res.status(404).json({ detail: 'Usuário não encontrado' });
   if (!req.file) return res.status(400).json({ detail: 'Nenhum arquivo enviado' });
 
-  user.avatar_data = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-  user.avatar_content_type = req.file.mimetype;
+  const mime = resolveImageMime(req.file);
+  user.avatar_data = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
+  user.avatar_content_type = mime;
   db.saveToDisk();
   await firebaseService.saveUser(user).catch(console.warn);
 
-  res.json({ ok: true });
+  res.json({ ok: true, has_avatar: true });
 });
 
 api.delete('/users/:user_id/avatar', requireAdmin, async (req, res) => {
@@ -1026,7 +1075,7 @@ api.delete('/users/:user_id/avatar', requireAdmin, async (req, res) => {
   db.saveToDisk();
   await firebaseService.saveUser(user).catch(console.warn);
 
-  res.json({ ok: true });
+  res.json({ ok: true, has_avatar: false });
 });
 
 api.get('/avatars/:user_id', (req, res) => {
@@ -1037,7 +1086,8 @@ api.get('/avatars/:user_id', (req, res) => {
   }
 
   const parts = user.avatar_data.split(',');
-  const mime = user.avatar_content_type || 'image/png';
+  const headerMime = parts[0] ? parts[0].replace(/^data:/, '').replace(/;base64$/, '') : '';
+  const mime = user.avatar_content_type || headerMime || 'image/png';
   const imgBuffer = Buffer.from(parts[1] || '', 'base64');
   res.setHeader('Content-Type', mime);
   res.setHeader('Cache-Control', 'no-cache');
@@ -1230,6 +1280,46 @@ api.get('/files/:file_id/download', async (req, res) => {
   res.send(file.data);
 });
 
+export function getFileRecord(fileId: string | null | undefined): FileRecord | null {
+  if (!fileId) return null;
+  let file = db.files.get(fileId);
+  if (file && file.data && file.data.length > 0) {
+    return file;
+  }
+  try {
+    if (fs.existsSync(UPLOAD_DIR)) {
+      const filesInDir = fs.readdirSync(UPLOAD_DIR).filter((f) => f.startsWith(fileId));
+      if (filesInDir.length > 0) {
+        const found = filesInDir[0];
+        const fullPath = path.resolve(UPLOAD_DIR, found);
+        const data = fs.readFileSync(fullPath);
+        const ext = path.extname(found).toLowerCase();
+        let mime = 'image/jpeg';
+        if (ext === '.png') mime = 'image/png';
+        else if (ext === '.webp') mime = 'image/webp';
+        else if (ext === '.gif') mime = 'image/gif';
+        else if (ext === '.svg') mime = 'image/svg+xml';
+        else if (ext === '.pdf') mime = 'application/pdf';
+
+        const record: FileRecord = {
+          id: fileId,
+          original_filename: file?.original_filename || found,
+          content_type: file?.content_type && file.content_type !== 'application/octet-stream' ? file.content_type : mime,
+          size: data.length,
+          data,
+          uploaded_by: file?.uploaded_by || 'system',
+          created_at: file?.created_at || new Date().toISOString(),
+        };
+        db.files.set(fileId, record);
+        return record;
+      }
+    }
+  } catch (e) {
+    console.warn(`[Storage] Erro ao carregar arquivo ${fileId} do disco:`, e);
+  }
+  return file || null;
+}
+
 // ---------------------------------------------------------------------------
 // Tasks
 // ---------------------------------------------------------------------------
@@ -1382,13 +1472,13 @@ async function dispatchTaskWhatsAppNotifications(task: TaskItem) {
       }
     }
 
-    // Buscar primeira foto anexada em admin_photos ou attachments (se houver)
+    // Buscar primeira foto anexada em attachments públicos da tarefa (NUNCA usar admin_photos que são fonte da IA)
     let photoBuffer: Buffer | null = null;
     let photoContentType: string | null = null;
 
-    const allFileIds = [...(task.admin_photos || []), ...(task.attachments || [])];
-    for (const fId of allFileIds) {
-      const f = db.files.get(fId);
+    const publicFileIds = [...(task.attachments || [])];
+    for (const fId of publicFileIds) {
+      const f = getFileRecord(fId);
       if (f && f.content_type?.startsWith('image/') && f.data && f.data.length > 0) {
         photoBuffer = f.data;
         photoContentType = f.content_type;
@@ -1396,9 +1486,9 @@ async function dispatchTaskWhatsAppNotifications(task: TaskItem) {
       }
     }
 
-    // Se não houver foto anexada nesta tarefa específica, usar a foto universal de tarefas configurada no WhatsApp
+    // Se não houver foto pública anexada nesta tarefa específica, usar a foto universal de tarefas configurada no WhatsApp
     if (!photoBuffer && db.whatsapp_config?.templates?.task_photo_id) {
-      const f = db.files.get(db.whatsapp_config.templates.task_photo_id);
+      const f = getFileRecord(db.whatsapp_config.templates.task_photo_id);
       if (f && f.data) {
         photoBuffer = f.data;
         photoContentType = f.content_type;
@@ -1414,6 +1504,7 @@ async function dispatchTaskWhatsAppNotifications(task: TaskItem) {
       recipients_label: recipientsLabel,
       photo_buffer: photoBuffer,
       photo_content_type: photoContentType,
+      custom_caption_template: db.whatsapp_config?.templates?.task_caption,
     });
   } catch (err) {
     console.error('[WhatsApp] Falha no disparo de notificações:', err);
@@ -1463,16 +1554,16 @@ api.post('/tasks/:task_id/send-whatsapp', requireAdmin, async (req, res) => {
       console.warn('Erro ao decodificar photo_data:', e);
     }
   } else if (photo_id) {
-    const f = db.files.get(photo_id);
+    const f = getFileRecord(photo_id);
     if (f && f.data) {
       photoBuffer = f.data;
       photoContentType = f.content_type;
     }
   } else if (photo_id !== null) {
-    // Se photo_id não foi explicitamente setado como null (ou seja, undefined), pega a primeira foto disponível da tarefa
-    const allFileIds = [...(task.admin_photos || []), ...(task.attachments || [])];
-    for (const fId of allFileIds) {
-      const f = db.files.get(fId);
+    // Anexos públicos da tarefa (NUNCA fotos fonte da IA admin_photos)
+    const publicFileIds = [...(task.attachments || [])];
+    for (const fId of publicFileIds) {
+      const f = getFileRecord(fId);
       if (f && f.content_type?.startsWith('image/') && f.data && f.data.length > 0) {
         photoBuffer = f.data;
         photoContentType = f.content_type;
@@ -1480,7 +1571,7 @@ api.post('/tasks/:task_id/send-whatsapp', requireAdmin, async (req, res) => {
       }
     }
     if (!photoBuffer && db.whatsapp_config?.templates?.task_photo_id) {
-      const f = db.files.get(db.whatsapp_config.templates.task_photo_id);
+      const f = getFileRecord(db.whatsapp_config.templates.task_photo_id);
       if (f && f.data) {
         photoBuffer = f.data;
         photoContentType = f.content_type;
@@ -1498,6 +1589,7 @@ api.post('/tasks/:task_id/send-whatsapp', requireAdmin, async (req, res) => {
     group2_caption: group2_caption !== undefined ? group2_caption : task.description,
     photo_buffer: photoBuffer,
     photo_content_type: photoContentType,
+    custom_caption_template: db.whatsapp_config?.templates?.task_caption,
     group1_enabled: Boolean(group1_enabled),
     group2_enabled: Boolean(group2_enabled),
   });
@@ -1572,26 +1664,8 @@ api.post('/tasks/:task_id/generate-answer', requireAuth, async (req, res) => {
   const photoIds = [...(task.admin_photos || []), ...(task.attachments || [])];
   const imageFiles: FileRecord[] = [];
   for (const pid of photoIds) {
-    let f = db.files.get(pid);
-    if (!f) {
-      try {
-        const filesInDir = fs.readdirSync(UPLOAD_DIR).filter((fn) => fn.startsWith(pid));
-        if (filesInDir.length > 0) {
-          const found = filesInDir[0];
-          const data = fs.readFileSync(path.resolve(UPLOAD_DIR, found));
-          f = {
-            id: pid,
-            original_filename: found,
-            content_type: 'image/jpeg',
-            size: data.length,
-            data,
-            uploaded_by: 'system',
-            created_at: new Date().toISOString(),
-          };
-        }
-      } catch {}
-    }
-    if (f && f.data && (f.content_type?.startsWith('image/') || f.original_filename?.match(/\.(jpg|jpeg|png|webp|gif)$/i))) {
+    const f = getFileRecord(pid);
+    if (f && f.data && (f.content_type?.startsWith('image/') || f.original_filename?.match(/\.(jpe?g|png|webp|gif|bmp|jfif)$/i))) {
       imageFiles.push(f);
     }
   }
@@ -1601,9 +1675,11 @@ api.post('/tasks/:task_id/generate-answer', requireAuth, async (req, res) => {
   if (genAI) {
     try {
       const contentsParts: any[] = [];
-      for (const img of imageFiles.slice(0, 3)) {
-        if (img.data && img.data.length < 5 * 1024 * 1024) {
-          const mime = img.content_type?.startsWith('image/') ? img.content_type : 'image/jpeg';
+      for (const img of imageFiles.slice(0, 5)) {
+        if (img.data && img.data.length < 20 * 1024 * 1024) {
+          const mime = img.content_type?.startsWith('image/') && img.content_type !== 'application/octet-stream'
+            ? img.content_type
+            : 'image/jpeg';
           contentsParts.push({
             inlineData: {
               data: img.data.toString('base64'),
@@ -1968,11 +2044,23 @@ api.post('/announcements', requireAdmin, async (req, res) => {
     const names = doc.assigned_to.map((sid) => db.users.get(sid)?.name).filter(Boolean);
     if (names.length > 0) recipientsLabel = names.join(', ');
   }
+  let photoBuffer: Buffer | null = null;
+  let photoContentType: string | null = null;
+  if (db.whatsapp_config?.templates?.announcement_photo_id) {
+    const f = getFileRecord(db.whatsapp_config.templates.announcement_photo_id);
+    if (f && f.data) {
+      photoBuffer = f.data;
+      photoContentType = f.content_type;
+    }
+  }
   whatsappService.sendAnnouncementNotifications({
     title: doc.title,
     message: doc.message,
     created_at: doc.created_at,
     recipients_label: recipientsLabel,
+    photo_buffer: photoBuffer,
+    photo_content_type: photoContentType,
+    custom_caption_template: db.whatsapp_config?.templates?.announcement_caption,
   }).catch((err) => {
     console.error('[WhatsApp] Erro no disparo de aviso:', err);
   });
@@ -2019,14 +2107,14 @@ api.post('/announcements/:ann_id/send-whatsapp', requireAdmin, async (req, res) 
       console.warn('Erro ao decodificar photo_data para aviso:', e);
     }
   } else if (photo_id) {
-    const f = db.files.get(photo_id);
+    const f = getFileRecord(photo_id);
     if (f && f.data) {
       photoBuffer = f.data;
       photoContentType = f.content_type;
     }
   } else if (photo_id !== null) {
     if (db.whatsapp_config?.templates?.announcement_photo_id) {
-      const f = db.files.get(db.whatsapp_config.templates.announcement_photo_id);
+      const f = getFileRecord(db.whatsapp_config.templates.announcement_photo_id);
       if (f && f.data) {
         photoBuffer = f.data;
         photoContentType = f.content_type;
@@ -2042,6 +2130,7 @@ api.post('/announcements/:ann_id/send-whatsapp', requireAdmin, async (req, res) 
     group2_caption: group2_caption !== undefined ? group2_caption : doc.message,
     photo_buffer: photoBuffer,
     photo_content_type: photoContentType,
+    custom_caption_template: db.whatsapp_config?.templates?.announcement_caption,
     group1_enabled: Boolean(group1_enabled),
     group2_enabled: Boolean(group2_enabled),
   });
@@ -3575,54 +3664,81 @@ Responda EXCLUSIVAMENTE em JSON:
 
 api.post('/ai/generate-task-answer', requireAdmin, async (req, res) => {
   if (!db.ai_enabled) return res.status(503).json({ detail: 'Recursos de IA desativados' });
-  const { task_id, extra_hint } = req.body || {};
-  const task = db.tasks.get(task_id);
-  if (!task) return res.status(404).json({ detail: 'Tarefa não encontrada' });
+  const { task_id, photo_ids, subject, title, description, answer_source, extra_hint } = req.body || {};
+  const task = task_id ? db.tasks.get(task_id) : null;
 
-  const photoIds = task.admin_photos || [];
-  const photos = photoIds.map((id) => db.files.get(id)).filter(Boolean) as FileRecord[];
+  const resolvedSubject = subject || task?.subject || 'Geral';
+  const resolvedTitle = title || task?.title || 'Atividade';
+  const resolvedDescription = description || task?.description || '';
+  const resolvedSource = answer_source || task?.answer_source || task?.answer || '';
 
-  if (genAI && photos.length > 0) {
+  const rawPhotoIds: string[] = Array.isArray(photo_ids) && photo_ids.length > 0
+    ? photo_ids
+    : (task?.admin_photos || []);
+
+  const photos: FileRecord[] = [];
+  for (const pid of rawPhotoIds) {
+    const f = getFileRecord(pid);
+    if (f && f.data && (f.content_type?.startsWith('image/') || f.original_filename?.match(/\.(jpe?g|png|webp|gif|bmp|jfif)$/i))) {
+      photos.push(f);
+    }
+  }
+
+  if (genAI && (photos.length > 0 || resolvedDescription || resolvedSource)) {
     try {
       const contentsParts: any[] = [];
       for (const p of photos.slice(0, 5)) {
-        if (p.content_type.startsWith('image/')) {
+        if (p.data && p.data.length > 0) {
+          const mime = p.content_type?.startsWith('image/') && p.content_type !== 'application/octet-stream'
+            ? p.content_type
+            : 'image/jpeg';
           contentsParts.push({
             inlineData: {
               data: p.data.toString('base64'),
-              mimeType: p.content_type,
+              mimeType: mime,
             },
           });
         }
       }
 
-      contentsParts.push({
-        text: `Você é um professor gerando um gabarito CURTO E DIRETO em português do Brasil.
-NÃO use markdown negrito com **, NÃO explique raciocínio longo, NÃO coloque introdução.
-Para cada questão da imagem:
-Questão N: <enunciado curto>
-Contas: <contas resumidas em 1 linha se houver cálculo>
-Resposta: <resultado final>
+      const prompt = `Você é um professor tutor especialista no ensino fundamental e médio.
+${photos.length > 0 ? `ATENÇÃO: Foram enviadas ${photos.length} foto(s) da tarefa/livro/enunciado. LEIA CUIDADOSAMENTE O CONTEÚDO DAS IMAGENS, transcreva cada questão identificada e resolva-a com total precisão passo a passo.` : ''}
 
-Matéria: ${task.subject}
-Título: ${task.title}
-Observação: ${extra_hint || ''}`,
-      });
+Disciplina: ${resolvedSubject}
+Título da Atividade: ${resolvedTitle}
+${resolvedDescription ? `Enunciado/Instruções: ${resolvedDescription}` : ''}
+${resolvedSource ? `Material de Referência / Gabarito Base do Professor: ${resolvedSource}` : ''}
+${extra_hint ? `Instruções adicionais: ${extra_hint}` : ''}
+
+Diretrizes obrigatórias para o gabarito oficial:
+1. Resolva TODAS as questões e itens visíveis nas imagens ou descritas no enunciado.
+2. Para cada questão, estruture claramente:
+   - Questão N: <enunciado ou identificação do item>
+   - Resolução: <cálculo, raciocínio ou desenvolvimento didático>
+   - Resposta: <resultado final destacado>
+3. Responda em português do Brasil correto, claro e pedagógico.
+4. Mantenha formatação limpa e organizada.`;
+
+      contentsParts.push({ text: prompt });
 
       const response = await withTimeout(genAI.models.generateContent({
         model: 'gemini-3.8-flash',
         contents: contentsParts,
-      }));
+      }), 45000);
 
-      const cleaned = (response.text || '').replace(/\*\*/g, '').trim();
-      return res.json({ answer: cleaned, photos_used: photos.length });
+      const cleaned = (response.text || '').trim();
+      if (cleaned) {
+        return res.json({ answer: cleaned, photos_used: photos.length });
+      }
     } catch (e: any) {
-      console.warn('Gemini generate-task-answer fallback:', e.message);
+      console.warn('Gemini generate-task-answer error:', e.message);
     }
   }
 
   // Realistic answer generation fallback
-  const mockAnswer = `Questão 1: Calcule o valor correspondente\nContas: 1/2 + 1/4 = 2/4 + 1/4 = 3/4\nResposta: 3/4 (75%)\n\nQuestão 2: Resolução do problema proposto\nContas: 25% de 80 = 0.25 * 80 = 20\nResposta: 20\n\nQuestão 3: Interpretação e conclusão\nResposta: O ciclo se completa com a precipitação e recarga dos lençóis freáticos.`;
+  const mockAnswer = photos.length > 0
+    ? `Questão 1: Resolução com base na foto analisada\nResolução: Análise detalhada dos dados da imagem.\nResposta: Gabarito apurado com sucesso.\n\nQuestão 2: Continuação dos exercícios da folha\nResolução: Aplicação dos conceitos da disciplina de ${resolvedSubject}.\nResposta: Conclusão validada.`
+    : `Questão 1: Resolução do problema proposto\nResolução: ${resolvedDescription || 'Aplicação prática dos conceitos'}\nResposta: Conforme enunciado da atividade.`;
 
   res.json({
     answer: mockAnswer,

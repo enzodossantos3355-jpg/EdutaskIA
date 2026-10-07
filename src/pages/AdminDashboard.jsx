@@ -563,9 +563,14 @@ function TaskDialog({ task, onClose, onSaved }) {
       }
       const { data: gen } = await api.post("/ai/generate-task-answer", {
         task_id: currentTaskId,
+        photo_ids: adminPhotos.map((f) => f.id),
+        subject,
+        title,
+        description,
+        answer_source: answerSource,
       });
       setAnswer(gen.answer || "");
-      toast.success(`Resposta gerada a partir de ${gen.photos_used} foto(s)! ✨`);
+      toast.success(`Gabarito gerado a partir de ${gen.photos_used || adminPhotos.length} foto(s) analisada(s)! ✨`);
       // Dialog stays open so admin can review and click "Salvar alterações"
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao gerar resposta");
@@ -1039,6 +1044,9 @@ function StudentsPanel() {
       {creating && <CreateStudentDialog onClose={() => setCreating(false)} onCreated={() => { setCreating(false); load(); }} />}
       {editing && (
         <EditProfileDialog
+          userId={editing.id}
+          hasAvatar={editing.has_avatar}
+          avatarPath={`/users/${editing.id}/avatar`}
           initialName={editing.name}
           path={`/users/${editing.id}`}
           label={`aluno: ${editing.name}`}

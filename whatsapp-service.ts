@@ -22,6 +22,15 @@ export interface WhatsAppGroupInfo {
   participantsCount: number;
 }
 
+export interface WhatsAppTemplatesConfig {
+  task_caption?: string;
+  task_photo_id?: string | null;
+  announcement_caption?: string;
+  announcement_photo_id?: string | null;
+  tomorrow_caption?: string;
+  tomorrow_photo_id?: string | null;
+}
+
 export interface WhatsAppServiceStatus {
   status: WhatsAppConnectionStatus;
   qrCode: string | null;
@@ -36,6 +45,7 @@ export interface WhatsAppServiceStatus {
   group2Jid: string;
   group2Name: string;
   enabled: boolean;
+  templates?: WhatsAppTemplatesConfig;
   lastError: string | null;
   lastConnectedAt: string | null;
   hasSavedAuth?: boolean;
@@ -52,10 +62,11 @@ export interface TaskNotificationPayload {
   subject: string;
   title: string;
   due_date: string;
-  points: number;
+  points?: number;
   description: string;
   recipients_label?: string;
   group2_caption?: string;
+  custom_caption_template?: string;
   photo_buffer?: Buffer | null;
   photo_content_type?: string | null;
   group1_enabled?: boolean;
@@ -68,6 +79,7 @@ export interface AnnouncementNotificationPayload {
   created_at?: string;
   recipients_label?: string;
   group2_caption?: string;
+  custom_caption_template?: string;
   photo_buffer?: Buffer | null;
   photo_content_type?: string | null;
   group1_enabled?: boolean;
@@ -103,6 +115,7 @@ class WhatsAppService {
   private group2Jid: string = '';
   private group2Name: string = '';
   private enabled: boolean = true;
+  private templates: WhatsAppTemplatesConfig = {};
   private isInitializing: boolean = false;
   private reconnectTimeout: any = null;
   private keepAliveInterval: any = null;
@@ -150,6 +163,7 @@ class WhatsAppService {
     group_2_name?: string;
     group_jid?: string;
     enabled?: boolean;
+    templates?: WhatsAppTemplatesConfig;
   }) {
     if (config.group1Jid !== undefined) this.group1Jid = (config.group1Jid || '').trim();
     else if (config.group_1_jid !== undefined) this.group1Jid = (config.group_1_jid || '').trim();
@@ -165,6 +179,13 @@ class WhatsAppService {
     else if (config.group_2_name !== undefined) this.group2Name = (config.group_2_name || '').trim();
 
     if (config.enabled !== undefined) this.enabled = Boolean(config.enabled);
+
+    if (config.templates) {
+      this.templates = {
+        ...this.templates,
+        ...config.templates,
+      };
+    }
   }
 
   public isWindowExpired(): boolean {
@@ -245,6 +266,7 @@ class WhatsAppService {
       group2Jid: this.group2Jid,
       group2Name: this.group2Name,
       enabled: this.enabled,
+      templates: this.templates,
       lastError: this.lastError,
       lastConnectedAt: this.lastConnectedAt,
       hasSavedAuth: this.hasSavedAuth(),
@@ -552,11 +574,48 @@ class WhatsAppService {
     if (this.group2Jid && sendG2) {
       try {
         const target2 = this.group2Jid.includes('@') ? this.group2Jid : `${this.group2Jid}@g.us`;
-        const statementText = (task.group2_caption || task.description || '').trim();
-        const captionG2 =
-          `📚 *${task.subject} — ${task.title}*\n` +
-          `📅 *Entrega:* ${formattedDate}\n\n` +
-          `📝 *Enunciado:*\n${statementText}`;
+        const rawStatement = (task.group2_caption !== undefined && task.group2_caption !== null && task.group2_caption !== '')
+          ? task.group2_caption
+          : (task.description || '');
+
+        const taskTemplate = (
+          task.custom_caption_template ||
+          this.templates?.task_caption ||
+          '📚 *{materia} — {titulo}*\n📅 *Entrega:* {data_entrega}\n\n📝 *Enunciado:*\n{descricao}'
+        ).trim();
+
+        let captionG2 = '';
+        if (rawStatement.includes('{materia}') || rawStatement.includes('{titulo}') || rawStatement.includes('{descricao}') || rawStatement.includes('{data_entrega}')) {
+          captionG2 = rawStatement
+            .replace(/\{materia\}/gi, task.subject || '')
+            .replace(/\{subject\}/gi, task.subject || '')
+            .replace(/\{titulo\}/gi, task.title || '')
+            .replace(/\{title\}/gi, task.title || '')
+            .replace(/\{data_entrega\}/gi, formattedDate)
+            .replace(/\{due_date\}/gi, formattedDate)
+            .replace(/\{pontos\}/gi, String(task.points || 0))
+            .replace(/\{points\}/gi, String(task.points || 0))
+            .replace(/\{destinatarios\}/gi, task.recipients_label || 'Todos os alunos')
+            .replace(/\{recipients\}/gi, task.recipients_label || 'Todos os alunos')
+            .replace(/\{descricao\}/gi, task.description || '')
+            .replace(/\{enunciado\}/gi, task.description || '')
+            .replace(/\{description\}/gi, task.description || '');
+        } else {
+          captionG2 = taskTemplate
+            .replace(/\{materia\}/gi, task.subject || '')
+            .replace(/\{subject\}/gi, task.subject || '')
+            .replace(/\{titulo\}/gi, task.title || '')
+            .replace(/\{title\}/gi, task.title || '')
+            .replace(/\{data_entrega\}/gi, formattedDate)
+            .replace(/\{due_date\}/gi, formattedDate)
+            .replace(/\{pontos\}/gi, String(task.points || 0))
+            .replace(/\{points\}/gi, String(task.points || 0))
+            .replace(/\{destinatarios\}/gi, task.recipients_label || 'Todos os alunos')
+            .replace(/\{recipients\}/gi, task.recipients_label || 'Todos os alunos')
+            .replace(/\{descricao\}/gi, rawStatement)
+            .replace(/\{enunciado\}/gi, rawStatement)
+            .replace(/\{description\}/gi, rawStatement);
+        }
 
         if (task.photo_buffer && task.photo_buffer.length > 0) {
           await this.sock.sendMessage(target2, {
@@ -625,7 +684,15 @@ class WhatsAppService {
           `\n💬 *Mensagem:*\n${ann.message}\n\n` +
           `👉 _Acesse o Edutask para interagir e responder aos comentários!_`;
 
-        await this.sock.sendMessage(target1, { text: msgG1 });
+        if (ann.photo_buffer && ann.photo_buffer.length > 0) {
+          await this.sock.sendMessage(target1, {
+            image: ann.photo_buffer,
+            caption: msgG1,
+            mimetype: ann.photo_content_type || 'image/jpeg',
+          });
+        } else {
+          await this.sock.sendMessage(target1, { text: msgG1 });
+        }
         results.group1Sent = true;
       } catch (err: any) {
         results.errors.push(`Grupo 1: ${err?.message || err}`);
@@ -635,8 +702,40 @@ class WhatsAppService {
     if (this.group2Jid && sendG2) {
       try {
         const target2 = this.group2Jid.includes('@') ? this.group2Jid : `${this.group2Jid}@g.us`;
-        const statementText = (ann.group2_caption || ann.message || '').trim();
-        const msgG2 = `📢 *${ann.title}*\n\n${statementText}`;
+        const rawMessage = (ann.group2_caption !== undefined && ann.group2_caption !== null && ann.group2_caption !== '')
+          ? ann.group2_caption
+          : (ann.message || '');
+
+        const annTemplate = (
+          ann.custom_caption_template ||
+          this.templates?.announcement_caption ||
+          '📣 *{titulo}*\n\n{mensagem}'
+        ).trim();
+
+        let msgG2 = '';
+        if (rawMessage.includes('{titulo}') || rawMessage.includes('{mensagem}') || rawMessage.includes('{message}')) {
+          msgG2 = rawMessage
+            .replace(/\{titulo\}/gi, ann.title || '')
+            .replace(/\{title\}/gi, ann.title || '')
+            .replace(/\{data\}/gi, formattedDate)
+            .replace(/\{created_at\}/gi, formattedDate)
+            .replace(/\{destinatarios\}/gi, ann.recipients_label || 'Todos os alunos')
+            .replace(/\{recipients\}/gi, ann.recipients_label || 'Todos os alunos')
+            .replace(/\{mensagem\}/gi, ann.message || '')
+            .replace(/\{comunicado\}/gi, ann.message || '')
+            .replace(/\{message\}/gi, ann.message || '');
+        } else {
+          msgG2 = annTemplate
+            .replace(/\{titulo\}/gi, ann.title || '')
+            .replace(/\{title\}/gi, ann.title || '')
+            .replace(/\{data\}/gi, formattedDate)
+            .replace(/\{created_at\}/gi, formattedDate)
+            .replace(/\{destinatarios\}/gi, ann.recipients_label || 'Todos os alunos')
+            .replace(/\{recipients\}/gi, ann.recipients_label || 'Todos os alunos')
+            .replace(/\{mensagem\}/gi, rawMessage)
+            .replace(/\{comunicado\}/gi, rawMessage)
+            .replace(/\{message\}/gi, rawMessage);
+        }
 
         if (ann.photo_buffer && ann.photo_buffer.length > 0) {
           await this.sock.sendMessage(target2, {

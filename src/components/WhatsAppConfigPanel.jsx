@@ -1225,44 +1225,110 @@ export default function WhatsAppConfigPanel() {
       </div>
 
       {/* SEÇÃO: MODELOS PRÉ-PRONTOS DE ENUNCIADOS (GRUPO 2) */}
-      <div className="nb-card bg-white p-6 space-y-4 border-2 border-black">
-        <h3 className="font-heading font-black text-lg flex items-center gap-2">
-          <Layers className="w-5 h-5 text-violet-600" />
-          Modelos Pré-Prontos de Enunciados (Grupo 2)
-        </h3>
-        <p className="text-xs text-neutral-600">
-          Estes modelos serão usados como legenda padrão quando você disparar tarefas ou avisos.
-        </p>
+      <div className="nb-card bg-white p-6 space-y-4 border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+        <div className="flex items-center justify-between flex-wrap gap-2 border-b-2 border-black/20 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-violet-400 text-violet-950 border-2 border-black flex items-center justify-center">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-heading font-black text-lg text-neutral-900">
+                📝 Modelos Pré-Prontos de Enunciados (Grupo 2)
+              </h3>
+              <p className="text-xs text-neutral-600">
+                Estes modelos são usados como legenda e estrutura padrão enviada no Grupo 2 ao disparar tarefas e avisos.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => saveAllConfig()}
+            disabled={savingConfig}
+            className="nb-btn bg-violet-400 hover:bg-violet-500 text-violet-950 px-4 py-2 text-xs font-heading font-black flex items-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+            data-testid="save-statement-templates-btn"
+          >
+            <Save className={`w-3.5 h-3.5 ${savingConfig ? "animate-spin" : ""}`} />
+            {savingConfig ? "Salvando..." : "Salvar Modelos de Enunciado"}
+          </button>
+        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-neutral-800">
-              📝 Modelo de Enunciado para Tarefas
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {/* Tarefas */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
+              <span>📝 Modelo de Enunciado para Tarefas</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setTaskCaption(
+                    "📚 *{materia} — {titulo}*\n📅 *Entrega:* {data_entrega}\n\n📝 *Enunciado:*\n{descricao}"
+                  )
+                }
+                className="text-[10px] text-neutral-500 hover:text-black underline"
+              >
+                Padrão
+              </button>
             </label>
             <textarea
-              rows={4}
+              rows={5}
               value={taskCaption}
               onChange={(e) => setTaskCaption(e.target.value)}
               className="nb-input bg-neutral-50 text-xs font-sans resize-y"
+              placeholder="Digite o modelo com tags..."
+              data-testid="input-task-caption-template"
             />
             <p className="text-[10px] text-neutral-500">
-              Tags: <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{materia}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{titulo}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{data_entrega}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{descricao}"}</code>
+              Tags disponíveis: <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{materia}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{titulo}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{data_entrega}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{pontos}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{descricao}"}</code>
             </p>
+
+            {/* Prévia Tarefas */}
+            <div className="bg-neutral-900 text-neutral-100 p-3 rounded-xl text-xs space-y-1 font-mono">
+              <div className="text-[9px] uppercase font-bold text-emerald-400">Prévia no WhatsApp (Grupo 2):</div>
+              <div className="whitespace-pre-wrap font-sans text-xs pt-1">
+                {(taskCaption || "")
+                  .replace(/\{materia\}/gi, "Matemática")
+                  .replace(/\{titulo\}/gi, "Exercícios de Frações")
+                  .replace(/\{data_entrega\}/gi, "15/10/2026")
+                  .replace(/\{pontos\}/gi, "10")
+                  .replace(/\{descricao\}/gi, "Resolver páginas 42 a 45 do livro didático.")}
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-neutral-800">
-              📣 Modelo de Enunciado para Avisos
+          {/* Avisos */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
+              <span>📣 Modelo de Enunciado para Avisos</span>
+              <button
+                type="button"
+                onClick={() => setAnnouncementCaption("📣 *{titulo}*\n\n{mensagem}")}
+                className="text-[10px] text-neutral-500 hover:text-black underline"
+              >
+                Padrão
+              </button>
             </label>
             <textarea
-              rows={4}
+              rows={5}
               value={announcementCaption}
               onChange={(e) => setAnnouncementCaption(e.target.value)}
               className="nb-input bg-neutral-50 text-xs font-sans resize-y"
+              placeholder="Digite o modelo de avisos..."
+              data-testid="input-announcement-caption-template"
             />
             <p className="text-[10px] text-neutral-500">
-              Tags: <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{titulo}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{mensagem}"}</code>
+              Tags disponíveis: <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{titulo}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{mensagem}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{data}"}</code>
             </p>
+
+            {/* Prévia Avisos */}
+            <div className="bg-neutral-900 text-neutral-100 p-3 rounded-xl text-xs space-y-1 font-mono">
+              <div className="text-[9px] uppercase font-bold text-emerald-400">Prévia no WhatsApp (Grupo 2):</div>
+              <div className="whitespace-pre-wrap font-sans text-xs pt-1">
+                {(announcementCaption || "")
+                  .replace(/\{titulo\}/gi, "Reunião de Pais e Mestres")
+                  .replace(/\{mensagem\}/gi, "Lembramos a todos da nossa reunião nesta sexta-feira às 19h.")
+                  .replace(/\{data\}/gi, "10/10/2026")}
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -91,6 +91,9 @@ export default function MyProfileBanner({ bg = null, onOpenStore = null }) {
 
       {editing && user.role === "admin" && (
         <EditProfileDialog
+          userId={user.id}
+          hasAvatar={hasAvatar}
+          avatarPath="/me/avatar"
           initialName={user.name}
           path="/me"
           onClose={() => setEditing(false)}
