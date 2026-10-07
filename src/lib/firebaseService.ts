@@ -1,4 +1,13 @@
-import { collection, getDocs, doc, setDoc, deleteDoc, getDoc, deleteField } from 'firebase/firestore';
+import {
+  collection,
+  getDocs,
+  doc,
+  setDoc,
+  deleteDoc,
+  getDoc,
+  updateDoc,
+  deleteField,
+} from 'firebase/firestore';
 import { db } from './firebase';
 
 export enum OperationType {
@@ -32,8 +41,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path,
   };
-  console.error('Firestore Error:', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Operation Notice:', JSON.stringify(errInfo));
+  throw new Error(errInfo.error);
 }
 
 function sanitizeFirestoreData(obj: any): any {
@@ -72,10 +81,11 @@ export const firebaseService = {
   },
 
   async saveTask(task: any): Promise<boolean> {
-    const path = `tasks/${task.id}`;
+    const taskId = task.id || `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const path = `tasks/${taskId}`;
     try {
-      const sanitized = sanitizeFirestoreData(task);
-      await setDoc(doc(db, 'tasks', task.id), sanitized, { merge: true });
+      const sanitized = sanitizeFirestoreData({ ...task, id: taskId });
+      await setDoc(doc(db, 'tasks', taskId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -107,18 +117,43 @@ export const firebaseService = {
     }
   },
 
-  async saveUser(user: any): Promise<boolean> {
-    const path = `users/${user.id}`;
+  async getUserById(userId: string): Promise<any | null> {
+    const path = `users/${userId}`;
     try {
-      const sanitized = sanitizeFirestoreData(user);
+      const snap = await getDoc(doc(db, 'users', userId));
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() };
+      }
+      return null;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.GET, path);
+    }
+  },
+
+  async saveUser(user: any): Promise<boolean> {
+    const userId = user.id || `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const path = `users/${userId}`;
+    try {
+      const sanitized = sanitizeFirestoreData({ ...user, id: userId });
       if (!user.avatar_data) {
         sanitized.avatar_data = deleteField();
         sanitized.avatar_content_type = deleteField();
       }
-      await setDoc(doc(db, 'users', user.id), sanitized, { merge: true });
+      await setDoc(doc(db, 'users', userId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
+    }
+  },
+
+  async updateUser(userId: string, updates: any): Promise<boolean> {
+    const path = `users/${userId}`;
+    try {
+      const sanitized = sanitizeFirestoreData(updates);
+      await updateDoc(doc(db, 'users', userId), sanitized);
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.UPDATE, path);
     }
   },
 
@@ -148,10 +183,11 @@ export const firebaseService = {
   },
 
   async saveSubject(subject: any): Promise<boolean> {
-    const path = `subjects/${subject.id}`;
+    const subjectId = subject.id || `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const path = `subjects/${subjectId}`;
     try {
-      const sanitized = sanitizeFirestoreData(subject);
-      await setDoc(doc(db, 'subjects', subject.id), sanitized, { merge: true });
+      const sanitized = sanitizeFirestoreData({ ...subject, id: subjectId });
+      await setDoc(doc(db, 'subjects', subjectId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -184,10 +220,11 @@ export const firebaseService = {
   },
 
   async saveAnnouncement(ann: any): Promise<boolean> {
-    const path = `announcements/${ann.id}`;
+    const annId = ann.id || `ann_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const path = `announcements/${annId}`;
     try {
-      const sanitized = sanitizeFirestoreData(ann);
-      await setDoc(doc(db, 'announcements', ann.id), sanitized, { merge: true });
+      const sanitized = sanitizeFirestoreData({ ...ann, id: annId });
+      await setDoc(doc(db, 'announcements', annId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -220,7 +257,7 @@ export const firebaseService = {
   },
 
   async saveCompletion(comp: any): Promise<boolean> {
-    const compId = `${comp.user_id}_${comp.task_id}`;
+    const compId = comp.id || `${comp.user_id}_${comp.task_id}`;
     const path = `completions/${compId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...comp, id: compId });
@@ -258,10 +295,11 @@ export const firebaseService = {
   },
 
   async saveComment(comment: any): Promise<boolean> {
-    const path = `comments/${comment.id}`;
+    const commentId = comment.id || `cmt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const path = `comments/${commentId}`;
     try {
-      const sanitized = sanitizeFirestoreData(comment);
-      await setDoc(doc(db, 'comments', comment.id), sanitized, { merge: true });
+      const sanitized = sanitizeFirestoreData({ ...comment, id: commentId });
+      await setDoc(doc(db, 'comments', commentId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -358,10 +396,11 @@ export const firebaseService = {
   },
 
   async saveFile(fileRecord: any): Promise<boolean> {
-    const path = `files/${fileRecord.id}`;
+    const fileId = fileRecord.id || `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const path = `files/${fileId}`;
     try {
-      const sanitized = sanitizeFirestoreData(fileRecord);
-      await setDoc(doc(db, 'files', fileRecord.id), sanitized, { merge: true });
+      const sanitized = sanitizeFirestoreData({ ...fileRecord, id: fileId });
+      await setDoc(doc(db, 'files', fileId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -387,17 +426,18 @@ export const firebaseService = {
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
-      return list;
+      return list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
     } catch (e: any) {
       handleFirestoreError(e, OperationType.LIST, path);
     }
   },
 
   async saveLoginLog(log: any): Promise<boolean> {
-    const path = `login_logs/${log.id}`;
+    const logId = log.id || `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const path = `login_logs/${logId}`;
     try {
-      const sanitized = sanitizeFirestoreData(log);
-      await setDoc(doc(db, 'login_logs', log.id), sanitized, { merge: true });
+      const sanitized = sanitizeFirestoreData({ ...log, id: logId });
+      await setDoc(doc(db, 'login_logs', logId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -411,6 +451,19 @@ export const firebaseService = {
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
+    }
+  },
+
+  async clearAllLoginLogs(): Promise<boolean> {
+    try {
+      const logs = await this.getAllLoginLogs();
+      for (const log of logs) {
+        await this.deleteLoginLog(log.id);
+      }
+      return true;
+    } catch (e: any) {
+      console.warn("Clear login logs error:", e);
+      return false;
     }
   }
 };
