@@ -20,6 +20,61 @@ import { formatDateBR } from "@/lib/priority";
 
 const API = import.meta.env.VITE_API_BASE_URL || "/api";
 
+// Helper para formatar a data ISO em DD/MM/AAAA
+const formatIsoDate = (isoStr) => {
+  try {
+    const [y, m, d] = (isoStr || "").split("-");
+    if (y && m && d) return `${d}/${m}/${y}`;
+    return isoStr || "";
+  } catch {
+    return isoStr || "";
+  }
+};
+
+// Gera o enunciado padrão oficial a partir do modelo programado na aba WhatsApp
+const formatProgrammedCaption = (template, item, type) => {
+  if (!item) return "";
+  const formattedDate = formatIsoDate(type === "task" ? item.due_date : (item.date || item.created_at));
+
+  if (type === "task") {
+    const tmpl = (
+      template ||
+      "📚 *{materia} — {titulo}*\n📅 *Entrega:* {data_entrega}\n\n📝 *Enunciado:*\n{descricao}"
+    ).trim();
+
+    return tmpl
+      .replace(/\{materia\}/gi, item.subject || "")
+      .replace(/\{subject\}/gi, item.subject || "")
+      .replace(/\{titulo\}/gi, item.title || "")
+      .replace(/\{title\}/gi, item.title || "")
+      .replace(/\{data_entrega\}/gi, formattedDate)
+      .replace(/\{due_date\}/gi, formattedDate)
+      .replace(/\{pontos\}/gi, String(item.points || 0))
+      .replace(/\{points\}/gi, String(item.points || 0))
+      .replace(/\{destinatarios\}/gi, item.recipients_label || "Todos os alunos")
+      .replace(/\{recipients\}/gi, item.recipients_label || "Todos os alunos")
+      .replace(/\{descricao\}/gi, item.description || "")
+      .replace(/\{enunciado\}/gi, item.description || "")
+      .replace(/\{description\}/gi, item.description || "");
+  } else {
+    const tmpl = (
+      template ||
+      "📣 *{titulo}*\n\n{mensagem}"
+    ).trim();
+
+    return tmpl
+      .replace(/\{titulo\}/gi, item.title || "")
+      .replace(/\{title\}/gi, item.title || "")
+      .replace(/\{data\}/gi, formattedDate || new Date().toLocaleDateString("pt-BR"))
+      .replace(/\{created_at\}/gi, formattedDate || new Date().toLocaleDateString("pt-BR"))
+      .replace(/\{destinatarios\}/gi, item.recipients_label || "Todos os alunos")
+      .replace(/\{recipients\}/gi, item.recipients_label || "Todos os alunos")
+      .replace(/\{mensagem\}/gi, item.message || "")
+      .replace(/\{comunicado\}/gi, item.message || "")
+      .replace(/\{message\}/gi, item.message || "");
+  }
+};
+
 export default function WhatsAppDispatchDialog({
   open,
   onClose,
@@ -41,22 +96,28 @@ export default function WhatsAppDispatchDialog({
   const [uploadedPhotoData, setUploadedPhotoData] = useState(null);
   const [uploadedPhotoName, setUploadedPhotoName] = useState(null);
 
-  // Enunciado / Escrita do Grupo 2
-  const defaultCaption = type === "task" ? (item?.description || "") : (item?.message || "");
-  const [group2Caption, setGroup2Caption] = useState(defaultCaption);
+  // Modelo programado na aba WhatsApp e Enunciado do Grupo 2
+  const [programmedTemplate, setProgrammedTemplate] = useState("");
+  const [group2Caption, setGroup2Caption] = useState("");
 
   const fileInputRef = useRef(null);
 
-  // Carregar status do WhatsApp e fotos disponíveis
+  // Carregar status do WhatsApp, fotos disponíveis e enunciado programado
   useEffect(() => {
     if (!open || !item) return;
 
     // Resetar campos
     setSendG1(true);
     setSendG2(true);
-    setGroup2Caption(type === "task" ? (item.description || "") : (item.message || ""));
     setUploadedPhotoData(null);
     setUploadedPhotoName(null);
+
+    const fallbackTmpl =
+      type === "task"
+        ? "📚 *{materia} — {titulo}*\n📅 *Entrega:* {data_entrega}\n\n📝 *Enunciado:*\n{descricao}"
+        : "📣 *{titulo}*\n\n{mensagem}";
+    setProgrammedTemplate(fallbackTmpl);
+    setGroup2Caption(formatProgrammedCaption(fallbackTmpl, item, type));
 
     // Identificar anexos públicos da tarefa (fotos fonte da IA admin_photos NÃO são enviadas para alunos)
     const photos = [];
@@ -91,6 +152,15 @@ export default function WhatsAppDispatchDialog({
           type === "task"
             ? cfg.templates?.task_photo_id
             : cfg.templates?.announcement_photo_id;
+
+        const tmpl =
+          type === "task"
+            ? (cfg.templates?.task_caption || fallbackTmpl)
+            : (cfg.templates?.announcement_caption || fallbackTmpl);
+
+        setProgrammedTemplate(tmpl);
+        // O enunciado do Grupo 2 é inicializado exatamente como programado na aba WhatsApp!
+        setGroup2Caption(formatProgrammedCaption(tmpl, item, type));
 
         if (universalPhotoId && !photos.some((p) => p.id === universalPhotoId)) {
           const universalPhoto = {
@@ -417,100 +487,50 @@ export default function WhatsAppDispatchDialog({
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
                     <FileText className="w-3.5 h-3.5 text-violet-600" />
-                    Enunciado / Legenda da Foto (Grupo 2)
+                    Enunciado do Grupo 2 (Programado na Aba WhatsApp)
                   </label>
                   <button
                     type="button"
-                    onClick={() => setGroup2Caption(defaultCaption)}
-                    className="text-[11px] text-neutral-600 hover:text-black underline font-medium"
+                    onClick={() => setGroup2Caption(formatProgrammedCaption(programmedTemplate, item, type))}
+                    className="text-[11px] text-violet-700 hover:text-violet-950 underline font-bold"
+                    title="Restaura o modelo padrão configurado na aba WhatsApp"
                   >
-                    Restaurar texto original
+                    Restaurar Enunciado Programado ↺
                   </button>
                 </div>
                 <textarea
-                  rows={4}
+                  rows={5}
                   value={group2Caption}
                   onChange={(e) => setGroup2Caption(e.target.value)}
-                  placeholder="Digite ou ajuste o enunciado que acompanhará a foto no Grupo 2..."
+                  placeholder="Enunciado que acompanhará a foto no Grupo 2..."
                   className="nb-input bg-white text-xs sm:text-sm resize-y"
                   data-testid="input-group-2-caption"
                 />
                 <p className="text-[11px] text-neutral-500">
-                  Esta mensagem preencherá a tag <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{descricao}"}</code> do seu modelo de enunciado configurado na aba WhatsApp.
+                  O enunciado acima é o modelo oficial programado na aba WhatsApp e será utilizado no disparo para o Grupo 2, a não ser que você altere o texto diretamente neste campo.
                 </p>
               </div>
 
-              {/* Pré-visualização Real do Grupo 2 com o Modelo Configurado */}
-              {(() => {
-                const cfg = status?.config || {};
-                const template =
-                  type === "task"
-                    ? (cfg.templates?.task_caption || "📚 *{materia} — {titulo}*\n📅 *Entrega:* {data_entrega}\n\n📝 *Enunciado:*\n{descricao}")
-                    : (cfg.templates?.announcement_caption || "📣 *{titulo}*\n\n{mensagem}");
-
-                let renderedPreview = "";
-                const rawText = group2Caption || (type === "task" ? item.description : item.message) || "";
-
-                if (rawText.includes("{materia}") || rawText.includes("{titulo}") || rawText.includes("{descricao}") || rawText.includes("{mensagem}")) {
-                  renderedPreview = rawText
-                    .replace(/\{materia\}/gi, item.subject || "")
-                    .replace(/\{subject\}/gi, item.subject || "")
-                    .replace(/\{titulo\}/gi, item.title || "")
-                    .replace(/\{title\}/gi, item.title || "")
-                    .replace(/\{data_entrega\}/gi, formattedDueDate)
-                    .replace(/\{due_date\}/gi, formattedDueDate)
-                    .replace(/\{pontos\}/gi, String(item.points || 0))
-                    .replace(/\{points\}/gi, String(item.points || 0))
-                    .replace(/\{destinatarios\}/gi, "Todos os alunos")
-                    .replace(/\{descricao\}/gi, item.description || "")
-                    .replace(/\{enunciado\}/gi, item.description || "")
-                    .replace(/\{mensagem\}/gi, item.message || "");
-                } else if (type === "task") {
-                  renderedPreview = template
-                    .replace(/\{materia\}/gi, item.subject || "")
-                    .replace(/\{subject\}/gi, item.subject || "")
-                    .replace(/\{titulo\}/gi, item.title || "")
-                    .replace(/\{title\}/gi, item.title || "")
-                    .replace(/\{data_entrega\}/gi, formattedDueDate)
-                    .replace(/\{due_date\}/gi, formattedDueDate)
-                    .replace(/\{pontos\}/gi, String(item.points || 0))
-                    .replace(/\{points\}/gi, String(item.points || 0))
-                    .replace(/\{destinatarios\}/gi, "Todos os alunos")
-                    .replace(/\{descricao\}/gi, rawText)
-                    .replace(/\{enunciado\}/gi, rawText);
-                } else {
-                  renderedPreview = template
-                    .replace(/\{titulo\}/gi, item.title || "")
-                    .replace(/\{title\}/gi, item.title || "")
-                    .replace(/\{data\}/gi, formattedDueDate)
-                    .replace(/\{created_at\}/gi, formattedDueDate)
-                    .replace(/\{destinatarios\}/gi, "Todos os alunos")
-                    .replace(/\{mensagem\}/gi, rawText)
-                    .replace(/\{comunicado\}/gi, rawText);
-                }
-
-                return (
-                  <div className="nb-card bg-neutral-900 text-white p-3.5 rounded-xl text-xs space-y-2 font-mono">
-                    <div className="text-[10px] uppercase font-bold text-neutral-400 flex items-center justify-between border-b border-neutral-700 pb-1.5">
-                      <span className="flex items-center gap-1.5 text-emerald-400">
-                        📱 Pré-visualização Real no WhatsApp (Grupo 2):
-                      </span>
-                      {selectedPhotoId && selectedPhotoId !== "none" ? (
-                        <span className="text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40">
-                          📷 Com Foto Anexada
-                        </span>
-                      ) : (
-                        <span className="text-neutral-400 bg-neutral-800 px-1.5 py-0.5 rounded">
-                          💬 Apenas Texto
-                        </span>
-                      )}
-                    </div>
-                    <div className="pt-1 text-neutral-100 whitespace-pre-wrap font-sans text-xs sm:text-sm leading-relaxed">
-                      {renderedPreview || "—"}
-                    </div>
-                  </div>
-                );
-              })()}
+              {/* Pré-visualização Real do Grupo 2 */}
+              <div className="nb-card bg-neutral-900 text-white p-3.5 rounded-xl text-xs space-y-2 font-mono">
+                <div className="text-[10px] uppercase font-bold text-neutral-400 flex items-center justify-between border-b border-neutral-700 pb-1.5">
+                  <span className="flex items-center gap-1.5 text-emerald-400">
+                    📱 Pré-visualização Real no WhatsApp (Grupo 2):
+                  </span>
+                  {selectedPhotoId && selectedPhotoId !== "none" ? (
+                    <span className="text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40">
+                      📷 Foto com Enunciado (Grupo 2)
+                    </span>
+                  ) : (
+                    <span className="text-neutral-400 bg-neutral-800 px-1.5 py-0.5 rounded">
+                      💬 Apenas Texto (Grupo 2)
+                    </span>
+                  )}
+                </div>
+                <div className="pt-1 text-neutral-100 whitespace-pre-wrap font-sans text-xs sm:text-sm leading-relaxed bg-black/30 p-2.5 rounded-lg border border-neutral-800">
+                  {group2Caption || "(Nenhum enunciado digitado)"}
+                </div>
+              </div>
             </div>
           )}
         </div>

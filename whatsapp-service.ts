@@ -574,19 +574,10 @@ class WhatsAppService {
     if (this.group2Jid && sendG2) {
       try {
         const target2 = this.group2Jid.includes('@') ? this.group2Jid : `${this.group2Jid}@g.us`;
-        const rawStatement = (task.group2_caption !== undefined && task.group2_caption !== null && task.group2_caption !== '')
-          ? task.group2_caption
-          : (task.description || '');
-
-        const taskTemplate = (
-          task.custom_caption_template ||
-          this.templates?.task_caption ||
-          '📚 *{materia} — {titulo}*\n📅 *Entrega:* {data_entrega}\n\n📝 *Enunciado:*\n{descricao}'
-        ).trim();
-
         let captionG2 = '';
-        if (rawStatement.includes('{materia}') || rawStatement.includes('{titulo}') || rawStatement.includes('{descricao}') || rawStatement.includes('{data_entrega}')) {
-          captionG2 = rawStatement
+        if (task.group2_caption !== undefined && task.group2_caption !== null && task.group2_caption.trim() !== '') {
+          // Enunciado gerado a partir do modelo programado ou alterado pelo usuário no diálogo
+          captionG2 = task.group2_caption
             .replace(/\{materia\}/gi, task.subject || '')
             .replace(/\{subject\}/gi, task.subject || '')
             .replace(/\{titulo\}/gi, task.title || '')
@@ -601,6 +592,12 @@ class WhatsAppService {
             .replace(/\{enunciado\}/gi, task.description || '')
             .replace(/\{description\}/gi, task.description || '');
         } else {
+          const taskTemplate = (
+            task.custom_caption_template ||
+            this.templates?.task_caption ||
+            '📚 *{materia} — {titulo}*\n📅 *Entrega:* {data_entrega}\n\n📝 *Enunciado:*\n{descricao}'
+          ).trim();
+
           captionG2 = taskTemplate
             .replace(/\{materia\}/gi, task.subject || '')
             .replace(/\{subject\}/gi, task.subject || '')
@@ -612,9 +609,9 @@ class WhatsAppService {
             .replace(/\{points\}/gi, String(task.points || 0))
             .replace(/\{destinatarios\}/gi, task.recipients_label || 'Todos os alunos')
             .replace(/\{recipients\}/gi, task.recipients_label || 'Todos os alunos')
-            .replace(/\{descricao\}/gi, rawStatement)
-            .replace(/\{enunciado\}/gi, rawStatement)
-            .replace(/\{description\}/gi, rawStatement);
+            .replace(/\{descricao\}/gi, task.description || '')
+            .replace(/\{enunciado\}/gi, task.description || '')
+            .replace(/\{description\}/gi, task.description || '');
         }
 
         if (task.photo_buffer && task.photo_buffer.length > 0) {
@@ -684,15 +681,8 @@ class WhatsAppService {
           `\n💬 *Mensagem:*\n${ann.message}\n\n` +
           `👉 _Acesse o Edutask para interagir e responder aos comentários!_`;
 
-        if (ann.photo_buffer && ann.photo_buffer.length > 0) {
-          await this.sock.sendMessage(target1, {
-            image: ann.photo_buffer,
-            caption: msgG1,
-            mimetype: ann.photo_content_type || 'image/jpeg',
-          });
-        } else {
-          await this.sock.sendMessage(target1, { text: msgG1 });
-        }
+        // Grupo 1 SEMPRE recebe exclusivamente mensagem em texto (fotos programadas são apenas para o Grupo 2)
+        await this.sock.sendMessage(target1, { text: msgG1 });
         results.group1Sent = true;
       } catch (err: any) {
         results.errors.push(`Grupo 1: ${err?.message || err}`);
@@ -702,19 +692,11 @@ class WhatsAppService {
     if (this.group2Jid && sendG2) {
       try {
         const target2 = this.group2Jid.includes('@') ? this.group2Jid : `${this.group2Jid}@g.us`;
-        const rawMessage = (ann.group2_caption !== undefined && ann.group2_caption !== null && ann.group2_caption !== '')
-          ? ann.group2_caption
-          : (ann.message || '');
-
-        const annTemplate = (
-          ann.custom_caption_template ||
-          this.templates?.announcement_caption ||
-          '📣 *{titulo}*\n\n{mensagem}'
-        ).trim();
-
         let msgG2 = '';
-        if (rawMessage.includes('{titulo}') || rawMessage.includes('{mensagem}') || rawMessage.includes('{message}')) {
-          msgG2 = rawMessage
+
+        if (ann.group2_caption !== undefined && ann.group2_caption !== null && ann.group2_caption.trim() !== '') {
+          // Enunciado gerado a partir do modelo programado ou alterado pelo usuário no diálogo
+          msgG2 = ann.group2_caption
             .replace(/\{titulo\}/gi, ann.title || '')
             .replace(/\{title\}/gi, ann.title || '')
             .replace(/\{data\}/gi, formattedDate)
@@ -725,6 +707,12 @@ class WhatsAppService {
             .replace(/\{comunicado\}/gi, ann.message || '')
             .replace(/\{message\}/gi, ann.message || '');
         } else {
+          const annTemplate = (
+            ann.custom_caption_template ||
+            this.templates?.announcement_caption ||
+            '📣 *{titulo}*\n\n{mensagem}'
+          ).trim();
+
           msgG2 = annTemplate
             .replace(/\{titulo\}/gi, ann.title || '')
             .replace(/\{title\}/gi, ann.title || '')
@@ -732,9 +720,9 @@ class WhatsAppService {
             .replace(/\{created_at\}/gi, formattedDate)
             .replace(/\{destinatarios\}/gi, ann.recipients_label || 'Todos os alunos')
             .replace(/\{recipients\}/gi, ann.recipients_label || 'Todos os alunos')
-            .replace(/\{mensagem\}/gi, rawMessage)
-            .replace(/\{comunicado\}/gi, rawMessage)
-            .replace(/\{message\}/gi, rawMessage);
+            .replace(/\{mensagem\}/gi, ann.message || '')
+            .replace(/\{comunicado\}/gi, ann.message || '')
+            .replace(/\{message\}/gi, ann.message || '');
         }
 
         if (ann.photo_buffer && ann.photo_buffer.length > 0) {

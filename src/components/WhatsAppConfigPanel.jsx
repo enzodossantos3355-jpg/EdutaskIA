@@ -808,10 +808,10 @@ export default function WhatsAppConfigPanel() {
             </div>
             <div>
               <h3 className="font-heading font-black text-xl text-neutral-900">
-                🖼️ Fotos Universais Pré-Definidas (Grupo 2)
+                🖼️ Fotos Universais Pré-Definidas (Exclusivas do Grupo 2)
               </h3>
               <p className="text-xs text-neutral-600">
-                Defina aqui na seção do WhatsApp as imagens padrão enviadas automaticamente com os enunciados para o Grupo 2.
+                As fotos programadas são enviadas exclusivamente para o <b>Grupo 2</b> com seus enunciados. O Grupo 1 sempre recebe os comunicados e tarefas em texto completo.
               </p>
             </div>
           </div>
@@ -1252,7 +1252,7 @@ export default function WhatsAppConfigPanel() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {/* Tarefas */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
@@ -1327,6 +1327,46 @@ export default function WhatsAppConfigPanel() {
                   .replace(/\{titulo\}/gi, "Reunião de Pais e Mestres")
                   .replace(/\{mensagem\}/gi, "Lembramos a todos da nossa reunião nesta sexta-feira às 19h.")
                   .replace(/\{data\}/gi, "10/10/2026")}
+              </div>
+            </div>
+          </div>
+
+          {/* Lembrete de Amanhã */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
+              <span>🚨 Enunciado: Lembrete do Dia Seguinte</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setTomorrowCaption(
+                    "🚨 *LEMBRETE: TAREFAS PARA AMANHÃ ({data_amanha})*\n\nOlá turma! Não se esqueçam das tarefas marcadas para amanhã:\n\n{lista_tarefas}\n\n👉 Acessem o Edutask para conferir e responder no prazo!"
+                  )
+                }
+                className="text-[10px] text-neutral-500 hover:text-black underline"
+              >
+                Padrão
+              </button>
+            </label>
+            <textarea
+              rows={5}
+              value={tomorrowCaption}
+              onChange={(e) => setTomorrowCaption(e.target.value)}
+              className="nb-input bg-neutral-50 text-xs font-sans resize-y"
+              placeholder="Digite o modelo do lembrete diário..."
+              data-testid="input-tomorrow-caption-template"
+            />
+            <p className="text-[10px] text-neutral-500">
+              Tags disponíveis: <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{data_amanha}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{total_tarefas}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{lista_tarefas}"}</code>
+            </p>
+
+            {/* Prévia Lembrete de Amanhã */}
+            <div className="bg-neutral-900 text-neutral-100 p-3 rounded-xl text-xs space-y-1 font-mono">
+              <div className="text-[9px] uppercase font-bold text-emerald-400">Prévia no WhatsApp (Grupo 2):</div>
+              <div className="whitespace-pre-wrap font-sans text-xs pt-1">
+                {(tomorrowCaption || "")
+                  .replace(/\{data_amanha\}/gi, "15/10/2026")
+                  .replace(/\{total_tarefas\}/gi, "2")
+                  .replace(/\{lista_tarefas\}/gi, "• [Matemática] Exercícios de Frações (10 pts)\n• [História] Resumo da Revolução Francesa (15 pts)")}
               </div>
             </div>
           </div>
