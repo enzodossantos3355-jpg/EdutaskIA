@@ -100,6 +100,11 @@ export default function WhatsAppDispatchDialog({
   const [programmedTemplate, setProgrammedTemplate] = useState("");
   const [group2Caption, setGroup2Caption] = useState("");
 
+  // Modelo pré-pronto de parte extra para o Grupo 1 (o texto completo base é protegido e fixo)
+  const [group1Extra, setGroup1Extra] = useState("");
+  const [group1DefaultExtra, setGroup1DefaultExtra] = useState("");
+  const [showG1Preview, setShowG1Preview] = useState(false);
+
   const fileInputRef = useRef(null);
 
   // Carregar status do WhatsApp, fotos disponíveis e enunciado programado
@@ -161,6 +166,14 @@ export default function WhatsAppDispatchDialog({
         setProgrammedTemplate(tmpl);
         // O enunciado do Grupo 2 é inicializado exatamente como programado na aba WhatsApp!
         setGroup2Caption(formatProgrammedCaption(tmpl, item, type));
+
+        // Modelo pré-pronto de parte extra para o Grupo 1 (o texto base completo nunca é alterado)
+        const defaultExtra =
+          type === "task"
+            ? (cfg.templates?.group1_task_extra || "")
+            : (cfg.templates?.group1_announcement_extra || "");
+        setGroup1DefaultExtra(defaultExtra);
+        setGroup1Extra(defaultExtra);
 
         if (universalPhotoId && !photos.some((p) => p.id === universalPhotoId)) {
           const universalPhoto = {
@@ -226,6 +239,7 @@ export default function WhatsAppDispatchDialog({
       const payload = {
         group1_enabled: sendG1,
         group2_enabled: sendG2,
+        group1_extra: group1Extra.trim(),
         group2_caption: group2Caption.trim(),
         photo_id: selectedPhotoId === "none" ? null : selectedPhotoId === "custom_upload" ? null : selectedPhotoId,
         photo_data: selectedPhotoId === "custom_upload" ? uploadedPhotoData : null,
@@ -333,8 +347,8 @@ export default function WhatsAppDispatchDialog({
             sendG1 ? "bg-emerald-50/60" : "bg-neutral-100 opacity-60"
           }`}
         >
-          <label className="flex items-center justify-between cursor-pointer mb-2">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between mb-2">
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={sendG1}
@@ -343,16 +357,94 @@ export default function WhatsAppDispatchDialog({
                 data-testid="checkbox-send-group-1"
               />
               <span className="font-heading font-black text-sm text-neutral-900">
-                1. Grupo 1 — Aviso Completo
+                1. Grupo 1 — Aviso Oficial Completo + Parte Extra
               </span>
-            </div>
+            </label>
             <span className="nb-badge bg-emerald-200 text-emerald-950 text-[10px] font-bold">
               {group1Name}
             </span>
-          </label>
-          <p className="text-xs text-neutral-600 mb-2 pl-6">
-            Envia o card informativo formatado com matéria, título, data de entrega, pontuação e orientações completas.
+          </div>
+
+          <p className="text-xs text-neutral-600 mb-3 pl-6">
+            🔒 <b>Texto Base Oficial Protegido:</b> O cabeçalho completo, matéria, título, prazo e enunciado são mantidos integralmente e nunca alterados.
           </p>
+
+          {sendG1 && (
+            <div className="space-y-2 pt-2 border-t border-emerald-200 pl-6">
+              <div className="flex items-center justify-between flex-wrap gap-1.5">
+                <label className="text-xs font-bold text-neutral-800 flex items-center gap-1">
+                  <span>📌 Modelo Pré-Pronto da Parte Extra (Grupo 1):</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  {group1DefaultExtra && (
+                    <button
+                      type="button"
+                      onClick={() => setGroup1Extra(group1DefaultExtra)}
+                      className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 underline"
+                      title="Carregar modelo pré-pronto salvo na aba WhatsApp"
+                    >
+                      Restaurar Modelo Pré-Pronto
+                    </button>
+                  )}
+                  {group1Extra && (
+                    <button
+                      type="button"
+                      onClick={() => setGroup1Extra("")}
+                      className="text-[11px] font-bold text-neutral-500 hover:text-red-700 underline"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowG1Preview(!showG1Preview)}
+                    className="text-[11px] font-bold text-blue-700 hover:text-blue-900 underline"
+                  >
+                    {showG1Preview ? "Ocultar Prévia" : "Ver Prévia Completa"}
+                  </button>
+                </div>
+              </div>
+
+              <textarea
+                rows={2}
+                value={group1Extra}
+                onChange={(e) => setGroup1Extra(e.target.value)}
+                placeholder="Insira apenas a parte extra para o Grupo 1 (ex: aviso extra de entrega, recado adicional...)"
+                className="nb-input bg-white text-xs font-sans resize-y"
+                data-testid="input-group1-extra"
+              />
+              <p className="text-[10px] text-neutral-500">
+                Esta parte extra será inserida antes do link de acesso. Suporta tags: <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{materia}"}</code>, <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{titulo}"}</code>, <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{data_entrega}"}</code>
+              </p>
+
+              {showG1Preview && (
+                <div className="bg-neutral-900 text-neutral-100 p-3 rounded-xl text-xs space-y-1 font-mono mt-2">
+                  <div className="text-[9px] uppercase font-bold text-emerald-400">
+                    Prévia da Mensagem Completa no WhatsApp (Grupo 1):
+                  </div>
+                  <div className="whitespace-pre-wrap font-sans text-xs pt-1">
+                    {type === "task" ? (
+                      `📚 *NOVA TAREFA NO EDUTASK*\n\n` +
+                      `📖 *Matéria:* ${item.subject || "Matéria"}\n` +
+                      `📝 *Título:* ${item.title}\n` +
+                      `📅 *Data de Entrega:* ${formattedDueDate}\n` +
+                      `🎁 *Pontos:* ${item.points || 10} pts\n\n` +
+                      `📋 *Descrição / Orientações:*\n${item.description || "Orientações..."}\n` +
+                      (group1Extra ? `\n${group1Extra}\n` : "") +
+                      `\n👉 _Acesse o Edutask para responder e visualizar os detalhes!_`
+                    ) : (
+                      `📢 *NOVO AVISO NO EDUTASK*\n\n` +
+                      `📌 *${item.title}*\n` +
+                      `📅 *Data:* ${formattedDueDate}\n\n` +
+                      `💬 *Mensagem:*\n${item.message || "Mensagem..."}\n` +
+                      (group1Extra ? `\n${group1Extra}\n` : "") +
+                      `\n👉 _Acesse o Edutask para interagir e responder aos comentários!_`
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Configuração do GRUPO 2 (FOTO E ENUNCIADO ESCOLHÍVEIS) */}

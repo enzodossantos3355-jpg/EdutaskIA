@@ -68,6 +68,14 @@ export default function WhatsAppConfigPanel() {
     "🚨 *LEMBRETE: TAREFAS PARA AMANHÃ ({data_amanha})*\n\nOlá turma! Não se esqueçam das tarefas marcadas para amanhã:\n\n{lista_tarefas}\n\n👉 Acessem o Edutask para conferir e responder no prazo!"
   );
 
+  // Modelos Pré-Prontos da Parte Extra para o Grupo 1 (o texto base completo nunca é modificado)
+  const [group1TaskExtra, setGroup1TaskExtra] = useState(
+    "📌 *Lembrete Extra da Turma:*\nFavor conferir os detalhes e responder dentro do prazo no portal!"
+  );
+  const [group1AnnouncementExtra, setGroup1AnnouncementExtra] = useState(
+    "📌 *Observação Importante:*\nAcompanhem as atualizações e tirem dúvidas pelo Edutask!"
+  );
+
   // Lembrete Diário Automático de Tarefas para Amanhã
   const [dailyReminderEnabled, setDailyReminderEnabled] = useState(true);
   const [dailyReminderTime, setDailyReminderTime] = useState("19:00");
@@ -122,6 +130,8 @@ export default function WhatsAppConfigPanel() {
           if (cfg.templates.task_caption) setTaskCaption(cfg.templates.task_caption);
           if (cfg.templates.announcement_caption) setAnnouncementCaption(cfg.templates.announcement_caption);
           if (cfg.templates.tomorrow_caption) setTomorrowCaption(cfg.templates.tomorrow_caption);
+          if (cfg.templates.group1_task_extra !== undefined) setGroup1TaskExtra(cfg.templates.group1_task_extra);
+          if (cfg.templates.group1_announcement_extra !== undefined) setGroup1AnnouncementExtra(cfg.templates.group1_announcement_extra);
 
           if (cfg.templates.task_photo_id) {
             setTaskPhotoId(cfg.templates.task_photo_id);
@@ -314,6 +324,8 @@ export default function WhatsAppConfigPanel() {
           announcement_photo_id: announcementPhotoId,
           tomorrow_caption: tomorrowCaption,
           tomorrow_photo_id: tomorrowPhotoId,
+          group1_task_extra: group1TaskExtra,
+          group1_announcement_extra: group1AnnouncementExtra,
         },
         daily_reminder: {
           enabled: dailyReminderEnabled,
@@ -1555,6 +1567,127 @@ export default function WhatsAppConfigPanel() {
                   .replace(/\{data_amanha\}/gi, "15/10/2026")
                   .replace(/\{total_tarefas\}/gi, "2")
                   .replace(/\{lista_tarefas\}/gi, "• [Matemática] Exercícios de Frações (10 pts)\n• [História] Resumo da Revolução Francesa (15 pts)")}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* SEÇÃO: MODELOS PRÉ-PRONTOS DE TEXTO EXTRA (GRUPO 1) */}
+      <div className="nb-card bg-emerald-50/70 p-6 space-y-4 border-2 border-emerald-800 shadow-[3px_3px_0px_0px_rgba(6,78,59,1)]">
+        <div className="flex items-center justify-between flex-wrap gap-2 border-b-2 border-emerald-700/30 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-emerald-400 text-emerald-950 border-2 border-black flex items-center justify-center font-bold">
+              📌
+            </div>
+            <div>
+              <h3 className="font-heading font-black text-lg text-emerald-950">
+                📌 Modelos Pré-Prontos de Texto Extra (Grupo 1)
+              </h3>
+              <p className="text-xs text-emerald-800">
+                <b>Regra do Sistema:</b> O texto base oficial do Grupo 1 é completo e <b>nunca modificado</b>. Você configura apenas a parte extra que é anexada à mensagem.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => saveAllConfig()}
+            disabled={savingConfig}
+            className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 px-4 py-2 text-xs font-heading font-black flex items-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+            data-testid="save-group1-extra-templates-btn"
+          >
+            <Save className={`w-3.5 h-3.5 ${savingConfig ? "animate-spin" : ""}`} />
+            {savingConfig ? "Salvando..." : "Salvar Texto Extra do Grupo 1"}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Tarefas - Parte Extra do Grupo 1 */}
+          <div className="space-y-2 bg-white p-4 rounded-xl border-2 border-black">
+            <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
+              <span>📚 Texto Extra Pré-Pronto para Tarefas (Grupo 1)</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setGroup1TaskExtra(
+                    "📌 *Lembrete Extra da Turma:*\nFavor conferir os detalhes e responder dentro do prazo no portal!"
+                  )
+                }
+                className="text-[10px] text-neutral-500 hover:text-black underline"
+              >
+                Padrão
+              </button>
+            </label>
+            <textarea
+              rows={4}
+              value={group1TaskExtra}
+              onChange={(e) => setGroup1TaskExtra(e.target.value)}
+              className="nb-input bg-neutral-50 text-xs font-sans resize-y"
+              placeholder="Digite o modelo de aviso extra para tarefas..."
+              data-testid="input-group1-task-extra-template"
+            />
+            <p className="text-[10px] text-neutral-500">
+              Tags disponíveis: <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{materia}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{titulo}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{data_entrega}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{pontos}"}</code>
+            </p>
+
+            {/* Prévia Grupo 1 */}
+            <div className="bg-neutral-900 text-neutral-100 p-3 rounded-xl text-xs space-y-1 font-mono">
+              <div className="text-[9px] uppercase font-bold text-emerald-400">
+                Prévia Completa no WhatsApp (Grupo 1):
+              </div>
+              <div className="whitespace-pre-wrap font-sans text-xs pt-1">
+                {`📚 *NOVA TAREFA NO EDUTASK*\n\n` +
+                 `📖 *Matéria:* Matemática\n` +
+                 `📝 *Título:* Exercícios de Frações\n` +
+                 `📅 *Data de Entrega:* 15/10/2026\n` +
+                 `🎁 *Pontos:* 10 pts\n\n` +
+                 `📋 *Descrição / Orientações:*\nResolver páginas 42 a 45 do livro didático.\n` +
+                 (group1TaskExtra ? `\n${group1TaskExtra}\n` : "") +
+                 `\n👉 _Acesse o Edutask para responder e visualizar os detalhes!_`}
+              </div>
+            </div>
+          </div>
+
+          {/* Avisos - Parte Extra do Grupo 1 */}
+          <div className="space-y-2 bg-white p-4 rounded-xl border-2 border-black">
+            <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
+              <span>📢 Texto Extra Pré-Pronto para Avisos (Grupo 1)</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setGroup1AnnouncementExtra(
+                    "📌 *Observação Importante:*\nAcompanhem as atualizações e tirem dúvidas pelo Edutask!"
+                  )
+                }
+                className="text-[10px] text-neutral-500 hover:text-black underline"
+              >
+                Padrão
+              </button>
+            </label>
+            <textarea
+              rows={4}
+              value={group1AnnouncementExtra}
+              onChange={(e) => setGroup1AnnouncementExtra(e.target.value)}
+              className="nb-input bg-neutral-50 text-xs font-sans resize-y"
+              placeholder="Digite o modelo de aviso extra para comunicados..."
+              data-testid="input-group1-announcement-extra-template"
+            />
+            <p className="text-[10px] text-neutral-500">
+              Tags disponíveis: <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{titulo}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{data}"}</code>
+            </p>
+
+            {/* Prévia Grupo 1 */}
+            <div className="bg-neutral-900 text-neutral-100 p-3 rounded-xl text-xs space-y-1 font-mono">
+              <div className="text-[9px] uppercase font-bold text-emerald-400">
+                Prévia Completa no WhatsApp (Grupo 1):
+              </div>
+              <div className="whitespace-pre-wrap font-sans text-xs pt-1">
+                {`📢 *NOVO AVISO NO EDUTASK*\n\n` +
+                 `📌 *Reunião de Pais e Mestres*\n` +
+                 `📅 *Data:* 10/10/2026\n\n` +
+                 `💬 *Mensagem:*\nLembramos a todos da nossa reunião nesta sexta-feira às 19h.\n` +
+                 (group1AnnouncementExtra ? `\n${group1AnnouncementExtra}\n` : "") +
+                 `\n👉 _Acesse o Edutask para interagir e responder aos comentários!_`}
               </div>
             </div>
           </div>

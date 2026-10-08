@@ -15,6 +15,7 @@ import StoreEffects from "@/components/StoreEffects";
 import StudentAIStatsView from "@/components/StudentAIStatsView";
 import AIChatDialog from "@/components/AIChatDialog";
 import SpecialAnnouncementModal from "@/components/SpecialAnnouncementModal";
+import { getButtonColorStyle } from "@/components/StudentButtonsPanel";
 import { getPriority, formatDateBR, daysUntil } from "@/lib/priority";
 import { fireConfetti } from "@/lib/celebrate";
 import { getTheme } from "@/lib/themes";
@@ -36,22 +37,26 @@ export default function StudentDashboard() {
   const [chatTask, setChatTask] = useState(null);
   const [globalChatOpen, setGlobalChatOpen] = useState(false);
   const [specialModalAnnouncement, setSpecialModalAnnouncement] = useState(null);
+  const [customButtons, setCustomButtons] = useState([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: t }, { data: a }] = await Promise.all([
+      const [{ data: t }, { data: a }, btnRes] = await Promise.all([
         api.get("/tasks"),
         api.get("/announcements"),
+        api.get("/student-buttons").catch(() => ({ data: [] })),
       ]);
       setTasks(t);
       setAnnouncements(a);
+      setCustomButtons(btnRes?.data || []);
     } catch (e) {
       try {
-        const [allTasks, allAnnouncements, allCompletions] = await Promise.all([
+        const [allTasks, allAnnouncements, allCompletions, btnRes] = await Promise.all([
           firebaseService.getAllTasks(),
           firebaseService.getAllAnnouncements(),
           firebaseService.getAllCompletions(),
+          api.get("/student-buttons").catch(() => ({ data: [] })),
         ]);
         const currentUserId = user?.id;
         const mapped = (allTasks || [])
@@ -67,6 +72,7 @@ export default function StudentDashboard() {
           });
         setTasks(mapped);
         setAnnouncements(allAnnouncements || []);
+        setCustomButtons(btnRes?.data || []);
       } catch (e2) {
         toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao carregar tarefas");
       }
@@ -74,6 +80,13 @@ export default function StudentDashboard() {
       setLoading(false);
     }
   }, [user?.id]);
+
+  const handleCustomButtonClick = (btn) => {
+    try {
+      api.post(`/student-buttons/${btn.id}/click`).catch(() => {});
+    } catch {}
+    window.open(btn.url, "_blank", "noopener,noreferrer");
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -255,6 +268,50 @@ export default function StudentDashboard() {
           <h1 className="font-heading font-black text-2xl sm:text-5xl tracking-tight">Olá! Vamos estudar?</h1>
           <p className="text-neutral-600 mt-1 text-xs sm:text-sm">Marque suas tarefas conforme as conclui.</p>
         </div>
+
+        {/* Botões & Links Criados pelo Professor para os Alunos */}
+        {customButtons && customButtons.length > 0 && (
+          <div className="mb-6 sm:mb-8 space-y-2.5" data-testid="student-custom-buttons-section">
+            <div className="flex items-center gap-2">
+              <span className="font-heading font-black text-sm sm:text-base text-neutral-800 flex items-center gap-1.5">
+                <span>🔗</span> Acessos Rápidos & Links Úteis
+              </span>
+              <span className="nb-badge bg-black text-white text-[10px] font-bold">
+                {customButtons.length}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3">
+              {customButtons.map((btn) => {
+                const colorStyle = getButtonColorStyle(btn.color);
+                return (
+                  <button
+                    key={btn.id}
+                    onClick={() => handleCustomButtonClick(btn)}
+                    className={`nb-btn p-3 sm:p-3.5 text-left flex items-center justify-between gap-2.5 border-2 border-black transition-all transform hover:-translate-y-0.5 active:translate-y-0.5 ${colorStyle.bg} ${colorStyle.shadow}`}
+                    title={btn.description || `Abrir link: ${btn.url}`}
+                    data-testid={`student-action-button-${btn.id}`}
+                  >
+                    <div className="min-w-0 flex items-center gap-2.5">
+                      <span className="text-lg sm:text-xl flex-shrink-0">{btn.icon || "🔗"}</span>
+                      <div className="min-w-0">
+                        <div className="font-heading font-black text-xs sm:text-sm truncate">
+                          {btn.name}
+                        </div>
+                        {btn.description && (
+                          <div className="text-[10px] opacity-80 truncate font-sans">
+                            {btn.description}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 opacity-80" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Announcements */}
         {announcements.length > 0 && (

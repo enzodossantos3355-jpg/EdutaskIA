@@ -258,6 +258,8 @@ export function getTier() {
 // ---------------------------------------------------------------------------
 const DEFAULT_EFFECTS = [
   { id: 'none', name: 'Sem Moldura', emoji: '⚪', description: 'Visual clássico limpo sem efeitos no bloco do perfil.', cost: 0, css: '', rarity: 'common' },
+  { id: 'stranger_things', name: 'Moldura Stranger Things', emoji: '🧇', description: 'Moldura épica do Mundo Invertido de Hawkins com logotipo retrô vermelho neon, céu estrelado cósmico, luzes de natal da Joyce e faróis!', cost: 200, css: 'fx-stranger-things', rarity: 'rare' },
+  { id: 'riverdale', name: 'Moldura Riverdale (Bulldogs & Serpents)', emoji: '🐍', description: 'Moldura inspirada no universo de Riverdale com azul e ouro dos Bulldogs, verde das Serpentes do Sul e o clássico Pop\'s Chock\'lit Shoppe!', cost: 180, css: 'fx-riverdale', rarity: 'rare' },
   { id: 'spongebob', name: 'Moldura Bob Esponja', emoji: '🍍', description: 'Moldura alegre da Fenda do Biquíni com arte tropical submarina central e aura dourada!', cost: 120, css: 'fx-spongebob', rarity: 'rare' },
   { id: 'mentalist', name: 'Moldura O Mentalista', emoji: '🔍', description: 'Moldura inspirada na série O Mentalista com arte central vermelha e bege e Patrick Jane.', cost: 160, css: 'fx-mentalist', rarity: 'rare' },
   { id: 'neon_pulse', name: 'Moldura Neon Pulse', emoji: '💠', description: 'Halo azul pulsante futurista que envolve todo o bloco do perfil.', cost: 50, css: 'fx-neon-pulse', rarity: 'common' },
@@ -405,6 +407,20 @@ interface ChatSession {
   updated_at: string;
 }
 
+export interface StudentButton {
+  id: string;
+  name: string; // Nome do botão para os alunos
+  url: string;  // Link de escolha do administrador/professor
+  description?: string;
+  color?: string; // Estilo/cor do botão (ex: 'indigo', 'emerald', 'amber', 'rose', 'sky', 'violet')
+  icon?: string;  // Emoji ou ícone
+  active: boolean; // Se está visível para os alunos
+  order?: number;
+  click_count?: number;
+  created_at: string;
+  created_by?: string;
+}
+
 const BASE_DIR = process.env.VERCEL || process.env.NODE_ENV === 'production' ? os.tmpdir() : __dirname;
 const DATA_DIR = path.resolve(BASE_DIR, 'data');
 const DB_FILE = path.resolve(DATA_DIR, 'db.json');
@@ -501,6 +517,7 @@ class Database {
     last_deleted_count: 0,
     last_deleted_titles: [],
   };
+  student_buttons: Map<string, StudentButton> = new Map();
   whatsapp_config: {
     group_1_jid: string;
     group_1_name: string;
@@ -514,6 +531,8 @@ class Database {
       announcement_photo_id: string | null;
       tomorrow_caption: string;
       tomorrow_photo_id: string | null;
+      group1_task_extra: string; // Modelo pré-pronto de texto extra para o Grupo 1 (adicionado ao texto oficial sem modificar o texto base)
+      group1_announcement_extra: string; // Modelo pré-pronto de texto extra para avisos no Grupo 1
     };
     daily_reminder: {
       enabled: boolean;
@@ -541,6 +560,8 @@ class Database {
       announcement_photo_id: null,
       tomorrow_caption: '🚨 *LEMBRETE: TAREFAS PARA AMANHÃ ({data_amanha})*\n\nOlá turma! Não se esqueçam das tarefas marcadas para amanhã:\n\n{lista_tarefas}\n\n👉 Acessem o Edutask para conferir e responder no prazo!',
       tomorrow_photo_id: null,
+      group1_task_extra: '📌 *Lembrete Extra da Turma:*\nFavor conferir os detalhes e responder dentro do prazo no portal!',
+      group1_announcement_extra: '📌 *Observação Importante:*\nAcompanhem as atualizações e tirem dúvidas pelo Edutask!',
     },
     daily_reminder: {
       enabled: true,
@@ -729,6 +750,7 @@ class Database {
         effect_overrides: this.effect_overrides,
         monthly_prize: this.monthly_prize,
         task_cleanup_config: this.task_cleanup_config,
+        student_buttons: Array.from(this.student_buttons.entries()),
         whatsapp_config: this.whatsapp_config,
         app_info: this.app_info,
         ai_enabled: this.ai_enabled,
@@ -756,6 +778,7 @@ class Database {
         if (data.effect_overrides) this.effect_overrides = data.effect_overrides;
         if (data.monthly_prize) this.monthly_prize = data.monthly_prize;
         if (data.task_cleanup_config) this.task_cleanup_config = { ...this.task_cleanup_config, ...data.task_cleanup_config };
+        if (data.student_buttons) this.student_buttons = new Map(data.student_buttons);
         if (data.whatsapp_config) this.whatsapp_config = { ...this.whatsapp_config, ...data.whatsapp_config };
         if (data.app_info) this.app_info = data.app_info;
         if (data.ai_enabled !== undefined) this.ai_enabled = data.ai_enabled;
@@ -803,6 +826,39 @@ class Database {
       const id = `subj-${i + 1}`;
       this.subjects.set(id, { id, name });
     });
+
+    // Seed default student buttons if empty
+    if (this.student_buttons.size === 0) {
+      const defaultButtons: StudentButton[] = [
+        {
+          id: 'btn-classroom',
+          name: 'Google Sala de Aula',
+          url: 'https://classroom.google.com',
+          description: 'Acesse suas salas de aula virtuais e materiais complementares.',
+          color: 'emerald',
+          icon: '📚',
+          active: true,
+          order: 1,
+          click_count: 0,
+          created_at: new Date().toISOString(),
+          created_by: 'admin',
+        },
+        {
+          id: 'btn-livros',
+          name: 'Biblioteca Digital',
+          url: 'http://www.dominiopublico.gov.br',
+          description: 'Acervo gratuito de livros, literatura e pesquisas acadêmicas.',
+          color: 'indigo',
+          icon: '📖',
+          active: true,
+          order: 2,
+          click_count: 0,
+          created_at: new Date().toISOString(),
+          created_by: 'admin',
+        },
+      ];
+      defaultButtons.forEach((b) => this.student_buttons.set(b.id, b));
+    }
   }
 
   getEffectsCatalog() {
@@ -1754,6 +1810,7 @@ async function dispatchTaskWhatsAppNotifications(task: TaskItem) {
       points: task.points,
       description: task.description,
       recipients_label: recipientsLabel,
+      group1_extra: db.whatsapp_config?.templates?.group1_task_extra,
       photo_buffer: photoBuffer,
       photo_content_type: photoContentType,
       custom_caption_template: db.whatsapp_config?.templates?.task_caption,
@@ -1768,6 +1825,7 @@ api.post('/tasks/:task_id/send-whatsapp', requireAdmin, async (req, res) => {
   const {
     group1_enabled = true,
     group2_enabled = true,
+    group1_extra,
     group2_caption,
     photo_id,
     photo_data,
@@ -1838,6 +1896,7 @@ api.post('/tasks/:task_id/send-whatsapp', requireAdmin, async (req, res) => {
     points: task.points,
     description: task.description,
     recipients_label: recipientsLabel,
+    group1_extra: typeof group1_extra === 'string' ? group1_extra : undefined,
     group2_caption: group2_caption !== undefined ? group2_caption : undefined,
     photo_buffer: photoBuffer,
     photo_content_type: photoContentType,
@@ -2319,6 +2378,7 @@ api.post('/announcements', requireAdmin, async (req, res) => {
       message: doc.message,
       created_at: doc.created_at,
       recipients_label: recipientsLabel,
+      group1_extra: db.whatsapp_config?.templates?.group1_announcement_extra,
       photo_buffer: photoBuffer,
       photo_content_type: photoContentType,
       custom_caption_template: db.whatsapp_config?.templates?.announcement_caption,
@@ -2337,6 +2397,7 @@ api.post('/announcements/:ann_id/send-whatsapp', requireAdmin, async (req, res) 
   const {
     group1_enabled = true,
     group2_enabled = true,
+    group1_extra,
     group2_caption,
     photo_id,
     photo_data,
@@ -2391,6 +2452,7 @@ api.post('/announcements/:ann_id/send-whatsapp', requireAdmin, async (req, res) 
     message: doc.message,
     created_at: doc.created_at,
     recipients_label: recipientsLabel,
+    group1_extra: typeof group1_extra === 'string' ? group1_extra : undefined,
     group2_caption: group2_caption !== undefined ? group2_caption : undefined,
     photo_buffer: photoBuffer,
     photo_content_type: photoContentType,
@@ -2490,6 +2552,104 @@ api.delete('/announcements/:ann_id/comments/:comment_id', requireAuth, async (re
   await firebaseService.deleteComment(comment_id).catch(console.warn);
 
   res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// Botões e Links Personalizados para Alunos
+// ---------------------------------------------------------------------------
+api.get('/student-buttons', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  let buttons = Array.from(db.student_buttons.values());
+  if (user.role === 'aluno') {
+    // Alunos só veem botões ativos
+    buttons = buttons.filter((b) => b.active);
+  }
+  buttons.sort((a, b) => {
+    const orderA = a.order ?? 999;
+    const orderB = b.order ?? 999;
+    if (orderA !== orderB) return orderA - orderB;
+    return (b.created_at || '').localeCompare(a.created_at || '');
+  });
+  res.json(buttons);
+});
+
+api.post('/student-buttons', requireAdmin, (req, res) => {
+  const { name, url, description, color, icon, active, order } = req.body || {};
+  if (!name || !name.trim()) {
+    return res.status(400).json({ detail: 'O nome do botão é obrigatório.' });
+  }
+  if (!url || !url.trim()) {
+    return res.status(400).json({ detail: 'O link (URL) do botão é obrigatório.' });
+  }
+
+  let formattedUrl = url.trim();
+  if (!/^https?:\/\//i.test(formattedUrl)) {
+    formattedUrl = 'https://' + formattedUrl;
+  }
+
+  const user = (req as any).user as User;
+  const id = `btn-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const button: StudentButton = {
+    id,
+    name: name.trim(),
+    url: formattedUrl,
+    description: description ? description.trim() : '',
+    color: color || 'indigo',
+    icon: icon || '🔗',
+    active: active !== false,
+    order: typeof order === 'number' ? order : db.student_buttons.size + 1,
+    click_count: 0,
+    created_at: new Date().toISOString(),
+    created_by: user.id,
+  };
+
+  db.student_buttons.set(id, button);
+  db.saveToDisk();
+  res.status(201).json(button);
+});
+
+api.put('/student-buttons/:btn_id', requireAdmin, (req, res) => {
+  const { btn_id } = req.params;
+  const btn = db.student_buttons.get(btn_id);
+  if (!btn) return res.status(404).json({ detail: 'Botão não encontrado.' });
+
+  const { name, url, description, color, icon, active, order } = req.body || {};
+  if (name && name.trim()) btn.name = name.trim();
+  if (url && url.trim()) {
+    let formattedUrl = url.trim();
+    if (!/^https?:\/\//i.test(formattedUrl)) {
+      formattedUrl = 'https://' + formattedUrl;
+    }
+    btn.url = formattedUrl;
+  }
+  if (description !== undefined) btn.description = description ? description.trim() : '';
+  if (color !== undefined) btn.color = color;
+  if (icon !== undefined) btn.icon = icon;
+  if (typeof active === 'boolean') btn.active = active;
+  if (typeof order === 'number') btn.order = order;
+
+  db.saveToDisk();
+  res.json(btn);
+});
+
+api.delete('/student-buttons/:btn_id', requireAdmin, (req, res) => {
+  const { btn_id } = req.params;
+  if (!db.student_buttons.has(btn_id)) {
+    return res.status(404).json({ detail: 'Botão não encontrado.' });
+  }
+  db.student_buttons.delete(btn_id);
+  db.saveToDisk();
+  res.json({ ok: true, message: 'Botão removido com sucesso.' });
+});
+
+api.post('/student-buttons/:btn_id/click', requireAuth, (req, res) => {
+  const { btn_id } = req.params;
+  const btn = db.student_buttons.get(btn_id);
+  if (btn) {
+    btn.click_count = (btn.click_count || 0) + 1;
+    db.saveToDisk();
+  }
+  res.json({ ok: true, clicks: btn?.click_count || 0 });
 });
 
 // ---------------------------------------------------------------------------

@@ -33,6 +33,8 @@ export interface WhatsAppTemplatesConfig {
   announcement_photo_id?: string | null;
   tomorrow_caption?: string;
   tomorrow_photo_id?: string | null;
+  group1_task_extra?: string;
+  group1_announcement_extra?: string;
 }
 
 export interface WhatsAppServiceStatus {
@@ -70,6 +72,7 @@ export interface TaskNotificationPayload {
   points?: number;
   description: string;
   recipients_label?: string;
+  group1_extra?: string; // Parte extra para o Grupo 1 (adicionada ao texto base sem modificar o texto oficial)
   group2_caption?: string;
   custom_caption_template?: string;
   photo_buffer?: Buffer | null;
@@ -83,6 +86,7 @@ export interface AnnouncementNotificationPayload {
   message: string;
   created_at?: string;
   recipients_label?: string;
+  group1_extra?: string; // Parte extra para o Grupo 1
   group2_caption?: string;
   custom_caption_template?: string;
   photo_buffer?: Buffer | null;
@@ -851,15 +855,32 @@ class WhatsAppService {
       try {
         const target1 = this.group1Jid.includes('@') ? this.group1Jid : `${this.group1Jid}@g.us`;
         const recipients = task.recipients_label ? `👥 *Destinatários:* ${task.recipients_label}\n` : '';
-        const messageG1 =
+        const baseMessageG1 =
           `📚 *NOVA TAREFA NO EDUTASK*\n\n` +
           `📖 *Matéria:* ${task.subject}\n` +
           `📝 *Título:* ${task.title}\n` +
           `📅 *Data de Entrega:* ${formattedDate}\n` +
           `🎁 *Pontos:* ${task.points} pts\n` +
           `${recipients}` +
-          `\n📋 *Descrição / Orientações:*\n${task.description}\n\n` +
-          `👉 _Acesse o Edutask para responder e visualizar os detalhes!_`;
+          `\n📋 *Descrição / Orientações:*\n${task.description}\n`;
+
+        // O texto completo acima NUNCA é modificado; apenas a parte extra pré-pronta/configurada é adicionada
+        let extraSectionG1 = '';
+        const rawExtra = (task.group1_extra !== undefined && task.group1_extra !== null
+          ? task.group1_extra
+          : (this.templates?.group1_task_extra || '')).trim();
+
+        if (rawExtra) {
+          const formattedExtra = rawExtra
+            .replace(/\{materia\}/gi, task.subject || '')
+            .replace(/\{titulo\}/gi, task.title || '')
+            .replace(/\{data_entrega\}/gi, formattedDate)
+            .replace(/\{pontos\}/gi, String(task.points || 0))
+            .replace(/\{destinatarios\}/gi, task.recipients_label || 'Todos os alunos');
+          extraSectionG1 = `\n${formattedExtra}\n`;
+        }
+
+        const messageG1 = `${baseMessageG1}${extraSectionG1}\n👉 _Acesse o Edutask para responder e visualizar os detalhes!_`;
 
         await this.sock.sendMessage(target1, { text: messageG1 });
         results.group1Sent = true;
@@ -973,13 +994,28 @@ class WhatsAppService {
       try {
         const target1 = this.group1Jid.includes('@') ? this.group1Jid : `${this.group1Jid}@g.us`;
         const recipients = ann.recipients_label ? `👥 *Destinatários:* ${ann.recipients_label}\n` : '';
-        const msgG1 =
+        const baseMsgG1 =
           `📢 *NOVO AVISO NO EDUTASK*\n\n` +
           `📌 *${ann.title}*\n` +
           `📅 *Data:* ${formattedDate}\n` +
           `${recipients}` +
-          `\n💬 *Mensagem:*\n${ann.message}\n\n` +
-          `👉 _Acesse o Edutask para interagir e responder aos comentários!_`;
+          `\n💬 *Mensagem:*\n${ann.message}\n`;
+
+        // Parte extra para o Grupo 1 (o texto completo acima NUNCA é modificado; apenas a parte extra configurada é adicionada)
+        let extraSectionG1 = '';
+        const rawExtra = (ann.group1_extra !== undefined && ann.group1_extra !== null
+          ? ann.group1_extra
+          : (this.templates?.group1_announcement_extra || '')).trim();
+
+        if (rawExtra) {
+          const formattedExtra = rawExtra
+            .replace(/\{titulo\}/gi, ann.title || '')
+            .replace(/\{data\}/gi, formattedDate)
+            .replace(/\{destinatarios\}/gi, ann.recipients_label || 'Todos os alunos');
+          extraSectionG1 = `\n${formattedExtra}\n`;
+        }
+
+        const msgG1 = `${baseMsgG1}${extraSectionG1}\n👉 _Acesse o Edutask para interagir e responder aos comentários!_`;
 
         // Grupo 1 SEMPRE recebe exclusivamente mensagem em texto (fotos programadas são apenas para o Grupo 2)
         await this.sock.sendMessage(target1, { text: msgG1 });
