@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Trophy, Calendar as CalendarIcon, Star, Sparkles, ChevronDown, Loader2 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
@@ -20,9 +20,25 @@ export default function PrizeBanner() {
   const { user } = useAuth();
   const { enabled: aiEnabled } = useAIStatus();
 
-  useEffect(() => {
-    api.get("/monthly-prize").then(({ data }) => setData(data)).catch(() => {});
+  const fetchPrize = useCallback(async () => {
+    try {
+      const { data } = await api.get("/monthly-prize");
+      setData(data);
+    } catch {}
   }, []);
+
+  useEffect(() => {
+    fetchPrize();
+    const handleRefresh = () => fetchPrize();
+    window.addEventListener("task-completed", handleRefresh);
+    window.addEventListener("tasks-updated", handleRefresh);
+    window.addEventListener("prize-updated", handleRefresh);
+    return () => {
+      window.removeEventListener("task-completed", handleRefresh);
+      window.removeEventListener("tasks-updated", handleRefresh);
+      window.removeEventListener("prize-updated", handleRefresh);
+    };
+  }, [fetchPrize]);
 
   const loadTips = async () => {
     setTipsOpen(true);

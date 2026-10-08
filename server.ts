@@ -2280,13 +2280,16 @@ api.post('/tasks/:task_id/complete', requireAuth, async (req, res) => {
     return res.json({ ok: true, already_completed: true });
   }
 
+  const clock = getSystemClock();
   const now = new Date().toISOString();
-  const today = now.slice(0, 10);
-  const onTime = today <= task.due_date;
+  const todayYMD = clock.yearMonthDay; // Horário oficial de Brasília
+  const taskDueYMD = parseDateYMD(task.due_date);
+  const onTime = !taskDueYMD || todayYMD <= taskDueYMD;
   const basePoints = task.points || 10;
   const awarded = onTime ? basePoints : Math.max(1, Math.floor(basePoints * 0.3));
 
   const comp = {
+    id: `${user.id}_${task_id}`,
     task_id,
     user_id: user.id,
     completed_at: now,
@@ -2305,7 +2308,13 @@ api.post('/tasks/:task_id/complete', requireAuth, async (req, res) => {
   await firebaseService.saveCompletion(comp);
   db.saveToDisk();
 
-  res.json({ ok: true, points_awarded: awarded, on_time: onTime, new_total: user.points });
+  res.json({
+    ok: true,
+    points_awarded: awarded,
+    points_earned: awarded,
+    on_time: onTime,
+    new_total: user.points,
+  });
 });
 
 api.post('/tasks/:task_id/uncomplete', requireAuth, async (req, res) => {
@@ -2751,6 +2760,39 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
 // ---------------------------------------------------------------------------
 // AI Monthly Evaluation & Statistics (Leaderboard for students & admin)
 // ---------------------------------------------------------------------------
+export function parseDateYMD(d: any): string {
+  if (!d) return '';
+  if (typeof d === 'number') {
+    try {
+      d = new Date(d).toISOString();
+    } catch {
+      return '';
+    }
+  }
+  const s = String(d).trim();
+  // Check DD/MM/YYYY or DD-MM-YYYY
+  const brMatch = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+  if (brMatch) {
+    const day = brMatch[1].padStart(2, '0');
+    const month = brMatch[2].padStart(2, '0');
+    return `${brMatch[3]}-${month}-${day}`;
+  }
+  // Check YYYY-MM-DD
+  const isoMatch = s.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+  if (isoMatch) {
+    const month = isoMatch[2].padStart(2, '0');
+    const day = isoMatch[3].padStart(2, '0');
+    return `${isoMatch[1]}-${month}-${day}`;
+  }
+  try {
+    const dt = new Date(s);
+    if (!isNaN(dt.getTime())) {
+      return getSystemClockForDate(dt).yearMonthDay;
+    }
+  } catch {}
+  return s.slice(0, 10);
+}
+
 export function getCurrentMonthRange() {
   const clock = getSystemClock();
   const [yearStr, monthStr] = clock.yearMonthDay.split('-');
@@ -2760,6 +2802,7 @@ export function getCurrentMonthRange() {
 
   const monthStartDay = `${yearStr}-${monthStr}-01`;
   const monthStartIso = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0)).toISOString();
+  const monthStartMs = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0)).getTime();
 
   let nextYear = year;
   let nextMonth = month + 1;
@@ -2770,12 +2813,12 @@ export function getCurrentMonthRange() {
   const nextMonthStr = String(nextMonth).padStart(2, '0');
   const nextMonthStartDay = `${nextYear}-${nextMonthStr}-01`;
   const nextMonthStartIso = new Date(Date.UTC(nextYear, nextMonth - 1, 1, 0, 0, 0)).toISOString();
+  const nextMonthStartMs = new Date(Date.UTC(nextYear, nextMonth - 1, 1, 0, 0, 0)).getTime();
 
   const lastDayOfMonth = new Date(Date.UTC(year, month, 0)).getDate();
   const monthEndDay = `${yearStr}-${monthStr}-${String(lastDayOfMonth).padStart(2, '0')}`;
   const monthEndIso = new Date(Date.UTC(year, month - 1, lastDayOfMonth, 23, 59, 59, 999)).toISOString();
 
-  const nextMonthStartMs = new Date(Date.UTC(nextYear, nextMonth - 1, 1, 0, 0, 0)).getTime();
   const daysRemaining = Math.max(0, Math.ceil((nextMonthStartMs - clock.timestamp) / (24 * 60 * 60 * 1000)));
 
   const dateObj = new Date(year, month - 1, 1);
@@ -2790,8 +2833,10 @@ export function getCurrentMonthRange() {
     monthEndDay,
     monthStartIso,
     monthEndIso,
+    monthStartMs,
     nextMonthStartDay,
     nextMonthStartIso,
+    nextMonthStartMs,
     daysRemaining,
     monthLabel,
   };
@@ -2836,23 +2881,36 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
 
   // 1. Tarefas do MÊS (entrega marcada dentro do mês ou criadas no mês)
   const monthTasks = allTasks.filter((t) => {
-    if (t.due_date) {
-      return t.due_date >= range.monthStartDay && t.due_date <= range.monthEndDay;
+    const dueYMD = parseDateYMD(t.due_date);
+    if (dueYMD) {
+      return dueYMD >= range.monthStartDay && dueYMD <= range.monthEndDay;
     }
-    return t.created_at >= range.monthStartIso && t.created_at < range.nextMonthStartIso;
+    const createdYMD = parseDateYMD(t.created_at);
+    return createdYMD >= range.monthStartDay && createdYMD <= range.monthEndDay;
   });
 
-  // 2. Entregas concluídas dentro do MÊS
-  const monthlyCompletions = db.completions.filter(
-    (c) => c.completed_at >= range.monthStartIso && c.completed_at < range.nextMonthStartIso
-  );
+  // 2. Entregas concluídas dentro do MÊS (ou de tarefas pertencentes ao mês)
+  const monthTaskIds = new Set(monthTasks.map((t) => t.id));
+  const monthlyCompletions = db.completions.filter((c) => {
+    if (c.task_id && monthTaskIds.has(c.task_id)) return true;
+    const compYMD = parseDateYMD(c.completed_at);
+    return compYMD >= range.monthStartDay && compYMD <= range.monthEndDay;
+  });
 
   const studentMetrics = students.map((s) => {
     const sComps = monthlyCompletions.filter((c) => c.user_id === s.id);
-    const onTime = sComps.filter((c) => c.on_time).length;
+    const onTime = sComps.filter((c) => {
+      if (c.on_time === true) return true;
+      const task = db.tasks.get(c.task_id);
+      if (!task || !task.due_date) return true;
+      const compYMD = parseDateYMD(c.completed_at);
+      const dueYMD = parseDateYMD(task.due_date);
+      if (!dueYMD) return true;
+      return compYMD <= dueYMD;
+    }).length;
     const late = sComps.length - onTime;
 
-    const assignedMonthTasks = monthTasks.filter((t) => t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
+    const assignedMonthTasks = monthTasks.filter((t) => !t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
     const compSet = new Set(sComps.map((c) => c.task_id));
     // Tarefas pendentes do MÊS (atividades do mês não marcadas como feitas)
     const uncompletedMonth = assignedMonthTasks.filter((t) => !compSet.has(t.id)).length;
@@ -2868,9 +2926,14 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
       name: s.name,
       points: s.points || 0,
       completed_month: sComps.length,
+      completed_tasks: sComps.length,
       on_time_month: onTime,
+      on_time_completions: onTime,
+      on_time: onTime,
+      on_time_tasks: onTime,
       late_month: late,
       uncompleted_count: uncompletedMonth,
+      uncompleted_tasks: uncompletedMonth,
       total_month_tasks: assignedMonthTasks.length,
       on_time_pct: onTimePct,
       has_avatar: Boolean(s.avatar_data),
@@ -2928,8 +2991,12 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
       has_avatar: m.has_avatar,
       equipped_effect: m.equipped_effect,
       completed_month: m.completed_month,
+      completed_tasks: m.completed_month,
       on_time_month: m.on_time_month,
+      on_time_completions: m.on_time_month,
+      on_time: m.on_time_month,
       uncompleted_count: m.uncompleted_count,
+      uncompleted_tasks: m.uncompleted_count,
       on_time_pct: m.on_time_pct,
       score: m.score,
       is_leader: isTop1,
