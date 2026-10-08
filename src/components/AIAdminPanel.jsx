@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, Power, Trophy, X, Award, FileText, Loader2 } from "lucide-react";
+import { Sparkles, Power, Trophy, X, Award, FileText, Loader2, RotateCcw, Calendar, CheckCircle2, History } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { useAIStatus } from "@/context/AIStatusContext";
 import Avatar from "@/components/Avatar";
+import { effectClass } from "@/lib/effects";
 
 /**
  * Admin AI control panel: global on/off toggle, monthly report generator,
- * AI prize winner evaluation.
+ * AI prize winner evaluation, tied top 1 support, and monthly cycle reset.
  */
 export default function AIAdminPanel() {
   const { enabled, refresh } = useAIStatus();
@@ -18,9 +19,13 @@ export default function AIAdminPanel() {
   const [reportLoading, setReportLoading] = useState(false);
   const [prizeEval, setPrizeEval] = useState(null);
   const [prizeEvalLoading, setPrizeEvalLoading] = useState(false);
+  const [confirmingWinner, setConfirmingWinner] = useState(false);
+  const [finalizingMonth, setFinalizingMonth] = useState(false);
+  const [monthHistory, setMonthHistory] = useState([]);
 
   useEffect(() => {
     api.get("/users").then(({ data }) => setStudents(data.filter((u) => u.role === "aluno"))).catch(() => {});
+    api.get("/monthly-prize/history").then(({ data }) => setMonthHistory(data?.history || [])).catch(() => {});
   }, []);
 
   const toggle = async () => {
@@ -51,8 +56,6 @@ export default function AIAdminPanel() {
     }
   };
 
-  const [confirmingWinner, setConfirmingWinner] = useState(false);
-
   const runEval = async () => {
     setPrizeEvalLoading(true);
     setPrizeEval(null);
@@ -75,6 +78,8 @@ export default function AIAdminPanel() {
         winner_id: prizeEval.winner_id,
         winner_name: prizeEval.winner_name,
         score: prizeEval.winner_score,
+        is_tie: prizeEval.is_tie,
+        tied_winners: prizeEval.tied_winners,
         justification: prizeEval.justification,
         criteria: prizeEval.criteria,
       });
@@ -83,6 +88,23 @@ export default function AIAdminPanel() {
       toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao confirmar vencedor");
     } finally {
       setConfirmingWinner(false);
+    }
+  };
+
+  const finalizeMonthAndReset = async () => {
+    if (!window.confirm("Deseja realmente finalizar o mês atual? O resultado deste mês será registrado no histórico e o ciclo resetará para um novo mês.")) {
+      return;
+    }
+    setFinalizingMonth(true);
+    try {
+      const { data } = await api.post("/monthly-prize/finalize-month");
+      toast.success(data.message || "Mês finalizado e ciclo resetado com sucesso!");
+      setMonthHistory(data.history || []);
+      setPrizeEval(null);
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao finalizar mês");
+    } finally {
+      setFinalizingMonth(false);
     }
   };
 
@@ -183,7 +205,7 @@ export default function AIAdminPanel() {
                   </div>
                   <div>
                     <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-200 px-2 py-0.5 rounded">
-                      Vencedor(a) Sugerido(a) pela IA
+                      {prizeEval.is_tie ? `👑 Empate no 1º Lugar (${prizeEval.tied_winners?.length || 2} Alunos)` : "Vencedor(a) Sugerido(a) pela IA"}
                     </span>
                     <h3 className="font-heading font-black text-2xl text-neutral-900 mt-0.5">
                       {prizeEval.winner_name}
@@ -197,6 +219,31 @@ export default function AIAdminPanel() {
                   </div>
                 )}
               </div>
+
+              {/* Se houver empate no 1º lugar, exibe os avatares de todos os empatados em primeiro */}
+              {prizeEval.tied_winners && prizeEval.tied_winners.length > 1 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                  {prizeEval.tied_winners.map((tw) => (
+                    <div key={tw.id} className="p-3 bg-amber-50 rounded-xl border-2 border-black flex items-center gap-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                      <Avatar
+                        userId={tw.id}
+                        name={tw.name}
+                        size={46}
+                        hasAvatar={tw.has_avatar}
+                        bg="bg-amber-200"
+                        effect={effectClass(tw.equipped_effect)}
+                      />
+                      <div className="min-w-0">
+                        <div className="font-heading font-black text-sm text-neutral-900 truncate">{tw.name}</div>
+                        <div className="text-[10px] font-bold text-amber-900">👑 1º Lugar Empatado(a)</div>
+                        <div className="text-[10px] text-neutral-700 font-medium">
+                          {tw.on_time_month || 0} no prazo • {tw.uncompleted_count === 0 ? "zero pendências" : `${tw.uncompleted_count} pend.`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="bg-amber-50/80 p-4 rounded-lg border border-amber-200 mb-3">
                 <div className="text-xs font-bold uppercase tracking-wider text-amber-900 mb-1 flex items-center gap-1.5">
@@ -230,7 +277,7 @@ export default function AIAdminPanel() {
                   data-testid="confirm-winner-btn"
                 >
                   <Trophy className="w-4 h-4 text-emerald-950" />
-                  {confirmingWinner ? "Publicando..." : "Oficializar Vencedor e Publicar no Mural"}
+                  {confirmingWinner ? "Publicando..." : prizeEval.is_tie ? "Oficializar Vencedores Empatados no Mural" : "Oficializar Vencedor e Publicar no Mural"}
                 </button>
                 <button
                   onClick={() => {

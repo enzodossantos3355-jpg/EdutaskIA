@@ -75,6 +75,9 @@ export default function WhatsAppConfigPanel() {
   const [group1AnnouncementExtra, setGroup1AnnouncementExtra] = useState(
     "📌 *Observação Importante:*\nAcompanhem as atualizações e tirem dúvidas pelo Edutask!"
   );
+  const [group1TomorrowExtra, setGroup1TomorrowExtra] = useState(
+    "📌 *Aviso Extra da Turma:*\nOrganizem seus horários para não deixar nada para a última hora!"
+  );
 
   // Lembrete Diário Automático de Tarefas para Amanhã
   const [dailyReminderEnabled, setDailyReminderEnabled] = useState(true);
@@ -132,6 +135,7 @@ export default function WhatsAppConfigPanel() {
           if (cfg.templates.tomorrow_caption) setTomorrowCaption(cfg.templates.tomorrow_caption);
           if (cfg.templates.group1_task_extra !== undefined) setGroup1TaskExtra(cfg.templates.group1_task_extra);
           if (cfg.templates.group1_announcement_extra !== undefined) setGroup1AnnouncementExtra(cfg.templates.group1_announcement_extra);
+          if (cfg.templates.group1_tomorrow_extra !== undefined) setGroup1TomorrowExtra(cfg.templates.group1_tomorrow_extra);
 
           if (cfg.templates.task_photo_id) {
             setTaskPhotoId(cfg.templates.task_photo_id);
@@ -326,6 +330,7 @@ export default function WhatsAppConfigPanel() {
           tomorrow_photo_id: tomorrowPhotoId,
           group1_task_extra: group1TaskExtra,
           group1_announcement_extra: group1AnnouncementExtra,
+          group1_tomorrow_extra: group1TomorrowExtra,
         },
         daily_reminder: {
           enabled: dailyReminderEnabled,
@@ -1601,11 +1606,11 @@ export default function WhatsAppConfigPanel() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {/* Tarefas - Parte Extra do Grupo 1 */}
           <div className="space-y-2 bg-white p-4 rounded-xl border-2 border-black">
             <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
-              <span>📚 Texto Extra Pré-Pronto para Tarefas (Grupo 1)</span>
+              <span>📚 Texto Extra: Tarefas (Grupo 1)</span>
               <button
                 type="button"
                 onClick={() =>
@@ -1627,13 +1632,13 @@ export default function WhatsAppConfigPanel() {
               data-testid="input-group1-task-extra-template"
             />
             <p className="text-[10px] text-neutral-500">
-              Tags disponíveis: <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{materia}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{titulo}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{data_entrega}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{pontos}"}</code>
+              Tags disponíveis: <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{materia}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{titulo}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{data_entrega}"}</code>
             </p>
 
             {/* Prévia Grupo 1 */}
             <div className="bg-neutral-900 text-neutral-100 p-3 rounded-xl text-xs space-y-1 font-mono">
               <div className="text-[9px] uppercase font-bold text-emerald-400">
-                Prévia Completa no WhatsApp (Grupo 1):
+                Prévia Completa (Grupo 1):
               </div>
               <div className="whitespace-pre-wrap font-sans text-xs pt-1">
                 {`📚 *NOVA TAREFA NO EDUTASK*\n\n` +
@@ -1651,7 +1656,7 @@ export default function WhatsAppConfigPanel() {
           {/* Avisos - Parte Extra do Grupo 1 */}
           <div className="space-y-2 bg-white p-4 rounded-xl border-2 border-black">
             <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
-              <span>📢 Texto Extra Pré-Pronto para Avisos (Grupo 1)</span>
+              <span>📢 Texto Extra: Avisos (Grupo 1)</span>
               <button
                 type="button"
                 onClick={() =>
@@ -1679,7 +1684,7 @@ export default function WhatsAppConfigPanel() {
             {/* Prévia Grupo 1 */}
             <div className="bg-neutral-900 text-neutral-100 p-3 rounded-xl text-xs space-y-1 font-mono">
               <div className="text-[9px] uppercase font-bold text-emerald-400">
-                Prévia Completa no WhatsApp (Grupo 1):
+                Prévia Completa (Grupo 1):
               </div>
               <div className="whitespace-pre-wrap font-sans text-xs pt-1">
                 {`📢 *NOVO AVISO NO EDUTASK*\n\n` +
@@ -1688,6 +1693,51 @@ export default function WhatsAppConfigPanel() {
                  `💬 *Mensagem:*\nLembramos a todos da nossa reunião nesta sexta-feira às 19h.\n` +
                  (group1AnnouncementExtra ? `\n${group1AnnouncementExtra}\n` : "") +
                  `\n👉 _Acesse o Edutask para interagir e responder aos comentários!_`}
+              </div>
+            </div>
+          </div>
+
+          {/* Lembrete de Amanhã - Parte Extra do Grupo 1 */}
+          <div className="space-y-2 bg-white p-4 rounded-xl border-2 border-black">
+            <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
+              <span>🚨 Texto Extra: Lembrete Amanhã (Grupo 1)</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setGroup1TomorrowExtra(
+                    "📌 *Aviso Extra da Turma:*\nOrganizem seus horários para não deixar nada para a última hora!"
+                  )
+                }
+                className="text-[10px] text-neutral-500 hover:text-black underline"
+              >
+                Padrão
+              </button>
+            </label>
+            <textarea
+              rows={4}
+              value={group1TomorrowExtra}
+              onChange={(e) => setGroup1TomorrowExtra(e.target.value)}
+              className="nb-input bg-neutral-50 text-xs font-sans resize-y"
+              placeholder="Digite a mensagem extra anexada ao lembrete diário..."
+              data-testid="input-group1-tomorrow-extra-template"
+            />
+            <p className="text-[10px] text-neutral-500">
+              Anexado ao final do lembrete oficial de tarefas sem alterar o texto pronto.
+            </p>
+
+            {/* Prévia Grupo 1 */}
+            <div className="bg-neutral-900 text-neutral-100 p-3 rounded-xl text-xs space-y-1 font-mono">
+              <div className="text-[9px] uppercase font-bold text-emerald-400">
+                Prévia Completa (Grupo 1):
+              </div>
+              <div className="whitespace-pre-wrap font-sans text-xs pt-1">
+                {`🚨 *LEMBRETE DIÁRIO DE TAREFAS*\n\n` +
+                 `📅 *Entrega Amanhã:* 15/10/2026\n` +
+                 `📚 *Total de Tarefas:* 2\n\n` +
+                 `🔹 *1. [Matemática] Frações*\n   🎁 *Pontos:* 10 pts\n` +
+                 `🔹 *2. [História] Revolução*\n   🎁 *Pontos:* 15 pts\n\n` +
+                 `👉 _Acessem o Edutask para responder no prazo!_\n` +
+                 (group1TomorrowExtra ? `\n${group1TomorrowExtra}\n` : "")}
               </div>
             </div>
           </div>

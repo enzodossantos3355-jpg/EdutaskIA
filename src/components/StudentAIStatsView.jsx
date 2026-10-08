@@ -46,6 +46,8 @@ export default function StudentAIStatsView() {
   }
 
   const leader = data?.leader;
+  const leaders = data?.leaders && data.leaders.length > 0 ? data.leaders : leader ? [leader] : [];
+  const isTieTop1 = Boolean(data?.is_tie_top1 || leaders.length > 1);
   const rankings = data?.rankings || [];
   const monthLabel = data?.month_label || "Mês Atual";
 
@@ -64,63 +66,117 @@ export default function StudentAIStatsView() {
           Estatísticas & Líder da IA
         </h1>
         <p className="text-neutral-600 mt-1 text-xs sm:text-sm">
-          A liderança é calculada pela IA com base em <strong>pontualidade</strong> e penalizada por <strong>tarefas pendentes</strong>. Os pontos servem apenas para a Loja de Molduras.
+          A liderança é calculada pela IA avaliando as <strong>tarefas feitas no mês</strong> e <strong>tarefas pendentes do mês</strong>. Os pontos de tarefas servem exclusivamente para a Loja de Molduras.
         </p>
       </div>
 
-      {/* 👑 Spotlight da Pessoa Certa que Está Liderando */}
-      {leader ? (
+      {/* 👑 Spotlight da(s) Pessoa(s) que Estão Liderando (com suporte a empate no 1º lugar) */}
+      {leaders.length > 0 ? (
         <div className="nb-card bg-gradient-to-br from-amber-300 via-amber-200 to-amber-300 p-5 sm:p-7 border-3 border-black relative overflow-hidden" data-testid="ai-leader-spotlight">
           <div className="absolute top-2 right-2 opacity-10 text-8xl sm:text-9xl select-none pointer-events-none">
             👑
           </div>
 
           <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
               <span className="nb-badge bg-black text-amber-300 text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-1">
-                👑 Quem está liderando a avaliação
+                {isTieTop1 ? `👑 Empate no 1º Lugar (${leaders.length} alunos empatados)` : '👑 Quem está liderando a avaliação'}
               </span>
               <span className="nb-badge bg-white text-neutral-900 text-[10px] sm:text-xs font-bold">
-                Nota IA: {leader.score}/100
+                Nota IA: {leaders[0]?.score}/100
               </span>
+              {isTieTop1 && (
+                <span className="nb-badge bg-amber-400 text-amber-950 text-[10px] sm:text-xs font-bold">
+                  Mesma pontualidade e zero pendências
+                </span>
+              )}
             </div>
 
-            <div className="flex items-start sm:items-center gap-3 sm:gap-5 flex-wrap sm:flex-nowrap">
-              <div className="flex-shrink-0">
-                <Avatar
-                  userId={leader.id}
-                  name={leader.name}
-                  size={72}
-                  hasAvatar={leader.has_avatar}
-                  bg="bg-sky-300"
-                  effect={effectClass(leader.equipped_effect)}
-                />
+            {/* Se houver empate no 1º lugar, exibe os cartões com fotos de TODOS os empatados */}
+            {isTieTop1 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-3">
+                {leaders.map((ld) => {
+                  const isMe = ld.id === user?.id;
+                  return (
+                    <div
+                      key={ld.id}
+                      className={`nb-card p-4 flex items-center gap-4 ${
+                        isMe ? "bg-amber-100 ring-4 ring-amber-500 border-2 border-black" : "bg-white/95 border-2 border-black"
+                      }`}
+                    >
+                      <div className="flex-shrink-0">
+                        <Avatar
+                          userId={ld.id}
+                          name={ld.name}
+                          size={64}
+                          hasAvatar={ld.has_avatar}
+                          bg="bg-sky-300"
+                          effect={effectClass(ld.equipped_effect)}
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-heading font-black text-lg sm:text-xl text-neutral-900 leading-tight">
+                            {ld.name}
+                          </h3>
+                          {isMe && (
+                            <span className="nb-badge bg-emerald-400 text-black text-[10px] font-bold">É você! 🎉</span>
+                          )}
+                        </div>
+                        <div className="text-[11px] font-bold text-amber-900 mb-1">
+                          👑 1º Lugar Empatado(a)
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          <span className="nb-badge bg-emerald-100 text-emerald-950 text-[10px] font-bold">
+                            ✓ {ld.on_time_month} no prazo
+                          </span>
+                          <span className="nb-badge bg-white text-neutral-800 text-[10px] font-bold border border-black/20">
+                            {ld.uncompleted_count === 0 ? "0 pendências" : `${ld.uncompleted_count} pend.`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+            ) : (
+              <div className="flex items-start sm:items-center gap-3 sm:gap-5 flex-wrap sm:flex-nowrap">
+                <div className="flex-shrink-0">
+                  <Avatar
+                    userId={leaders[0].id}
+                    name={leaders[0].name}
+                    size={72}
+                    hasAvatar={leaders[0].has_avatar}
+                    bg="bg-sky-300"
+                    effect={effectClass(leaders[0].equipped_effect)}
+                  />
+                </div>
 
-              <div className="flex-1 min-w-0">
-                <h2 className="font-heading font-black text-xl sm:text-3xl text-neutral-900 leading-tight flex items-center gap-2 flex-wrap">
-                  <span>{leader.name}</span>
-                  {leader.id === user?.id && (
-                    <span className="nb-badge bg-emerald-400 text-black text-xs font-bold">É você! 🎉</span>
-                  )}
-                </h2>
+                <div className="flex-1 min-w-0">
+                  <h2 className="font-heading font-black text-xl sm:text-3xl text-neutral-900 leading-tight flex items-center gap-2 flex-wrap">
+                    <span>{leaders[0].name}</span>
+                    {leaders[0].id === user?.id && (
+                      <span className="nb-badge bg-emerald-400 text-black text-xs font-bold">É você! 🎉</span>
+                    )}
+                  </h2>
 
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <span className="nb-badge bg-white text-emerald-900 text-xs font-bold flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                    {leader.on_time_month} tarefa(s) no prazo
-                  </span>
-                  <span className="nb-badge bg-white text-neutral-900 text-xs font-bold flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-amber-600" />
-                    {leader.uncompleted_count === 0 ? "Zero pendências" : `${leader.uncompleted_count} pendente(s)`}
-                  </span>
-                  <span className="nb-badge bg-white text-violet-950 text-xs font-bold flex items-center gap-1">
-                    <ShoppingBag className="w-3.5 h-3.5 text-violet-600" />
-                    {leader.points || 0} pts (molduras)
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <span className="nb-badge bg-white text-emerald-900 text-xs font-bold flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      {leaders[0].on_time_month} tarefa(s) no prazo
+                    </span>
+                    <span className="nb-badge bg-white text-neutral-900 text-xs font-bold flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      {leaders[0].uncompleted_count === 0 ? "Zero pendências" : `${leaders[0].uncompleted_count} pendente(s)`}
+                    </span>
+                    <span className="nb-badge bg-white text-violet-950 text-xs font-bold flex items-center gap-1">
+                      <ShoppingBag className="w-3.5 h-3.5 text-violet-600" />
+                      {leaders[0].points || 0} pts (molduras)
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Parecer Conciso da IA */}
             <div className="mt-4 nb-card bg-white/95 p-3.5 sm:p-4 border-2 border-black">

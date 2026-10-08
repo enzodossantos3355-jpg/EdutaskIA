@@ -35,6 +35,7 @@ export interface WhatsAppTemplatesConfig {
   tomorrow_photo_id?: string | null;
   group1_task_extra?: string;
   group1_announcement_extra?: string;
+  group1_tomorrow_extra?: string; // Modelo pré-pronto de texto extra para lembretes do dia seguinte no Grupo 1
 }
 
 export interface WhatsAppServiceStatus {
@@ -104,6 +105,7 @@ export interface TomorrowReminderPayload {
     points: number;
     description: string;
   }>;
+  group1_extra?: string; // Parte extra para o Grupo 1 (adicionada ao texto base sem modificar o texto oficial)
   custom_caption_template?: string;
   photo_buffer?: Buffer | null;
   photo_content_type?: string | null;
@@ -1120,12 +1122,22 @@ class WhatsAppService {
           )
           .join('\n');
 
-        const msgG1 =
+        const baseMsgG1 =
           `🚨 *LEMBRETE DIÁRIO DE TAREFAS*\n\n` +
           `📅 *Entrega Amanhã:* ${payload.tomorrow_date_br}\n` +
           `📚 *Total de Tarefas:* ${tasks.length}\n\n` +
           `${tasksListG1}\n` +
           `👉 _Acessem o Edutask para conferir as questões e enviar suas respostas no prazo!_`;
+
+        const extraG1 = (
+          payload.group1_extra !== undefined
+            ? payload.group1_extra
+            : this.templates?.group1_tomorrow_extra || ''
+        ).trim();
+
+        const msgG1 = extraG1
+          ? `${baseMsgG1}\n\n${extraG1}`
+          : baseMsgG1;
 
         await this.sock.sendMessage(target1, { text: msgG1 });
         results.group1Sent = true;

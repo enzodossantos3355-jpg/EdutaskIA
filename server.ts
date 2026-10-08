@@ -500,12 +500,15 @@ class Database {
   ai_chats: Map<string, ChatSession> = new Map();
   effect_overrides: Record<string, { cost: number }> = {};
   monthly_prize: any = null;
+  active_month_key: string = '';
+  monthly_history: any[] = [];
   task_cleanup_config: {
     enabled: boolean;
     cleanup_time: string; // "HH:MM"
     days_after_due: number; // 0 = tarefas que vencem hoje/vencidas
     delete_only_if_completed: boolean;
     last_run_at: string | null;
+    last_run_date: string | null; // "YYYY-MM-DD" para garantir execução única por dia
     last_deleted_count: number;
     last_deleted_titles: string[];
   } = {
@@ -514,6 +517,7 @@ class Database {
     days_after_due: 0,
     delete_only_if_completed: false,
     last_run_at: null,
+    last_run_date: null,
     last_deleted_count: 0,
     last_deleted_titles: [],
   };
@@ -533,6 +537,7 @@ class Database {
       tomorrow_photo_id: string | null;
       group1_task_extra: string; // Modelo pré-pronto de texto extra para o Grupo 1 (adicionado ao texto oficial sem modificar o texto base)
       group1_announcement_extra: string; // Modelo pré-pronto de texto extra para avisos no Grupo 1
+      group1_tomorrow_extra: string; // Modelo pré-pronto de texto extra para lembrete do dia seguinte no Grupo 1
     };
     daily_reminder: {
       enabled: boolean;
@@ -562,6 +567,7 @@ class Database {
       tomorrow_photo_id: null,
       group1_task_extra: '📌 *Lembrete Extra da Turma:*\nFavor conferir os detalhes e responder dentro do prazo no portal!',
       group1_announcement_extra: '📌 *Observação Importante:*\nAcompanhem as atualizações e tirem dúvidas pelo Edutask!',
+      group1_tomorrow_extra: '📌 *Aviso Extra da Turma:*\nOrganizem seus horários para não deixar nada para a última hora!',
     },
     daily_reminder: {
       enabled: true,
@@ -573,7 +579,7 @@ class Database {
       time: '18:00',
       duration_minutes: 20,
       stay_connected_24_7: false,
-      dispatch_reminder_on_activation: true,
+      dispatch_reminder_on_activation: false,
       last_run_date: null,
     },
   };
@@ -749,6 +755,8 @@ class Database {
         point_adjustments: this.point_adjustments,
         effect_overrides: this.effect_overrides,
         monthly_prize: this.monthly_prize,
+        active_month_key: this.active_month_key,
+        monthly_history: this.monthly_history,
         task_cleanup_config: this.task_cleanup_config,
         student_buttons: Array.from(this.student_buttons.entries()),
         whatsapp_config: this.whatsapp_config,
@@ -2151,6 +2159,9 @@ function executeTaskCleanup(manual = false): { count: number; deleted_titles: st
 
   const clock = getSystemClock();
   db.task_cleanup_config.last_run_at = clock.iso;
+  if (!manual) {
+    db.task_cleanup_config.last_run_date = clock.yearMonthDay;
+  }
   db.task_cleanup_config.last_deleted_count = eligible.length;
   db.task_cleanup_config.last_deleted_titles = deletedTitles.slice(0, 20);
   db.saveToDisk();
@@ -2740,26 +2751,116 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
 // ---------------------------------------------------------------------------
 // AI Monthly Evaluation & Statistics (Leaderboard for students & admin)
 // ---------------------------------------------------------------------------
+export function getCurrentMonthRange() {
+  const clock = getSystemClock();
+  const [yearStr, monthStr] = clock.yearMonthDay.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10); // 1-indexed (1 to 12)
+  const monthKey = `${yearStr}-${monthStr}`; // "YYYY-MM"
+
+  const monthStartDay = `${yearStr}-${monthStr}-01`;
+  const monthStartIso = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0)).toISOString();
+
+  let nextYear = year;
+  let nextMonth = month + 1;
+  if (nextMonth > 12) {
+    nextMonth = 1;
+    nextYear += 1;
+  }
+  const nextMonthStr = String(nextMonth).padStart(2, '0');
+  const nextMonthStartDay = `${nextYear}-${nextMonthStr}-01`;
+  const nextMonthStartIso = new Date(Date.UTC(nextYear, nextMonth - 1, 1, 0, 0, 0)).toISOString();
+
+  const lastDayOfMonth = new Date(Date.UTC(year, month, 0)).getDate();
+  const monthEndDay = `${yearStr}-${monthStr}-${String(lastDayOfMonth).padStart(2, '0')}`;
+  const monthEndIso = new Date(Date.UTC(year, month - 1, lastDayOfMonth, 23, 59, 59, 999)).toISOString();
+
+  const nextMonthStartMs = new Date(Date.UTC(nextYear, nextMonth - 1, 1, 0, 0, 0)).getTime();
+  const daysRemaining = Math.max(0, Math.ceil((nextMonthStartMs - clock.timestamp) / (24 * 60 * 60 * 1000)));
+
+  const dateObj = new Date(year, month - 1, 1);
+  const rawLabel = dateObj.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const monthLabel = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1);
+
+  return {
+    year,
+    month,
+    monthKey,
+    monthStartDay,
+    monthEndDay,
+    monthStartIso,
+    monthEndIso,
+    nextMonthStartDay,
+    nextMonthStartIso,
+    daysRemaining,
+    monthLabel,
+  };
+}
+
+export function checkMonthlyRollover() {
+  const range = getCurrentMonthRange();
+  if (!db.active_month_key) {
+    db.active_month_key = range.monthKey;
+    db.saveToDisk();
+    return;
+  }
+
+  // Se o mês corrente do Relógio do Sistema mudou em relação ao mês ativo:
+  if (db.active_month_key !== range.monthKey) {
+    console.log(`[MonthlyReset] Mês finalizado (${db.active_month_key}). Realizando reset mensal para ${range.monthKey}...`);
+    const prevKey = db.active_month_key;
+    db.monthly_history.unshift({
+      month_key: prevKey,
+      finalized_at: new Date().toISOString(),
+      prize_title: db.monthly_prize?.title || 'Prêmio do Mês',
+      prize_emoji: db.monthly_prize?.emoji || '🏆',
+      ai_winner: db.monthly_prize?.ai_winner || null,
+    });
+    if (db.monthly_history.length > 24) db.monthly_history = db.monthly_history.slice(0, 24);
+
+    // Reseta o vencedor para o novo ciclo do mês
+    if (db.monthly_prize) {
+      db.monthly_prize.ai_winner = null;
+    }
+    db.active_month_key = range.monthKey;
+    db.saveToDisk();
+    saveSystemSettingsToFirestore();
+  }
+}
+
 function calculateMonthlyAILeaderboard(reqUser?: User) {
+  checkMonthlyRollover();
+  const range = getCurrentMonthRange();
   const students = Array.from(db.users.values()).filter((u) => u.role === 'aluno' && u.status === 'active');
   const allTasks = Array.from(db.tasks.values());
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const monthlyCompletions = db.completions.filter((c) => c.completed_at >= monthStart);
+
+  // 1. Tarefas do MÊS (entrega marcada dentro do mês ou criadas no mês)
+  const monthTasks = allTasks.filter((t) => {
+    if (t.due_date) {
+      return t.due_date >= range.monthStartDay && t.due_date <= range.monthEndDay;
+    }
+    return t.created_at >= range.monthStartIso && t.created_at < range.nextMonthStartIso;
+  });
+
+  // 2. Entregas concluídas dentro do MÊS
+  const monthlyCompletions = db.completions.filter(
+    (c) => c.completed_at >= range.monthStartIso && c.completed_at < range.nextMonthStartIso
+  );
 
   const studentMetrics = students.map((s) => {
     const sComps = monthlyCompletions.filter((c) => c.user_id === s.id);
     const onTime = sComps.filter((c) => c.on_time).length;
     const late = sComps.length - onTime;
 
-    const assignedTasks = allTasks.filter((t) => t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
+    const assignedMonthTasks = monthTasks.filter((t) => t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
     const compSet = new Set(sComps.map((c) => c.task_id));
-    const uncompleted = assignedTasks.filter((t) => !compSet.has(t.id)).length;
+    // Tarefas pendentes do MÊS (atividades do mês não marcadas como feitas)
+    const uncompletedMonth = assignedMonthTasks.filter((t) => !compSet.has(t.id)).length;
     const onTimePct = sComps.length > 0 ? Math.round((onTime / sComps.length) * 100) : 0;
 
-    // AI score: rewards on-time submissions, penalizes uncompleted tasks. Streak is disabled.
-    let score = 50 + (onTime * 15) - (uncompleted * 10);
-    if (onTime > 0 && uncompleted === 0) score += 15;
+    // AI score mensal: recompensa pontualidade no mês, penaliza pendências do mês. Streak desativado.
+    let score = 50 + (onTime * 15) - (uncompletedMonth * 10);
+    if (onTime > 0 && uncompletedMonth === 0) score += 15;
     score = Math.min(100, Math.max(30, Math.round(score)));
 
     return {
@@ -2769,7 +2870,8 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
       completed_month: sComps.length,
       on_time_month: onTime,
       late_month: late,
-      uncompleted_count: uncompleted,
+      uncompleted_count: uncompletedMonth,
+      total_month_tasks: assignedMonthTasks.length,
       on_time_pct: onTimePct,
       has_avatar: Boolean(s.avatar_data),
       equipped_effect: s.equipped_effect || 'none',
@@ -2777,46 +2879,91 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
     };
   });
 
-  // Sort by: 1. on-time completions (desc), 2. fewest uncompleted tasks (asc), 3. total completions (desc)
+  // Ordenação prioritária:
+  // 1. Mais tarefas no prazo no mês (desc)
+  // 2. Menos pendências no mês (asc)
+  // 3. Mais tarefas completadas no mês (desc)
+  // 4. Nota geral da IA (desc)
   studentMetrics.sort((a, b) => {
     if (b.on_time_month !== a.on_time_month) return b.on_time_month - a.on_time_month;
     if (a.uncompleted_count !== b.uncompleted_count) return a.uncompleted_count - b.uncompleted_count;
-    return b.completed_month - a.completed_month;
+    if (b.completed_month !== a.completed_month) return b.completed_month - a.completed_month;
+    return b.score - a.score;
   });
 
-  const leader = studentMetrics[0] || null;
-  const monthLabel = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-  const formattedMonth = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+  const top = studentMetrics[0] || null;
 
-  const rankings = studentMetrics.map((m, idx) => ({
-    rank: idx + 1,
-    id: m.id,
-    name: m.name,
-    points: m.points,
-    has_avatar: m.has_avatar,
-    equipped_effect: m.equipped_effect,
-    completed_month: m.completed_month,
-    on_time_month: m.on_time_month,
-    uncompleted_count: m.uncompleted_count,
-    on_time_pct: m.on_time_pct,
-    score: m.score,
-    is_leader: idx === 0,
-    ai_status: idx === 0 ? '👑 Líder do mês' : idx < 3 ? '🥈 Top 3' : '📚 Em avaliação',
-    ai_feedback: m.on_time_month > 0
-      ? `${m.on_time_month} tarefa(s) no prazo e ${m.uncompleted_count === 0 ? 'sem pendências' : `${m.uncompleted_count} pendente(s)`}.`
-      : `Entregue suas tarefas no prazo para pontuar na IA.`,
-  }));
+  // Detecção de EMPATE no Top 1:
+  // Se múltiplos alunos tiverem exatamente o mesmo destaque no topo:
+  let leaders: typeof studentMetrics = [];
+  if (top) {
+    leaders = studentMetrics.filter(
+      (m) =>
+        m.on_time_month === top.on_time_month &&
+        m.uncompleted_count === top.uncompleted_count &&
+        m.completed_month === top.completed_month
+    );
+  }
+  const isTieTop1 = leaders.length > 1;
+
+  // Atribuição de Ranks: se houver empate em 1º, TODOS empatados recebem rank 1!
+  let currentRank = 1;
+  const rankings = studentMetrics.map((m, idx) => {
+    if (idx > 0) {
+      const prev = studentMetrics[idx - 1];
+      const same =
+        prev.on_time_month === m.on_time_month &&
+        prev.uncompleted_count === m.uncompleted_count &&
+        prev.completed_month === m.completed_month;
+      if (!same) {
+        currentRank = idx + 1;
+      }
+    }
+    const isTop1 = currentRank === 1;
+    return {
+      rank: currentRank,
+      id: m.id,
+      name: m.name,
+      points: m.points,
+      has_avatar: m.has_avatar,
+      equipped_effect: m.equipped_effect,
+      completed_month: m.completed_month,
+      on_time_month: m.on_time_month,
+      uncompleted_count: m.uncompleted_count,
+      on_time_pct: m.on_time_pct,
+      score: m.score,
+      is_leader: isTop1,
+      is_tied_top1: isTop1 && isTieTop1,
+      ai_status: isTop1
+        ? (isTieTop1 ? '👑 1º Lugar Empatado' : '👑 Líder do Mês')
+        : currentRank <= 3
+        ? '🥈 Top 3'
+        : '📚 Em avaliação',
+      ai_feedback: m.on_time_month > 0
+        ? `${m.on_time_month} tarefa(s) no prazo e ${m.uncompleted_count === 0 ? 'zero pendências no mês' : `${m.uncompleted_count} pendência(s) no mês`}.`
+        : `Entregue suas tarefas deste mês no prazo para pontuar na IA.`,
+    };
+  });
 
   let leaderVerdict = '';
-  if (leader) {
-    leaderVerdict = `${leader.name} lidera com ${leader.on_time_month} tarefa(s) entregues no prazo e ${leader.uncompleted_count === 0 ? 'nenhuma pendência' : `${leader.uncompleted_count} pendência(s)`}.`;
+  if (isTieTop1) {
+    const names = leaders.map((l) => l.name).join(' e ');
+    leaderVerdict = `Empate no 1º lugar entre ${names}! Ambos possuem ${top.on_time_month} tarefa(s) entregues no prazo e ${top.uncompleted_count === 0 ? 'zero pendências no mês' : `${top.uncompleted_count} pendência(s)`}.`;
+  } else if (top) {
+    leaderVerdict = `${top.name} lidera o mês com ${top.on_time_month} tarefa(s) entregues no prazo e ${top.uncompleted_count === 0 ? 'zero pendências no mês' : `${top.uncompleted_count} pendência(s)`}.`;
   }
 
-  // Motivo da vitória: visível APENAS para o ganhador (e admin). Para os demais alunos, somente quem ganhou!
+  // Motivo da vitória: visível APENAS para o(s) ganhador(es) (e admin)
   let sanitizedWinner: any = null;
   if (db.monthly_prize?.ai_winner) {
     const raw = db.monthly_prize.ai_winner;
-    const isWinner = Boolean(reqUser && (reqUser.id === raw.winner_id || reqUser.name === raw.winner_name));
+    const isWinner = Boolean(
+      reqUser && (
+        reqUser.id === raw.winner_id ||
+        reqUser.name === raw.winner_name ||
+        raw.tied_winners?.some((tw: any) => tw.id === reqUser.id)
+      )
+    );
     const isAdmin = Boolean(reqUser && reqUser.role === 'admin');
     if (isWinner || isAdmin) {
       sanitizedWinner = {
@@ -2828,20 +2975,30 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
         winner_id: raw.winner_id,
         winner_name: raw.winner_name,
         winner_score: raw.winner_score || raw.score || 98,
+        is_tie: Boolean(raw.is_tie),
+        tied_winners: raw.tied_winners || null,
         is_me: false,
       };
     }
   }
 
   return {
-    month_label: formattedMonth,
-    leader,
+    month_label: range.monthLabel,
+    month_key: range.monthKey,
+    days_remaining: range.daysRemaining,
+    leader: top,
+    leaders,
+    is_tie_top1: isTieTop1,
     leader_verdict: leaderVerdict,
     rankings,
     ai_winner: sanitizedWinner,
+    month_totals: {
+      tasks_in_month: monthTasks.length,
+      completions_in_month: monthlyCompletions.length,
+    },
     evaluation_rules: [
-      'Entregas rigorosamente no prazo',
-      'Tarefas não marcadas como feitas contam negativamente',
+      'Entregas rigorosamente no prazo dentro do mês',
+      'Tarefas do mês não marcadas como feitas (pendentes) contam negativamente',
       '⚠️ Os pontos de tarefas servem estritamente para a Loja de Molduras e NÃO influenciam a avaliação.',
     ],
   };
@@ -2858,83 +3015,27 @@ api.get('/stats/monthly-ai', requireAuth, (req, res) => {
 api.get('/monthly-prize', requireAuth, (req, res) => {
   const user = (req as any).user as User;
   const prize = db.monthly_prize;
-  const students = Array.from(db.users.values()).filter((u) => u.role === 'aluno' && u.status === 'active');
-  const allTasks = Array.from(db.tasks.values());
-
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const daysRemaining = Math.max(0, Math.ceil((nextMonth.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
-
-  const statsByUser: Record<string, { month: number; on_time: number; uncompleted: number }> = {};
-  students.forEach((s) => {
-    const sComps = db.completions.filter((c) => c.user_id === s.id && c.completed_at >= monthStart);
-    const onTime = sComps.filter((c) => c.on_time).length;
-    const assignedTasks = allTasks.filter((t) => t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
-    const compSet = new Set(sComps.map((c) => c.task_id));
-    const uncompleted = assignedTasks.filter((t) => !compSet.has(t.id)).length;
-    statsByUser[s.id] = { month: sComps.length, on_time: onTime, uncompleted };
-  });
-
-  students.sort((a, b) => {
-    const sa = statsByUser[a.id] || { on_time: 0, month: 0, uncompleted: 0 };
-    const sb = statsByUser[b.id] || { on_time: 0, month: 0, uncompleted: 0 };
-    if (sb.on_time !== sa.on_time) return sb.on_time - sa.on_time;
-    if (sa.uncompleted !== sb.uncompleted) return sa.uncompleted - sb.uncompleted;
-    return sb.month - sa.month;
-  });
-
-  let leader: any = null;
-  if (students.length > 0) {
-    const top = students[0];
-    const st = statsByUser[top.id] || { on_time: 0, month: 0, uncompleted: 0 };
-    leader = {
-      id: top.id,
-      name: top.name,
-      on_time_this_month: st.on_time,
-      uncompleted_this_month: st.uncompleted,
-      completions_this_month: st.month,
-      has_avatar: Boolean(top.avatar_data),
-    };
-  }
-
-  // Motivo da vitória: visível APENAS para o ganhador (e admin). Para os demais alunos, somente quem ganhou!
-  let sanitizedWinner: any = null;
-  if (prize?.ai_winner) {
-    const raw = prize.ai_winner;
-    const isWinner = Boolean(user && (user.id === raw.winner_id || user.name === raw.winner_name));
-    const isAdmin = Boolean(user && user.role === 'admin');
-    if (isWinner || isAdmin) {
-      sanitizedWinner = {
-        ...raw,
-        is_me: isWinner,
-      };
-    } else {
-      sanitizedWinner = {
-        winner_id: raw.winner_id,
-        winner_name: raw.winner_name,
-        winner_score: raw.winner_score || raw.score || 98,
-        is_me: false,
-      };
-    }
-  }
-
-  const monthLabel = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const board = calculateMonthlyAILeaderboard(user);
 
   res.json({
     prize,
-    ai_winner: sanitizedWinner,
-    leader,
+    ai_winner: board.ai_winner,
+    leader: board.leader,
+    leaders: board.leaders,
+    is_tie_top1: board.is_tie_top1,
+    leader_verdict: board.leader_verdict,
     evaluation_rule: 'Os pontos de tarefas são exclusivamente para comprar molduras. O vencedor é eleito pela IA por pontualidade e penalizado por tarefas não feitas.',
-    days_remaining: daysRemaining,
-    end_date: new Date(nextMonth.getTime() - 1000).toISOString().slice(0, 10),
-    month_label: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
+    days_remaining: board.days_remaining,
+    month_label: board.month_label,
+    month_totals: board.month_totals,
   });
 });
 
 function saveSystemSettingsToFirestore() {
   firebaseService.saveSettings('system', {
     monthly_prize: db.monthly_prize,
+    active_month_key: db.active_month_key,
+    monthly_history: db.monthly_history,
     task_cleanup_config: db.task_cleanup_config,
     whatsapp_config: db.whatsapp_config,
     app_info: db.app_info,
@@ -2961,24 +3062,86 @@ api.put('/monthly-prize', requireAdmin, (req, res) => {
 });
 
 api.post('/monthly-prize/confirm-winner', requireAdmin, (req, res) => {
-  const { winner_id, winner_name, justification, criteria, score } = req.body || {};
+  const { winner_id, winner_name, justification, criteria, score, is_tie, tied_winners } = req.body || {};
   if (!winner_name) return res.status(400).json({ detail: 'Nome do vencedor obrigatório' });
 
   if (!db.monthly_prize) {
     db.monthly_prize = { id: 'monthly_prize', title: 'Prêmio do Mês', emoji: '🏆' };
   }
 
+  const range = getCurrentMonthRange();
   db.monthly_prize.ai_winner = {
     winner_id,
     winner_name,
     score: score || 95,
+    is_tie: Boolean(is_tie || (tied_winners && tied_winners.length > 1)),
+    tied_winners: tied_winners || null,
     justification: justification || 'Aluno(a) eleito(a) com base na Avaliação Mensal de Desempenho e Pontualidade por Inteligência Artificial.',
     criteria: criteria || ['Entregas no prazo', 'Consistência nos estudos'],
     confirmed_at: new Date().toISOString(),
+    month_key: range.monthKey,
   };
   db.saveToDisk();
   saveSystemSettingsToFirestore();
   res.json({ ok: true, ai_winner: db.monthly_prize.ai_winner });
+});
+
+api.post('/monthly-prize/finalize-month', requireAdmin, (req, res) => {
+  const range = getCurrentMonthRange();
+  const board = calculateMonthlyAILeaderboard();
+
+  let winnerRecord = db.monthly_prize?.ai_winner;
+  if (!winnerRecord && board.leaders.length > 0) {
+    winnerRecord = {
+      winner_id: board.leaders[0].id,
+      winner_name: board.leaders.map((l: any) => l.name).join(' & '),
+      score: board.leaders[0].score || 95,
+      is_tie: board.is_tie_top1,
+      tied_winners: board.leaders.map((l: any) => ({
+        id: l.id,
+        name: l.name,
+        has_avatar: l.has_avatar,
+        equipped_effect: l.equipped_effect,
+      })),
+      justification: board.leader_verdict,
+      criteria: [`${board.leaders[0].on_time_month} tarefa(s) no prazo`, board.leaders[0].uncompleted_count === 0 ? 'Zero pendências' : 'Maior pontualidade'],
+      confirmed_at: new Date().toISOString(),
+      month_key: range.monthKey,
+    };
+  }
+
+  db.monthly_history.unshift({
+    month_key: db.active_month_key || range.monthKey,
+    month_label: range.monthLabel,
+    finalized_at: new Date().toISOString(),
+    prize_title: db.monthly_prize?.title || 'Prêmio do Mês',
+    prize_emoji: db.monthly_prize?.emoji || '🏆',
+    ai_winner: winnerRecord,
+    leaders: board.leaders.map((l: any) => ({ id: l.id, name: l.name, score: l.score, on_time: l.on_time_month })),
+  });
+  if (db.monthly_history.length > 24) db.monthly_history = db.monthly_history.slice(0, 24);
+
+  // Reseta o ciclo para o novo mês!
+  if (db.monthly_prize) {
+    db.monthly_prize.ai_winner = null;
+  }
+  db.active_month_key = range.monthKey;
+  db.saveToDisk();
+  saveSystemSettingsToFirestore();
+
+  res.json({
+    ok: true,
+    message: `Ciclo de ${range.monthLabel} finalizado e resetado com sucesso!`,
+    archived_winner: winnerRecord,
+    history: db.monthly_history,
+  });
+});
+
+api.get('/monthly-prize/history', requireAuth, (req, res) => {
+  res.json({
+    active_month_key: db.active_month_key || getCurrentMonthRange().monthKey,
+    history: db.monthly_history || [],
+  });
 });
 
 api.delete('/monthly-prize/winner', requireAdmin, (req, res) => {
@@ -3334,6 +3497,7 @@ async function executeTomorrowTasksDispatch(isTest = false) {
       description: t.description,
     })),
     custom_caption_template: templates.tomorrow_caption,
+    group1_extra: templates.group1_tomorrow_extra || undefined,
     photo_buffer: photoBuffer,
     photo_content_type: photoContentType,
     group1_enabled: true,
@@ -3371,18 +3535,6 @@ async function checkWhatsAppAutoActivationScheduler() {
         saveSystemSettingsToFirestore();
 
         await whatsappService.activateForDuration(minDuration, 'schedule');
-
-        // Se configurado para disparar lembrete de tarefas do dia seguinte logo após ativar
-        if (autoSched.dispatch_reminder_on_activation) {
-          setTimeout(async () => {
-            try {
-              console.log('[WhatsApp Auto-Activation] Disparando lembrete programado de tarefas de amanhã...');
-              await executeTomorrowTasksDispatch(false);
-            } catch (err) {
-              console.error('[WhatsApp Auto-Activation] Erro ao disparar lembrete após ativação:', err);
-            }
-          }, 8000);
-        }
       }
     }
 
@@ -3582,7 +3734,10 @@ api.get('/admin/zip/export', requireAdmin, (req, res) => {
         point_adjustments: db.point_adjustments,
         effect_overrides: db.effect_overrides,
         monthly_prize: db.monthly_prize,
+        active_month_key: db.active_month_key,
+        monthly_history: db.monthly_history,
         task_cleanup_config: db.task_cleanup_config,
+        student_buttons: Array.from(db.student_buttons.values()),
         whatsapp_config: db.whatsapp_config,
         app_info: db.app_info,
         ai_enabled: db.ai_enabled,
@@ -3604,6 +3759,7 @@ api.get('/admin/zip/export', requireAdmin, (req, res) => {
         completions: db.completions.length,
         announcements: db.announcements.size,
         comments: db.comments.size,
+        student_buttons: db.student_buttons.size,
         uploads: 0,
       },
     };
@@ -3655,6 +3811,24 @@ api.get('/admin/zip/export', requireAdmin, (req, res) => {
     });
     zip.addFile('csv/entregas_concluidas.csv', Buffer.from(csvEntregas, 'utf8'));
 
+    // 3d. Botões de Alunos CSV
+    let csvBotoes = `${UTF8_BOM}ID;Nome;Link;Descricao;Cor;Icone;Ativo;Ordem;Cliques;CriadoEm\n`;
+    Array.from(db.student_buttons.values()).forEach((b) => {
+      csvBotoes += [
+        escapeCsvField(b.id),
+        escapeCsvField(b.name),
+        escapeCsvField(b.url),
+        escapeCsvField(b.description || ''),
+        escapeCsvField(b.color || 'indigo'),
+        escapeCsvField(b.icon || '🔗'),
+        escapeCsvField(b.active ? 'Sim' : 'Não'),
+        escapeCsvField(b.order || 0),
+        escapeCsvField(b.click_count || 0),
+        escapeCsvField(b.created_at || ''),
+      ].join(';') + '\n';
+    });
+    zip.addFile('csv/botoes_alunos.csv', Buffer.from(csvBotoes, 'utf8'));
+
     // 4. Attachments / Uploads directory
     let uploadFilesCount = 0;
     if (shouldIncludeUploads && fs.existsSync(UPLOAD_DIR)) {
@@ -3684,9 +3858,9 @@ Data de Exportação: ${new Date().toLocaleString('pt-BR')}
 Versão: ${db.app_info?.version || '1.2.0'}
 
 Conteúdo do Pacote:
-1. edutask_backup.json -> Banco de dados com todos os registros
+1. edutask_backup.json -> Banco de dados com todos os registros (alunos, tarefas, botões de alunos, WhatsApp, histórico mensal)
 2. manifest.json       -> Metadados e contagem de itens
-3. csv/                -> Planilhas em Excel/CSV de alunos, tarefas e entregas
+3. csv/                -> Planilhas em Excel/CSV de alunos, tarefas, entregas e botões de alunos
 4. uploads/            -> Fotos de perfis e anexos de tarefas (${uploadFilesCount} arquivos)
 
 Como Importar:
@@ -3751,6 +3925,9 @@ api.post('/admin/zip/preview', requireAdmin, upload.single('file'), (req, res) =
       ? actualData.subjects.map((s: any) => (Array.isArray(s) ? s[1] : s))
       : [];
     const completionsList: any[] = Array.isArray(actualData?.completions) ? actualData.completions : [];
+    const buttonsList: any[] = Array.isArray(actualData?.student_buttons)
+      ? actualData.student_buttons.map((b: any) => (Array.isArray(b) ? b[1] : b))
+      : [];
 
     const preview = {
       valid: Boolean(backupData || uploadFiles.length > 0),
@@ -3764,9 +3941,11 @@ api.post('/admin/zip/preview', requireAdmin, upload.single('file'), (req, res) =
         subjects: subjectsList.length,
         completions: completionsList.length,
         uploads: uploadFiles.length,
+        student_buttons: buttonsList.length,
       },
       previewUsers: usersList.slice(0, 5).map((u: any) => ({ id: u.id, name: u.name, role: u.role, points: u.points })),
       previewTasks: tasksList.slice(0, 5).map((t: any) => ({ id: t.id, title: t.title, subject: t.subject, points: t.points })),
+      previewButtons: buttonsList.slice(0, 5).map((b: any) => ({ id: b.id, name: b.name, url: b.url, color: b.color, icon: b.icon })),
       previewUploads: uploadFiles.slice(0, 8),
     };
 
@@ -3792,6 +3971,9 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
       import_announcements = 'true',
       import_uploads = 'true',
       import_effects = 'true',
+      import_buttons = 'true',
+      import_whatsapp = 'true',
+      import_monthly = 'true',
     } = req.body || {};
 
     const zip = new AdmZip(req.file.buffer);
@@ -3834,6 +4016,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
     let importedTasksCount = 0;
     let importedSubjectsCount = 0;
     let importedCompletionsCount = 0;
+    let importedButtonsCount = 0;
 
     if (actualData) {
       // Import Subjects
@@ -3969,6 +4152,84 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
       if (import_effects !== 'false' && actualData.effect_overrides) {
         db.effect_overrides = { ...db.effect_overrides, ...actualData.effect_overrides };
       }
+
+      // Import Student Buttons (Botões de Alunos)
+      if (import_buttons !== 'false' && actualData.student_buttons) {
+        const buttonsList: any[] = Array.isArray(actualData.student_buttons)
+          ? actualData.student_buttons.map((b: any) => (Array.isArray(b) ? b[1] : b))
+          : [];
+        if (mode === 'overwrite' && buttonsList.length > 0) {
+          db.student_buttons.clear();
+        }
+        buttonsList.forEach((b) => {
+          if (b && b.id && b.name && b.url) {
+            db.student_buttons.set(b.id, {
+              id: b.id,
+              name: b.name,
+              url: b.url,
+              description: b.description || '',
+              color: b.color || 'indigo',
+              icon: b.icon || '🔗',
+              active: b.active !== false,
+              order: typeof b.order === 'number' ? b.order : db.student_buttons.size + 1,
+              click_count: typeof b.click_count === 'number' ? b.click_count : 0,
+              created_at: b.created_at || new Date().toISOString(),
+              created_by: b.created_by || 'admin',
+            });
+            importedButtonsCount++;
+          }
+        });
+      }
+
+      // Import WhatsApp Config (Modelos de Mensagens, Agendamentos, Lembretes)
+      if (import_whatsapp !== 'false' && actualData.whatsapp_config) {
+        db.whatsapp_config = {
+          ...db.whatsapp_config,
+          ...actualData.whatsapp_config,
+          templates: {
+            ...db.whatsapp_config.templates,
+            ...(actualData.whatsapp_config.templates || {}),
+          },
+          auto_activation_schedule: {
+            ...db.whatsapp_config.auto_activation_schedule,
+            ...(actualData.whatsapp_config.auto_activation_schedule || {}),
+          },
+          daily_reminder: {
+            ...db.whatsapp_config.daily_reminder,
+            ...(actualData.whatsapp_config.daily_reminder || {}),
+          },
+        };
+      }
+
+      // Import Monthly Prize & Ciclo Mensal
+      if (import_monthly !== 'false') {
+        if (actualData.monthly_prize) {
+          db.monthly_prize = { ...db.monthly_prize, ...actualData.monthly_prize };
+        }
+        if (actualData.active_month_key) {
+          db.active_month_key = actualData.active_month_key;
+        }
+        if (Array.isArray(actualData.monthly_history)) {
+          if (mode === 'overwrite') {
+            db.monthly_history = actualData.monthly_history;
+          } else {
+            const existingKeys = new Set(db.monthly_history.map((h: any) => h.month_key));
+            actualData.monthly_history.forEach((h: any) => {
+              if (h && h.month_key && !existingKeys.has(h.month_key)) {
+                db.monthly_history.push(h);
+              }
+            });
+          }
+        }
+      }
+
+      // Import Task Cleanup Config
+      if (actualData.task_cleanup_config) {
+        db.task_cleanup_config = {
+          ...db.task_cleanup_config,
+          ...actualData.task_cleanup_config,
+        };
+      }
     }
 
     db.saveToDisk();
@@ -3982,6 +4243,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         tasks: importedTasksCount,
         subjects: importedSubjectsCount,
         completions: importedCompletionsCount,
+        buttons: importedButtonsCount,
         files: extractedFilesCount,
       },
     });
@@ -4522,51 +4784,42 @@ api.get('/ai/prize-evaluate', requireAdmin, async (req, res) => {
     });
   }
 
-  const allTasks = Array.from(db.tasks.values());
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const monthlyCompletions = db.completions.filter((c) => c.completed_at >= monthStart);
+  const leaderboard = calculateMonthlyAILeaderboard();
+  const top = leaderboard.leader;
+  if (!top) {
+    return res.json({
+      winner_name: 'Nenhum aluno elegível',
+      justification: 'Sem dados suficientes para avaliação neste mês.',
+      criteria: [],
+      rankings: [],
+    });
+  }
 
-  const studentMetrics = students.map((s) => {
-    const sComps = monthlyCompletions.filter((c) => c.user_id === s.id);
-    const onTime = sComps.filter((c) => c.on_time).length;
-    const late = sComps.length - onTime;
-    const assignedTasks = allTasks.filter((t) => t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
-    const compSet = new Set(sComps.map((c) => c.task_id));
-    const uncompleted = assignedTasks.filter((t) => !compSet.has(t.id)).length;
+  const isTie = leaderboard.is_tie_top1;
+  const leaders = leaderboard.leaders;
+  const rankings = leaderboard.rankings;
 
-    return {
-      id: s.id,
-      name: s.name,
-      completed_month: sComps.length,
-      on_time_month: onTime,
-      late_month: late,
-      uncompleted_count: uncompleted,
-      on_time_pct: sComps.length > 0 ? Math.round((onTime / sComps.length) * 100) : 0,
-      has_avatar: Boolean(s.avatar_data),
-    };
-  });
-
-  const dossierPrompt = studentMetrics
+  const dossierPrompt = rankings
     .map(
-      (m) =>
-        `- Aluno: ${m.name} (ID: ${m.id}) | Tarefas entregues no mês: ${m.completed_month} | Entregas no prazo: ${m.on_time_month} (${m.on_time_pct}%) | Atrasadas: ${m.late_month} | Tarefas NÃO marcadas como feitas (pendentes): ${m.uncompleted_count}`
+      (m: any) =>
+        `- Aluno: ${m.name} (ID: ${m.id}) | Tarefas entregues no mês: ${m.completed_month} | Entregas no prazo: ${m.on_time_month} (${m.on_time_pct}%) | Tarefas pendentes do mês: ${m.uncompleted_count}`
     )
     .join('\n');
 
   if (genAI) {
     try {
       const prompt = `Você é o Comitê Pedagógico de Inteligência Artificial do Edutask.
-Sua missão é escolher o Aluno Vencedor do Prêmio do Mês.
+Sua missão é escolher o(s) Aluno(s) Vencedor(es) do Prêmio do Mês (${leaderboard.month_label}).
 
 DIRETRIZES DA AVALIAÇÃO:
 - Os pontos dos alunos NÃO contam para esta premiação (pontos são exclusivamente para comprar molduras de avatar na loja!).
 - O SISTEMA DE OFENSIVA/SEQUÊNCIA ESTÁ TOTALMENTE DESATIVADO (NÃO mencione nem considere ofensiva).
 - O critério é:
-  1. Volume e taxa de entregas rigorosamente no prazo (pontualidade).
-  2. Penalização por tarefas NÃO marcadas como feitas (pendências contam contra o aluno).
-- IMPORTANTE - RESUMO CONCISO E SEM POLUIÇÃO:
-  A justificativa (justification) DEVE ser curta e direta: no máximo 1 a 2 frases curtas e objetivas, evitando discursos longos que poluam a interface!
+  1. Volume e taxa de entregas rigorosamente no prazo no mês (pontualidade).
+  2. Penalização por tarefas pendentes do mês (tarefas não marcadas como feitas).
+${isTie ? `- ATENÇÃO: HÁ UM EMPATE NO 1º LUGAR entre ${leaders.map((l: any) => l.name).join(' e ')} com exatamente o mesmo desempenho de pontualidade e zero pendências. Reconheça o empate e declare ambos/todos os empatados como vencedores conjuntos!` : ''}
+- RESUMO CONCISO E SEM POLUIÇÃO:
+  A justificativa (justification) DEVE ser curta e direta: no máximo 1 a 2 frases curtas e objetivas.
   O ai_feedback de cada aluno deve ser 1 frase curta.
 
 DADOS MENSAIS DOS ALUNOS:
@@ -4574,22 +4827,14 @@ ${dossierPrompt}
 
 Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
 {
-  "winner_id": "ID do aluno vencedor",
-  "winner_name": "Nome do aluno vencedor",
-  "winner_score": 98,
-  "justification": "Frase curta (máx 2 linhas) justificando a vitória pela pontualidade e ausência de pendências.",
+  "winner_id": "${top.id}",
+  "winner_name": "${isTie ? leaders.map((l: any) => l.name).join(' & ') : top.name}",
+  "winner_score": ${top.score || 98},
+  "is_tie": ${isTie},
+  "justification": "${leaderboard.leader_verdict}",
   "criteria": [
-    "Destaque 1 (ex.: 100% de entregas no prazo)",
-    "Destaque 2 (ex.: Nenhuma tarefa pendente)"
-  ],
-  "rankings": [
-    {
-      "id": "ID do aluno",
-      "name": "Nome do aluno",
-      "rank": 1,
-      "score": 98,
-      "ai_feedback": "1 frase curta e objetiva sobre o desempenho"
-    }
+    "${top.on_time_month} entregas no prazo no mês",
+    "${top.uncompleted_count === 0 ? 'Zero tarefas pendentes no mês' : 'Compromisso com os prazos escolares'}"
   ]
 }`;
 
@@ -4602,12 +4847,22 @@ Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
       const parsed = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '{}');
       if (parsed.winner_name) {
         return res.json({
-          winner_id: parsed.winner_id || studentMetrics[0].id,
-          winner_name: parsed.winner_name,
-          winner_score: parsed.winner_score || 98,
-          justification: parsed.justification,
-          criteria: parsed.criteria || ['Entregas pontuais', 'Nenhuma pendência'],
-          rankings: parsed.rankings || [],
+          winner_id: parsed.winner_id || top.id,
+          winner_name: parsed.winner_name || (isTie ? leaders.map((l: any) => l.name).join(' & ') : top.name),
+          winner_score: parsed.winner_score || top.score || 98,
+          is_tie: parsed.is_tie !== undefined ? parsed.is_tie : isTie,
+          tied_winners: isTie ? leaders.map((l: any) => ({
+            id: l.id,
+            name: l.name,
+            has_avatar: l.has_avatar,
+            equipped_effect: l.equipped_effect,
+            score: l.score,
+            on_time_month: l.on_time_month,
+            uncompleted_count: l.uncompleted_count,
+          })) : null,
+          justification: parsed.justification || leaderboard.leader_verdict,
+          criteria: parsed.criteria || [`${top.on_time_month} entregas no prazo`, 'Zero pendências no mês'],
+          rankings,
         });
       }
     } catch (e: any) {
@@ -4615,33 +4870,25 @@ Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
     }
   }
 
-  // Fallback algorithmic evaluation: rank by on_time_month desc, then uncompleted_count asc
-  studentMetrics.sort((a, b) => {
-    if (b.on_time_month !== a.on_time_month) return b.on_time_month - a.on_time_month;
-    if (a.uncompleted_count !== b.uncompleted_count) return a.uncompleted_count - b.uncompleted_count;
-    return b.completed_month - a.completed_month;
-  });
-
-  const top = studentMetrics[0];
-  const rankings = studentMetrics.map((m, idx) => ({
-    id: m.id,
-    name: m.name,
-    rank: idx + 1,
-    score: Math.max(65, 100 - idx * 7),
-    ai_feedback:
-      m.on_time_month > 0
-        ? `${m.on_time_month} tarefa(s) no prazo e ${m.uncompleted_count === 0 ? 'zero pendências' : `${m.uncompleted_count} pendência(s)`}.`
-        : `Entregue suas tarefas no prazo para disputar o prêmio no próximo mês.`,
-  }));
-
+  // Fallback algorítmico rigoroso com suporte a empate no 1º lugar
   res.json({
     winner_id: top.id,
-    winner_name: top.name,
-    winner_score: 96,
-    justification: `${top.name} conquistou o prêmio com ${top.on_time_month} tarefa(s) entregues no prazo e ${top.uncompleted_count === 0 ? 'nenhuma pendência no mês' : `apenas ${top.uncompleted_count} pendência(s)`}.`,
+    winner_name: isTie ? leaders.map((l: any) => l.name).join(' & ') : top.name,
+    winner_score: top.score || 96,
+    is_tie: isTie,
+    tied_winners: isTie ? leaders.map((l: any) => ({
+      id: l.id,
+      name: l.name,
+      has_avatar: l.has_avatar,
+      equipped_effect: l.equipped_effect,
+      score: l.score,
+      on_time_month: l.on_time_month,
+      uncompleted_count: l.uncompleted_count,
+    })) : null,
+    justification: leaderboard.leader_verdict,
     criteria: [
       `${top.on_time_month} entrega(s) rigorosamente no prazo`,
-      top.uncompleted_count === 0 ? 'Zero tarefas pendentes' : 'Compromisso com os prazos escolares',
+      top.uncompleted_count === 0 ? 'Zero tarefas pendentes no mês' : 'Compromisso com os prazos escolares',
     ],
     rankings,
   });
@@ -4662,8 +4909,12 @@ if (!process.env.VERCEL) {
       const today = clock.yearMonthDay;
       const runKey = `${today}_${currentTime}`;
 
-      if (currentTime === cfg.cleanup_time && lastCleanupMinuteRun !== runKey) {
+      if (currentTime === cfg.cleanup_time && cfg.last_run_date !== today && lastCleanupMinuteRun !== runKey) {
         lastCleanupMinuteRun = runKey;
+        cfg.last_run_date = today;
+        cfg.last_run_at = clock.iso;
+        db.saveToDisk();
+        saveSystemSettingsToFirestore();
         console.log(`[TaskCleanup] Horário agendado atingido pelo Relógio do Sistema (${currentTime}). Executando limpeza...`);
         executeTaskCleanup(false);
       }

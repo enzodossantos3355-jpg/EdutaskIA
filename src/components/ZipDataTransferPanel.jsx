@@ -39,6 +39,9 @@ export default function ZipDataTransferPanel() {
   const [optSubjects, setOptSubjects] = useState(true);
   const [optCompletions, setOptCompletions] = useState(true);
   const [optUploads, setOptUploads] = useState(true);
+  const [optButtons, setOptButtons] = useState(true);
+  const [optWhatsapp, setOptWhatsapp] = useState(true);
+  const [optMonthly, setOptMonthly] = useState(true);
 
   const fileInputRef = useRef(null);
 
@@ -127,6 +130,9 @@ export default function ZipDataTransferPanel() {
       formData.append("import_subjects", String(optSubjects));
       formData.append("import_completions", String(optCompletions));
       formData.append("import_uploads", String(optUploads));
+      formData.append("import_buttons", String(optButtons));
+      formData.append("import_whatsapp", String(optWhatsapp));
+      formData.append("import_monthly", String(optMonthly));
 
       const { data } = await api.post("/admin/zip/import", formData, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -193,11 +199,11 @@ export default function ZipDataTransferPanel() {
               <ul className="text-xs space-y-2 text-neutral-700">
                 <li className="flex items-center gap-2">
                   <Database className="w-4 h-4 text-sky-600" />
-                  <span><strong>edutask_backup.json</strong> (Alunos, Tarefas, Matérias, Avisos, Notas e Pontos)</span>
+                  <span><strong>edutask_backup.json</strong> (Alunos, Tarefas, Matérias, Botões de Alunos, WhatsApp, Ciclo Mensal e Pontos)</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span><strong>Planilhas CSV</strong> (Alunos e Pontos, Tarefas, Entregas Concluídas)</span>
+                  <span><strong>Planilhas CSV</strong> (Alunos e Pontos, Tarefas, Entregas Concluídas e Botões de Alunos)</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <ImageIcon className="w-4 h-4 text-amber-600" />
@@ -312,7 +318,7 @@ export default function ZipDataTransferPanel() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
                     <div className="p-2 bg-white rounded-lg border border-black/10">
                       <p className="font-black text-base text-sky-600">{previewData.counts.users}</p>
                       <p className="text-[10px] text-neutral-500 font-bold">Usuários</p>
@@ -320,6 +326,10 @@ export default function ZipDataTransferPanel() {
                     <div className="p-2 bg-white rounded-lg border border-black/10">
                       <p className="font-black text-base text-amber-600">{previewData.counts.tasks}</p>
                       <p className="text-[10px] text-neutral-500 font-bold">Tarefas</p>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-black/10">
+                      <p className="font-black text-base text-indigo-600">{previewData.counts.student_buttons ?? 0}</p>
+                      <p className="text-[10px] text-neutral-500 font-bold">Botões de Aluno</p>
                     </div>
                     <div className="p-2 bg-white rounded-lg border border-black/10">
                       <p className="font-black text-base text-emerald-600">{previewData.counts.uploads}</p>
@@ -387,6 +397,15 @@ export default function ZipDataTransferPanel() {
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input
                           type="checkbox"
+                          checked={optButtons}
+                          onChange={(e) => setOptButtons(e.target.checked)}
+                          className="rounded text-indigo-600"
+                        />
+                        <span>Botões de Alunos ({previewData.counts.student_buttons ?? 0})</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
                           checked={optCompletions}
                           onChange={(e) => setOptCompletions(e.target.checked)}
                           className="rounded text-sky-600"
@@ -401,6 +420,24 @@ export default function ZipDataTransferPanel() {
                           className="rounded text-sky-600"
                         />
                         <span>Fotos e Arquivos ({previewData.counts.uploads})</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={optWhatsapp}
+                          onChange={(e) => setOptWhatsapp(e.target.checked)}
+                          className="rounded text-emerald-600"
+                        />
+                        <span>WhatsApp (Modelos & Agendas)</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={optMonthly}
+                          onChange={(e) => setOptMonthly(e.target.checked)}
+                          className="rounded text-purple-600"
+                        />
+                        <span>Ciclo Mensal & Histórico IA</span>
                       </label>
                     </div>
                   </div>
@@ -438,6 +475,9 @@ export default function ZipDataTransferPanel() {
                     <p>• {importResult.imported.users} usuários sincronizados.</p>
                     <p>• {importResult.imported.tasks} tarefas importadas.</p>
                     <p>• {importResult.imported.subjects} matérias organizadas.</p>
+                    {importResult.imported.buttons !== undefined && (
+                      <p>• {importResult.imported.buttons} botões de alunos sincronizados.</p>
+                    )}
                     <p>• {importResult.imported.files} arquivos de mídia e fotos extraídos.</p>
                   </div>
                   <div className="flex gap-2 pt-1">

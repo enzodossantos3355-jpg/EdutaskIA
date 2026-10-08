@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Trophy, Calendar as CalendarIcon, Star, Sparkles, ChevronDown, Loader2 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import Avatar from "@/components/Avatar";
+import { effectClass } from "@/lib/effects";
 import { useAuth } from "@/context/AuthContext";
 import { useAIStatus } from "@/context/AIStatusContext";
 
@@ -39,11 +40,19 @@ export default function PrizeBanner() {
   };
 
   if (!data || !data.prize) return null;
-  const { prize, ai_winner, leader, days_remaining, month_label } = data;
+  const { prize, ai_winner, leader, leaders, is_tie_top1, days_remaining, month_label } = data;
   const showAiButton = aiEnabled && user?.role === "aluno";
   const isWinner = Boolean(
-    ai_winner && (user?.id === ai_winner.winner_id || user?.name === ai_winner.winner_name || ai_winner.is_me)
+    ai_winner && (
+      user?.id === ai_winner.winner_id ||
+      user?.name === ai_winner.winner_name ||
+      ai_winner.tied_winners?.some((tw) => tw.id === user?.id) ||
+      ai_winner.is_me
+    )
   );
+
+  const topLeaders = leaders && leaders.length > 0 ? leaders : leader ? [leader] : [];
+  const hasTie = Boolean(is_tie_top1 || topLeaders.length > 1);
 
   return (
     <div className="nb-card p-3 sm:p-5 mb-4 sm:mb-8 bg-gradient-to-br from-amber-200 via-amber-100 to-amber-200 relative overflow-hidden" data-testid="prize-banner">
@@ -55,10 +64,10 @@ export default function PrizeBanner() {
           <span className="text-xl flex-shrink-0">{prize.emoji}</span>
           <div className="min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-wider text-amber-900 truncate">
-              {ai_winner ? `🏆 Vencedor • ${month_label}` : `Prêmio do mês • ${days_remaining}d restantes`}
+              {ai_winner ? `🏆 Vencedor • ${month_label}` : hasTie ? `👑 Empate Top 1 • ${days_remaining}d` : `Prêmio do mês • ${days_remaining}d restantes`}
             </div>
             <div className="font-heading font-black text-xs text-neutral-900 truncate">
-              {ai_winner ? `🎉 ${ai_winner.winner_name}` : prize.title}
+              {ai_winner ? `🎉 ${ai_winner.winner_name}` : hasTie ? `👑 ${topLeaders.map(l => l.name).join(' & ')}` : leader ? `👑 ${leader.name}` : prize.title}
             </div>
           </div>
         </div>
@@ -80,15 +89,38 @@ export default function PrizeBanner() {
           <div className="flex items-center gap-2 mb-1">
             <Trophy className="w-5 h-5 text-amber-950" strokeWidth={2.5} />
             <span className="text-xs font-black uppercase tracking-wider text-amber-950">
-              {isWinner ? "🎉 Você Venceu a Premiação do Mês!" : `Vencedor(a) do Mês • ${month_label}`}
+              {isWinner ? "🎉 Você Venceu a Premiação do Mês!" : (ai_winner.tied_winners?.length > 1 || ai_winner.is_tie) ? `Vencedores Empatados do Mês • ${month_label}` : `Vencedor(a) do Mês • ${month_label}`}
             </span>
           </div>
-          <div className="font-heading font-black text-xl sm:text-2xl text-neutral-900 flex items-center gap-2 flex-wrap">
-            <span>🎉 {ai_winner.winner_name}</span>
-            {isWinner && (
-              <span className="nb-badge bg-emerald-300 text-emerald-950 text-xs font-bold">É você! Parabéns!</span>
-            )}
-          </div>
+
+          {/* Exibe o ícone de todos os vencedores empatados */}
+          {ai_winner.tied_winners && ai_winner.tied_winners.length > 1 ? (
+            <div className="flex items-center gap-3 my-2 flex-wrap">
+              {ai_winner.tied_winners.map((tw) => (
+                <div key={tw.id} className="flex items-center gap-2 bg-white/90 px-3 py-1.5 rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                  <Avatar
+                    userId={tw.id}
+                    name={tw.name}
+                    size={36}
+                    hasAvatar={tw.has_avatar}
+                    bg="bg-amber-200"
+                    effect={effectClass(tw.equipped_effect)}
+                  />
+                  <div>
+                    <div className="font-heading font-black text-sm text-neutral-900 leading-tight">{tw.name}</div>
+                    <span className="text-[10px] font-bold text-amber-900">👑 1º Lugar Empatado</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="font-heading font-black text-xl sm:text-2xl text-neutral-900 flex items-center gap-2 flex-wrap">
+              <span>🎉 {ai_winner.winner_name}</span>
+              {isWinner && (
+                <span className="nb-badge bg-emerald-300 text-emerald-950 text-xs font-bold">É você! Parabéns!</span>
+              )}
+            </div>
+          )}
 
           {/* O motivo da vitória aparece APENAS para o ganhador */}
           {isWinner && ai_winner.justification ? (
@@ -130,16 +162,44 @@ export default function PrizeBanner() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {leader && !ai_winner && (
+          {/* Se houver empate no 1º lugar, aparecem os ícones de TODOS os empatados em primeiro */}
+          {hasTie && topLeaders.length > 1 && !ai_winner ? (
+            <div className="flex items-center gap-2.5 nb-card bg-white px-3 py-2 border-2 border-black" data-testid="prize-leaders-tied">
+              <div className="flex items-center -space-x-2.5 flex-shrink-0">
+                {topLeaders.map((ld) => (
+                  <Avatar
+                    key={ld.id}
+                    userId={ld.id}
+                    name={ld.name}
+                    size={36}
+                    hasAvatar={ld.has_avatar}
+                    bg="bg-amber-200"
+                    effect={effectClass(ld.equipped_effect)}
+                  />
+                ))}
+              </div>
+              <div className="leading-tight min-w-0">
+                <div className="text-[10px] font-black uppercase tracking-wider text-amber-800 flex items-center gap-1">
+                  👑 Empate no 1º Lugar ({topLeaders.length})
+                </div>
+                <div className="font-heading font-bold text-xs sm:text-sm text-neutral-900 flex items-center gap-1 truncate max-w-[200px]">
+                  {topLeaders.map((l) => l.name).join(" & ")}
+                </div>
+                <div className="text-[10px] font-bold text-emerald-700">
+                  {topLeaders[0]?.on_time_month || 0} no prazo • {topLeaders[0]?.uncompleted_count === 0 ? "0 pendências" : `${topLeaders[0]?.uncompleted_count} pend.`}
+                </div>
+              </div>
+            </div>
+          ) : leader && !ai_winner ? (
             <div className="flex items-center gap-2 nb-card bg-white px-3 py-2" data-testid="prize-leader">
-              <Avatar userId={leader.id} name={leader.name} size={32} hasAvatar={leader.has_avatar} bg="bg-amber-200" />
+              <Avatar userId={leader.id} name={leader.name} size={32} hasAvatar={leader.has_avatar} bg="bg-amber-200" effect={effectClass(leader.equipped_effect)} />
               <div className="leading-tight">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-600">Destaque Pontualidade</div>
                 <div className="font-heading font-bold text-sm flex items-center gap-1">{leader.name} <Star className="w-3 h-3 text-amber-500" fill="currentColor" /></div>
-                <div className="text-[10px] font-bold text-emerald-700">{leader.on_time_this_month || 0} no prazo</div>
+                <div className="text-[10px] font-bold text-emerald-700">{leader.on_time_month || 0} no prazo</div>
               </div>
             </div>
-          )}
+          ) : null}
           <div className="nb-card bg-white px-3 py-2 flex items-center gap-2" data-testid="prize-countdown">
             <CalendarIcon className="w-4 h-4" />
             <div className="leading-tight">
