@@ -20,6 +20,98 @@ const JWT_SECRET = process.env.JWT_SECRET || 'edutask-super-secret-jwt-key-2026'
 const PORT = 3000;
 const HOST = '0.0.0.0';
 
+if (!process.env.TZ) {
+  process.env.TZ = 'America/Sao_Paulo';
+}
+
+// ---------------------------------------------------------------------------
+// Relógio Oficial do Sistema (Centralizado para todas as rotinas e horários)
+// ---------------------------------------------------------------------------
+export function getSystemClock(timezone = 'America/Sao_Paulo') {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const partMap: Record<string, string> = {};
+  for (const p of parts) {
+    if (p.type !== 'literal') partMap[p.type] = p.value;
+  }
+  const hours = partMap.hour || '00';
+  const minutes = partMap.minute || '00';
+  const seconds = partMap.second || '00';
+  const day = partMap.day || '01';
+  const month = partMap.month || '01';
+  const year = partMap.year || '2026';
+  const timeStr = `${hours}:${minutes}:${seconds}`;
+  const timeHM = `${hours}:${minutes}`;
+  const dateStr = `${day}/${month}/${year}`;
+  const yearMonthDay = `${year}-${month}-${day}`;
+
+  return {
+    now,
+    timestamp: now.getTime(),
+    iso: now.toISOString(),
+    hours,
+    minutes,
+    seconds,
+    timeStr,
+    timeHM,
+    dateStr,
+    yearMonthDay,
+    timezone,
+  };
+}
+
+export function getSystemClockForDate(targetDate: Date, timezone = 'America/Sao_Paulo') {
+  const formatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(targetDate);
+  const partMap: Record<string, string> = {};
+  for (const p of parts) {
+    if (p.type !== 'literal') partMap[p.type] = p.value;
+  }
+  const hours = partMap.hour || '00';
+  const minutes = partMap.minute || '00';
+  const seconds = partMap.second || '00';
+  const day = partMap.day || '01';
+  const month = partMap.month || '01';
+  const year = partMap.year || '2026';
+  const timeStr = `${hours}:${minutes}:${seconds}`;
+  const timeHM = `${hours}:${minutes}`;
+  const dateStr = `${day}/${month}/${year}`;
+  const yearMonthDay = `${year}-${month}-${day}`;
+
+  return {
+    date: targetDate,
+    timestamp: targetDate.getTime(),
+    iso: targetDate.toISOString(),
+    hours,
+    minutes,
+    seconds,
+    timeStr,
+    timeHM,
+    dateStr,
+    yearMonthDay,
+    timezone,
+  };
+}
+
 // Gemini AI client
 const geminiApiKey = process.env.GEMINI_API_KEY || '';
 const genAI = geminiApiKey
@@ -784,10 +876,12 @@ function updateStudentStreak(userId: string) {
   const user = db.users.get(userId);
   if (!user || user.role !== 'aluno') return;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const clock = getSystemClock();
+  const today = clock.yearMonthDay;
   if (user.last_active_date === today) return;
 
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const yesterdayDate = new Date(clock.timestamp - 24 * 60 * 60 * 1000);
+  const yesterday = getSystemClockForDate(yesterdayDate).yearMonthDay;
   if (user.last_active_date === yesterday) {
     user.streak_count = (user.streak_count || 0) + 1;
   } else {
@@ -1951,11 +2045,11 @@ api.delete('/tasks/:task_id', requireAdmin, async (req, res) => {
 // ---------------------------------------------------------------------------
 function getTasksEligibleForCleanup(): TaskItem[] {
   const cfg = db.task_cleanup_config;
-  const now = new Date();
+  const clock = getSystemClock();
 
-  // Cutoff date: today minus days_after_due
-  const cutoffTime = now.getTime() - (cfg.days_after_due || 0) * 24 * 60 * 60 * 1000;
-  const cutoffDateStr = new Date(cutoffTime).toISOString().slice(0, 10);
+  // Data de corte oficial calculada pelo Relógio do Sistema menos days_after_due
+  const cutoffTime = clock.timestamp - (cfg.days_after_due || 0) * 24 * 60 * 60 * 1000;
+  const cutoffDateStr = getSystemClockForDate(new Date(cutoffTime)).yearMonthDay;
 
   const eligible: TaskItem[] = [];
   const activeStudents = Array.from(db.users.values()).filter(
@@ -1996,40 +2090,39 @@ function executeTaskCleanup(manual = false): { count: number; deleted_titles: st
     });
   }
 
-  db.task_cleanup_config.last_run_at = new Date().toISOString();
+  const clock = getSystemClock();
+  db.task_cleanup_config.last_run_at = clock.iso;
   db.task_cleanup_config.last_deleted_count = eligible.length;
   db.task_cleanup_config.last_deleted_titles = deletedTitles.slice(0, 20);
   db.saveToDisk();
   saveSystemSettingsToFirestore();
 
-  console.log(`[TaskCleanup] Executed (${manual ? 'manual' : 'scheduled'}): ${eligible.length} tasks removed.`);
+  console.log(`[TaskCleanup] Executed (${manual ? 'manual' : 'scheduled'}) at ${clock.timeStr} (System Clock): ${eligible.length} tasks removed.`);
   return { count: eligible.length, deleted_titles: deletedTitles };
 }
 
 api.get('/system/time', requireAuth, (req, res) => {
-  const now = new Date();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const clock = getSystemClock();
   res.json({
-    iso: now.toISOString(),
-    time_str: `${hours}:${minutes}:${seconds}`,
-    hours,
-    minutes,
-    seconds,
-    timestamp: now.getTime(),
-    date_str: now.toLocaleDateString('pt-BR'),
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo',
+    iso: clock.iso,
+    time_str: clock.timeStr,
+    time_hm: clock.timeHM,
+    hours: clock.hours,
+    minutes: clock.minutes,
+    seconds: clock.seconds,
+    timestamp: clock.timestamp,
+    date_str: clock.dateStr,
+    year_month_day: clock.yearMonthDay,
+    timezone: clock.timezone,
+    ok: true,
   });
 });
 
 api.get('/admin/task-cleanup', requireAdmin, (req, res) => {
   const cfg = db.task_cleanup_config;
   const eligible = getTasksEligibleForCleanup();
-  const now = new Date();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const currentTime = `${hours}:${minutes}`;
+  const clock = getSystemClock();
+  const currentTime = clock.timeHM;
 
   const tasksPreview = eligible.map((t) => {
     const completionsCount = db.completions.filter((c) => c.task_id === t.id).length;
@@ -2046,7 +2139,7 @@ api.get('/admin/task-cleanup', requireAdmin, (req, res) => {
   res.json({
     config: cfg,
     server_time: currentTime,
-    server_date: now.toISOString().slice(0, 10),
+    server_date: clock.yearMonthDay,
     tasks_to_delete_today: tasksPreview,
     will_delete_today: cfg.enabled && tasksPreview.length > 0,
     count: tasksPreview.length,
@@ -2877,8 +2970,50 @@ api.put('/whatsapp/config', requireAdmin, (req, res) => {
 });
 
 api.get('/whatsapp/groups', requireAdmin, async (req, res) => {
-  const groups = await whatsappService.fetchParticipatingGroups();
-  res.json(groups);
+  try {
+    const groups = await whatsappService.fetchParticipatingGroups();
+    res.json(groups);
+  } catch (err: any) {
+    res.json(whatsappService.getDetectedGroups());
+  }
+});
+
+api.post('/whatsapp/sync-groups', requireAdmin, async (req, res) => {
+  try {
+    const groups = await whatsappService.fetchParticipatingGroups();
+    res.json({
+      ok: true,
+      groups,
+      count: groups.length,
+      message: `${groups.length} grupo(s) detectado(s) com sucesso!`,
+    });
+  } catch (err: any) {
+    const cached = whatsappService.getDetectedGroups();
+    res.json({
+      ok: true,
+      groups: cached,
+      count: cached.length,
+      message: `Grupos recuperados da memória (${cached.length} encontrados).`,
+      error: err?.message,
+    });
+  }
+});
+
+api.post('/whatsapp/detect-group', requireAdmin, async (req, res) => {
+  const { input } = req.body || {};
+  if (!input || !String(input).trim()) {
+    return res.status(400).json({ detail: 'Informe um link de convite (chat.whatsapp.com/...) ou ID do grupo para detecção.' });
+  }
+  const result = await whatsappService.detectGroupByInput(String(input).trim());
+  if (!result.ok) {
+    return res.status(400).json({ detail: result.error || 'Falha ao detectar o grupo.' });
+  }
+  res.json({
+    ok: true,
+    group: result.group,
+    isInvite: result.isInvite || false,
+    message: `Grupo "${result.group?.subject}" detectado com sucesso!`,
+  });
 });
 
 api.post('/whatsapp/test-message', requireAdmin, async (req, res) => {
@@ -2996,10 +3131,11 @@ api.post(['/whatsapp/test-tomorrow-reminder', '/whatsapp/dispatch-reminders', '/
 
 // Helper para disparo de tarefas do dia seguinte
 async function executeTomorrowTasksDispatch(isTest = false) {
-  const now = new Date();
-  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  const tomorrowStr = tomorrow.toISOString().slice(0, 10);
-  const tomorrowDateBR = `${String(tomorrow.getDate()).padStart(2, '0')}/${String(tomorrow.getMonth() + 1).padStart(2, '0')}/${tomorrow.getFullYear()}`;
+  const clock = getSystemClock();
+  const tomorrowDateObj = new Date(clock.timestamp + 24 * 60 * 60 * 1000);
+  const tomorrowClock = getSystemClockForDate(tomorrowDateObj);
+  const tomorrowStr = tomorrowClock.yearMonthDay;
+  const tomorrowDateBR = tomorrowClock.dateStr;
 
   let tomorrowTasks = Array.from(db.tasks.values()).filter((t) => t.due_date === tomorrowStr);
 
@@ -3059,19 +3195,17 @@ async function checkWhatsAppAutoActivationScheduler() {
     if (!config || !config.enabled) return;
 
     const autoSched = config.auto_activation_schedule;
-    const now = new Date();
-    const currentHours = String(now.getHours()).padStart(2, '0');
-    const currentMinutes = String(now.getMinutes()).padStart(2, '0');
-    const currentTimeStr = `${currentHours}:${currentMinutes}`;
-    const todayStr = now.toISOString().slice(0, 10);
+    const clock = getSystemClock();
+    const currentTimeStr = clock.timeHM;
+    const todayStr = clock.yearMonthDay;
 
-    // 1. Verificar se é o horário programado para ativar o WhatsApp
+    // 1. Verificar se é o horário programado para ativar o WhatsApp usando o Relógio do Sistema
     if (autoSched && autoSched.enabled) {
       const targetTime = (autoSched.time || '18:00').trim();
       const minDuration = Math.max(20, autoSched.duration_minutes || 20); // Pelo menos 20 minutos!
 
       if (currentTimeStr === targetTime && autoSched.last_run_date !== todayStr) {
-        console.log(`[WhatsApp Auto-Activation] Horário programado atingido (${currentTimeStr}). Ativando WhatsApp por no mínimo ${minDuration} minutos...`);
+        console.log(`[WhatsApp Auto-Activation] Horário programado atingido pelo Relógio do Sistema (${currentTimeStr}). Ativando WhatsApp por no mínimo ${minDuration} minutos...`);
         autoSched.last_run_date = todayStr;
         db.saveToDisk();
         saveSystemSettingsToFirestore();
@@ -3111,15 +3245,13 @@ async function checkDailyTomorrowReminder() {
     const config = db.whatsapp_config;
     if (!config || !config.enabled || !config.daily_reminder?.enabled) return;
 
-    const now = new Date();
-    const currentHours = String(now.getHours()).padStart(2, '0');
-    const currentMinutes = String(now.getMinutes()).padStart(2, '0');
-    const currentTimeStr = `${currentHours}:${currentMinutes}`;
-    const todayStr = now.toISOString().slice(0, 10);
+    const clock = getSystemClock();
+    const currentTimeStr = clock.timeHM;
+    const todayStr = clock.yearMonthDay;
 
     const targetTime = (config.daily_reminder.time || '19:00').trim();
     if (currentTimeStr === targetTime && config.daily_reminder.last_run_date !== todayStr) {
-      console.log(`[WhatsApp Reminder] Horário agendado atingido (${currentTimeStr}). Disparando lembrete de tarefas para amanhã...`);
+      console.log(`[WhatsApp Reminder] Horário agendado atingido pelo Relógio do Sistema (${currentTimeStr}). Disparando lembrete de tarefas para amanhã...`);
       config.daily_reminder.last_run_date = todayStr;
       db.saveToDisk();
       saveSystemSettingsToFirestore();
@@ -4356,7 +4488,7 @@ Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
 });
 
 // ---------------------------------------------------------------------------
-// Background Task Auto-Cleanup Runner (checks schedule every 30s)
+// Background Task Auto-Cleanup Runner (checks schedule every 30s using System Clock)
 // ---------------------------------------------------------------------------
 let lastCleanupMinuteRun = '';
 if (!process.env.VERCEL) {
@@ -4365,15 +4497,14 @@ if (!process.env.VERCEL) {
       const cfg = db.task_cleanup_config;
       if (!cfg || !cfg.enabled || !cfg.cleanup_time) return;
 
-      const now = new Date();
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      const currentTime = `${hours}:${minutes}`;
-      const today = now.toISOString().slice(0, 10);
+      const clock = getSystemClock();
+      const currentTime = clock.timeHM;
+      const today = clock.yearMonthDay;
       const runKey = `${today}_${currentTime}`;
 
       if (currentTime === cfg.cleanup_time && lastCleanupMinuteRun !== runKey) {
         lastCleanupMinuteRun = runKey;
+        console.log(`[TaskCleanup] Horário agendado atingido pelo Relógio do Sistema (${currentTime}). Executando limpeza...`);
         executeTaskCleanup(false);
       }
     } catch (err) {

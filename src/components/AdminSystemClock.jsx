@@ -51,11 +51,15 @@ export default function AdminSystemClock({ compact = false, nextCleanupTime = nu
     return () => clearInterval(timer);
   }, [serverOffset]);
 
-  const hours = String(serverTime.getHours()).padStart(2, "0");
-  const minutes = String(serverTime.getMinutes()).padStart(2, "0");
-  const seconds = String(serverTime.getSeconds()).padStart(2, "0");
-  const timeString = `${hours}:${minutes}:${seconds}`;
+  const timeString = serverTime.toLocaleTimeString("pt-BR", {
+    timeZone: timezone || "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
   const dateString = serverTime.toLocaleDateString("pt-BR", {
+    timeZone: timezone || "America/Sao_Paulo",
     weekday: "short",
     day: "2-digit",
     month: "2-digit",

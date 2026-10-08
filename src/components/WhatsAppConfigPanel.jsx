@@ -25,6 +25,7 @@ import {
   X,
   Layers,
   HelpCircle,
+  Link2,
 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import confetti from "canvas-confetti";
@@ -85,6 +86,10 @@ export default function WhatsAppConfigPanel() {
   const [groups, setGroups] = useState([]);
   const [groupSearch, setGroupSearch] = useState("");
   const [loadingGroups, setLoadingGroups] = useState(false);
+  const [manualGroupInput, setManualGroupInput] = useState("");
+  const [detectingGroup, setDetectingGroup] = useState(false);
+  const [detectedResult, setDetectedResult] = useState(null);
+  const [copiedJid, setCopiedJid] = useState(null);
   const [testingGroup1, setTestingGroup1] = useState(false);
   const [testingGroup2, setTestingGroup2] = useState(false);
 
@@ -153,6 +158,14 @@ export default function WhatsAppConfigPanel() {
         toast.success("🎉 WhatsApp conectado com sucesso!");
         try {
           confetti({ particleCount: 70, spread: 50, origin: { y: 0.6 } });
+        } catch {
+          // ignore
+        }
+        try {
+          const { data: gData } = await api.get("/whatsapp/groups");
+          if (Array.isArray(gData) && gData.length > 0) {
+            setGroups(gData);
+          }
         } catch {
           // ignore
         }
@@ -325,6 +338,48 @@ export default function WhatsAppConfigPanel() {
     }
   };
 
+  const handleCopyJid = (jid) => {
+    if (!jid) return;
+    navigator.clipboard?.writeText(jid);
+    setCopiedJid(jid);
+    toast.success("ID (JID) copiado com sucesso!");
+    setTimeout(() => setCopiedJid(null), 2000);
+  };
+
+  const handleDetectGroup = async (e) => {
+    if (e) e.preventDefault();
+    const cleanInput = manualGroupInput.trim();
+    if (!cleanInput) {
+      toast.error("Informe um link de convite (chat.whatsapp.com/...) ou ID do grupo.");
+      return;
+    }
+    if (statusData?.status !== "connected") {
+      toast.error("Conecte o WhatsApp primeiro para poder detectar grupos.");
+      return;
+    }
+
+    setDetectingGroup(true);
+    try {
+      const { data } = await api.post("/whatsapp/detect-group", { input: cleanInput });
+      if (data?.ok && data.group) {
+        setDetectedResult(data.group);
+        setGroups((prev) => {
+          const list = prev || [];
+          const exists = list.some((g) => g.id === data.group.id);
+          return exists ? list.map((g) => (g.id === data.group.id ? data.group : g)) : [data.group, ...list];
+        });
+        toast.success(`🎯 Grupo "${data.group.subject}" detectado com sucesso!`);
+        setManualGroupInput("");
+      } else {
+        toast.error("Não foi possível identificar o grupo.");
+      }
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao detectar o grupo");
+    } finally {
+      setDetectingGroup(false);
+    }
+  };
+
   const handleFetchGroups = async () => {
     if (statusData?.status !== "connected") {
       toast.error("Conecte o WhatsApp primeiro para buscar os grupos.");
@@ -332,15 +387,26 @@ export default function WhatsAppConfigPanel() {
     }
     setLoadingGroups(true);
     try {
-      const { data } = await api.get("/whatsapp/groups");
-      setGroups(data || []);
-      if (!data || data.length === 0) {
-        toast.info("Nenhum grupo encontrado na sua conta do WhatsApp.");
+      const { data } = await api.post("/whatsapp/sync-groups");
+      const list = data?.groups || [];
+      setGroups(list);
+      if (list.length === 0) {
+        toast.info("Nenhum grupo detectado pela API direta. Use o campo 'Detectar por Link de Convite' ou envie qualquer mensagem no grupo pelo WhatsApp!");
       } else {
-        toast.success(`${data.length} grupo(s) encontrado(s)! Selecione para o Grupo 1 ou Grupo 2.`);
+        toast.success(`${list.length} grupo(s) detectado(s)! Selecione para o Grupo 1 ou Grupo 2.`);
       }
-    } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao buscar grupos");
+    } catch {
+      try {
+        const { data: gData } = await api.get("/whatsapp/groups");
+        setGroups(gData || []);
+        if (gData?.length > 0) {
+          toast.success(`${gData.length} grupo(s) recuperados da memória!`);
+        } else {
+          toast.info("Nenhum grupo encontrado. Cole o link de convite abaixo.");
+        }
+      } catch (e2) {
+        toast.error(formatApiError(e2?.response?.data?.detail) || "Falha ao buscar grupos");
+      }
     } finally {
       setLoadingGroups(false);
     }
@@ -745,40 +811,161 @@ export default function WhatsAppConfigPanel() {
               </div>
             </div>
 
-            {/* Lista de Grupos Encontrados */}
-            {groups.length > 0 && (
-              <div className="nb-card bg-neutral-50 p-4 space-y-3 border-2 border-black">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-xs font-black uppercase text-neutral-800">
-                    Grupos do seu WhatsApp ({filteredGroups.length})
-                  </span>
-                  <div className="relative w-48 sm:w-64">
-                    <input
-                      type="text"
-                      value={groupSearch}
-                      onChange={(e) => setGroupSearch(e.target.value)}
-                      placeholder="Filtrar grupos..."
-                      className="nb-input bg-white text-xs py-1 pl-7"
-                    />
-                    <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2 top-2" />
+            {/* Bloco de Detecção de Grupos: Por Link de Convite, ID ou Auto-Detect */}
+            <div className="nb-card bg-sky-50/70 p-4 space-y-3 border-2 border-black">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-sky-200 border border-black flex items-center justify-center text-sky-950">
+                    <Link2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-heading font-black text-xs sm:text-sm text-neutral-900">
+                      🎯 Detectar Grupo por Link de Convite ou ID
+                    </h4>
+                    <p className="text-[11px] text-neutral-600">
+                      Cole o link do grupo (ex: <i>chat.whatsapp.com/...</i>) ou o ID (<span className="font-mono">...@g.us</span>) para identificação instantânea.
+                    </p>
                   </div>
                 </div>
+              </div>
 
-                <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+              <form onSubmit={handleDetectGroup} className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={manualGroupInput}
+                  onChange={(e) => setManualGroupInput(e.target.value)}
+                  placeholder="https://chat.whatsapp.com/ExemploCodigo ou 120363...@g.us"
+                  className="nb-input bg-white text-xs flex-1"
+                  disabled={detectingGroup}
+                  data-testid="input-detect-group"
+                />
+                <button
+                  type="submit"
+                  disabled={detectingGroup || !manualGroupInput.trim() || !isConnected}
+                  className="nb-btn bg-sky-400 hover:bg-sky-500 text-sky-950 px-3.5 py-1.5 text-xs font-black flex items-center justify-center gap-1.5 flex-shrink-0"
+                  data-testid="btn-detect-group"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${detectingGroup ? "animate-spin" : ""}`} />
+                  {detectingGroup ? "Detectando..." : "Detectar Grupo"}
+                </button>
+              </form>
+
+              {/* Resultado do Grupo Detectado */}
+              {detectedResult && (
+                <div className="nb-card bg-white p-3 border-2 border-emerald-600 shadow-[2px_2px_0px_0px_rgba(5,150,105,1)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="nb-badge bg-emerald-200 text-emerald-950 text-[10px] font-black">
+                        ✅ Grupo Detectado!
+                      </span>
+                      <span className="font-bold text-xs text-neutral-900 truncate">
+                        {detectedResult.subject}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] font-mono text-neutral-500 truncate max-w-[220px]">
+                        {detectedResult.id}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyJid(detectedResult.id)}
+                        className="text-[10px] text-sky-700 hover:underline flex items-center gap-0.5 font-bold"
+                        title="Copiar ID"
+                      >
+                        {copiedJid === detectedResult.id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                        {copiedJid === detectedResult.id ? "Copiado!" : "Copiar"}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0 w-full sm:w-auto justify-end">
+                    <button
+                      type="button"
+                      onClick={() => assignGroup(1, detectedResult)}
+                      className="nb-btn bg-emerald-200 hover:bg-emerald-300 text-emerald-950 px-2.5 py-1 text-[11px] font-bold"
+                    >
+                      Definir Grupo 1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => assignGroup(2, detectedResult)}
+                      className="nb-btn bg-sky-200 hover:bg-sky-300 text-sky-950 px-2.5 py-1 text-[11px] font-bold"
+                    >
+                      Definir Grupo 2
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Guia informativo de 3 formas de detecção */}
+              <div className="bg-white/80 rounded-lg p-2.5 border border-sky-200 text-[11px] text-neutral-700 space-y-1">
+                <div className="font-bold text-sky-950 flex items-center gap-1">
+                  💡 <b>3 Formas de Detectar Grupos no EduTask:</b>
+                </div>
+                <ul className="list-disc list-inside space-y-0.5 pl-1 text-[10.5px]">
+                  <li><b>1. Botão "Buscar Meus Grupos":</b> sincroniza diretamente via API do WhatsApp.</li>
+                  <li><b>2. Link de Convite:</b> cole o link do grupo acima e clique em "Detectar Grupo".</li>
+                  <li><b>3. Mensagem no WhatsApp:</b> envie qualquer mensagem no grupo pelo seu celular (ou digite <code className="bg-neutral-100 px-1 py-0.5 rounded font-mono font-bold text-sky-900">!id</code>). O EduTask detecta e salva o grupo em tempo real!</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Lista de Grupos Encontrados / Detectados */}
+            <div className="nb-card bg-neutral-50 p-4 space-y-3 border-2 border-black">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-xs font-black uppercase text-neutral-800">
+                  Grupos Detectados no WhatsApp ({filteredGroups.length})
+                </span>
+                <div className="relative w-48 sm:w-64">
+                  <input
+                    type="text"
+                    value={groupSearch}
+                    onChange={(e) => setGroupSearch(e.target.value)}
+                    placeholder="Filtrar grupos..."
+                    className="nb-input bg-white text-xs py-1 pl-7"
+                  />
+                  <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2 top-2" />
+                </div>
+              </div>
+
+              {filteredGroups.length === 0 ? (
+                <div className="p-4 bg-white rounded-lg border border-neutral-300 text-center text-xs text-neutral-600">
+                  Nenhum grupo detectado ainda. Clique em <b>"Buscar Meus Grupos"</b>, cole o link de convite acima ou envie qualquer mensagem no grupo pelo WhatsApp!
+                </div>
+              ) : (
+                <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
                   {filteredGroups.map((g) => (
                     <div
                       key={g.id}
                       className="nb-card bg-white p-2.5 flex items-center justify-between gap-3 text-xs border border-neutral-300"
                     >
                       <div className="min-w-0">
-                        <div className="font-bold truncate">{g.subject}</div>
-                        <div className="text-[10px] text-neutral-500 font-mono truncate">{g.id}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold truncate text-neutral-900">{g.subject}</span>
+                          {g.participantsCount > 0 && (
+                            <span className="text-[10px] text-neutral-500 font-medium bg-neutral-100 px-1.5 py-0.2 rounded">
+                              {g.participantsCount} membros
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] text-neutral-500 font-mono truncate max-w-[200px]">{g.id}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyJid(g.id)}
+                            className="text-[10px] text-sky-700 hover:underline flex items-center gap-0.5 font-bold"
+                            title="Copiar ID"
+                          >
+                            {copiedJid === g.id ? <Check className="w-2.5 h-2.5 text-emerald-600" /> : <Copy className="w-2.5 h-2.5" />}
+                            {copiedJid === g.id ? "Copiado!" : "Copiar"}
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <button
                           type="button"
                           onClick={() => assignGroup(1, g)}
                           className="nb-btn bg-emerald-200 hover:bg-emerald-300 text-emerald-950 px-2 py-1 text-[10px] font-bold"
+                          title="Definir para receber comunicado estruturado completo"
                         >
                           Definir Grupo 1
                         </button>
@@ -786,6 +973,7 @@ export default function WhatsAppConfigPanel() {
                           type="button"
                           onClick={() => assignGroup(2, g)}
                           className="nb-btn bg-sky-200 hover:bg-sky-300 text-sky-950 px-2 py-1 text-[10px] font-bold"
+                          title="Definir para receber foto universal com legenda/enunciado"
                         >
                           Definir Grupo 2
                         </button>
@@ -793,8 +981,8 @@ export default function WhatsAppConfigPanel() {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>

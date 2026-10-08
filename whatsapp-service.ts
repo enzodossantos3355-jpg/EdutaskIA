@@ -13,6 +13,7 @@ const __dirname = path.dirname(__filename);
 
 const BASE_DIR = process.env.VERCEL || process.env.NODE_ENV === 'production' ? os.tmpdir() : __dirname;
 const AUTH_DIR = path.resolve(BASE_DIR, 'data/baileys_auth');
+const DETECTED_GROUPS_FILE = path.resolve(BASE_DIR, 'data/detected_whatsapp_groups.json');
 
 export type WhatsAppConnectionStatus = 'disconnected' | 'connecting' | 'qr_ready' | 'connected';
 
@@ -20,6 +21,9 @@ export interface WhatsAppGroupInfo {
   id: string;
   subject: string;
   participantsCount: number;
+  desc?: string;
+  detectedAt?: string;
+  source?: 'sync' | 'invite' | 'message' | 'config' | 'manual';
 }
 
 export interface WhatsAppTemplatesConfig {
@@ -56,6 +60,7 @@ export interface WhatsAppServiceStatus {
   remainingMinutes?: number | null;
   activeDurationMinutes?: number | null;
   activeReason?: string | null;
+  detectedGroupsCount?: number;
 }
 
 export interface TaskNotificationPayload {
@@ -122,11 +127,60 @@ class WhatsAppService {
   private activeUntil: number | null = null;
   private activatedAt: number | null = null;
   private activeReason: string | null = null;
+  private detectedGroupsMap: Map<string, WhatsAppGroupInfo> = new Map();
 
   constructor() {
     if (!fs.existsSync(AUTH_DIR)) {
       fs.mkdirSync(AUTH_DIR, { recursive: true });
     }
+    this.loadDetectedGroupsFromDisk();
+  }
+
+  private loadDetectedGroupsFromDisk() {
+    try {
+      if (fs.existsSync(DETECTED_GROUPS_FILE)) {
+        const raw = fs.readFileSync(DETECTED_GROUPS_FILE, 'utf-8');
+        const list: WhatsAppGroupInfo[] = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          for (const item of list) {
+            if (item && item.id) {
+              this.detectedGroupsMap.set(item.id, item);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[WhatsApp] Erro ao carregar grupos detectados do disco:', e);
+    }
+  }
+
+  private saveDetectedGroupsToDisk() {
+    try {
+      const dataDir = path.dirname(DETECTED_GROUPS_FILE);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      const list = Array.from(this.detectedGroupsMap.values());
+      fs.writeFileSync(DETECTED_GROUPS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+    } catch (e) {
+      console.warn('[WhatsApp] Erro ao salvar grupos detectados no disco:', e);
+    }
+  }
+
+  public addOrUpdateDetectedGroup(group: Partial<WhatsAppGroupInfo> & { id: string }) {
+    if (!group || !group.id) return;
+    const existing = this.detectedGroupsMap.get(group.id);
+    const updated: WhatsAppGroupInfo = {
+      id: group.id,
+      subject: (group.subject || existing?.subject || 'Grupo WhatsApp').trim(),
+      participantsCount: group.participantsCount !== undefined ? group.participantsCount : (existing?.participantsCount || 0),
+      desc: group.desc || existing?.desc || undefined,
+      detectedAt: group.detectedAt || existing?.detectedAt || new Date().toISOString(),
+      source: group.source || existing?.source || 'manual',
+    };
+    this.detectedGroupsMap.set(group.id, updated);
+    this.saveDetectedGroupsToDisk();
+    return updated;
   }
 
   public hasSavedAuth(): boolean {
@@ -185,6 +239,21 @@ class WhatsAppService {
         ...this.templates,
         ...config.templates,
       };
+    }
+
+    if (this.group1Jid) {
+      this.addOrUpdateDetectedGroup({
+        id: this.group1Jid,
+        subject: this.group1Name || 'Grupo 1 (Aviso Completo)',
+        source: 'config',
+      });
+    }
+    if (this.group2Jid) {
+      this.addOrUpdateDetectedGroup({
+        id: this.group2Jid,
+        subject: this.group2Name || 'Grupo 2 (Foto com Enunciado)',
+        source: 'config',
+      });
     }
   }
 
@@ -277,6 +346,7 @@ class WhatsAppService {
       remainingMinutes,
       activeDurationMinutes,
       activeReason: this.activeReason,
+      detectedGroupsCount: this.detectedGroupsMap.size,
     };
   }
 
@@ -385,6 +455,18 @@ class WhatsAppService {
             phone,
           };
           console.log(`[WhatsApp] Baileys conectado com sucesso para ${phone}`);
+
+          // Sincronização inicial de grupos em segundo plano
+          setTimeout(async () => {
+            try {
+              if (this.sock && this.status === 'connected') {
+                console.log('[WhatsApp] Realizando detecção automática de grupos pós-conexão...');
+                await this.fetchParticipatingGroups();
+              }
+            } catch (syncErr) {
+              console.warn('[WhatsApp] Aviso na detecção inicial de grupos:', syncErr);
+            }
+          }, 3500);
         }
 
         if (connection === 'close') {
@@ -418,6 +500,98 @@ class WhatsAppService {
               });
             }, 4000);
           }
+        }
+      });
+
+      // ---------------------------------------------------------------------------
+      // Detectores automáticos de grupos em tempo real
+      // ---------------------------------------------------------------------------
+      sock.ev.on('groups.update', async (groupUpdates: any[]) => {
+        try {
+          for (const g of groupUpdates || []) {
+            if (g?.id) {
+              this.addOrUpdateDetectedGroup({
+                id: g.id,
+                subject: g.subject || undefined,
+                desc: g.desc || undefined,
+                participantsCount: g.participants?.length || undefined,
+                source: 'sync',
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('[WhatsApp] Erro no evento groups.update:', e);
+        }
+      });
+
+      sock.ev.on('chats.upsert', async (chats: any[]) => {
+        try {
+          for (const c of chats || []) {
+            if (c?.id && c.id.endsWith('@g.us')) {
+              this.addOrUpdateDetectedGroup({
+                id: c.id,
+                subject: c.name || c.subject || undefined,
+                source: 'sync',
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('[WhatsApp] Erro no evento chats.upsert:', e);
+        }
+      });
+
+      sock.ev.on('messages.upsert', async (m: any) => {
+        try {
+          const messages = m?.messages || [];
+          for (const msg of messages) {
+            const remoteJid = msg?.key?.remoteJid;
+            if (!remoteJid || !remoteJid.endsWith('@g.us')) continue;
+
+            const existing = this.detectedGroupsMap.get(remoteJid);
+            const text = (
+              msg?.message?.conversation ||
+              msg?.message?.extendedTextMessage?.text ||
+              ''
+            ).trim().toLowerCase();
+
+            // Detecta ou enriquece o grupo automaticamente
+            if (!existing || !existing.subject || existing.subject === 'Grupo sem nome' || existing.subject === 'Grupo WhatsApp') {
+              try {
+                if (this.sock && typeof this.sock.groupMetadata === 'function') {
+                  const meta = await this.sock.groupMetadata(remoteJid);
+                  if (meta && meta.id) {
+                    this.addOrUpdateDetectedGroup({
+                      id: meta.id,
+                      subject: meta.subject || 'Grupo Detectado',
+                      participantsCount: meta.participants?.length || 0,
+                      desc: meta.desc || undefined,
+                      source: 'message',
+                    });
+                  }
+                }
+              } catch {
+                this.addOrUpdateDetectedGroup({
+                  id: remoteJid,
+                  subject: existing?.subject || 'Grupo WhatsApp',
+                  source: 'message',
+                });
+              }
+            }
+
+            // Responde comando amigável de verificação de ID no grupo se solicitado
+            if (text === '!id' || text === '!grupo' || text === '!edutask') {
+              try {
+                const groupObj = this.detectedGroupsMap.get(remoteJid);
+                const subj = groupObj?.subject || 'Grupo';
+                const replyText = `🎓 *EduTask — Detecção de Grupo*\n\n✅ *Grupo identificado!*\n• *Nome:* ${subj}\n• *ID (JID):* \`${remoteJid}\`\n\nEste grupo já está disponível na lista de grupos do painel EduTask.`;
+                await this.sendMessage(remoteJid, replyText);
+              } catch (replyErr) {
+                console.warn('[WhatsApp] Aviso ao responder !id no grupo:', replyErr);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[WhatsApp] Erro no evento messages.upsert:', e);
         }
       });
 
@@ -463,21 +637,147 @@ class WhatsAppService {
     return this.getStatus();
   }
 
+  public getDetectedGroups(): WhatsAppGroupInfo[] {
+    if (this.detectedGroupsMap.size === 0) {
+      this.loadDetectedGroupsFromDisk();
+    }
+    if (this.group1Jid && !this.detectedGroupsMap.has(this.group1Jid)) {
+      this.addOrUpdateDetectedGroup({
+        id: this.group1Jid,
+        subject: this.group1Name || 'Grupo 1 (Configurado)',
+        source: 'config',
+      });
+    }
+    if (this.group2Jid && !this.detectedGroupsMap.has(this.group2Jid)) {
+      this.addOrUpdateDetectedGroup({
+        id: this.group2Jid,
+        subject: this.group2Name || 'Grupo 2 (Configurado)',
+        source: 'config',
+      });
+    }
+    const list = Array.from(this.detectedGroupsMap.values());
+    list.sort((a, b) => (a.subject || '').localeCompare(b.subject || '', 'pt-BR'));
+    return list;
+  }
+
   public async fetchParticipatingGroups(): Promise<WhatsAppGroupInfo[]> {
+    if (this.detectedGroupsMap.size === 0) {
+      this.loadDetectedGroupsFromDisk();
+    }
+
+    if (this.status === 'connected' && this.sock) {
+      try {
+        console.log('[WhatsApp] Consultando grupos participantes do Baileys...');
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Tempo limite excedido na consulta de grupos ao WhatsApp')), 15000)
+        );
+        const fetchPromise = this.sock.groupFetchAllParticipating();
+        const groups: any = await Promise.race([fetchPromise, timeoutPromise]);
+
+        if (groups && typeof groups === 'object') {
+          for (const g of Object.values(groups) as any[]) {
+            if (g && g.id) {
+              this.addOrUpdateDetectedGroup({
+                id: g.id,
+                subject: g.subject || 'Grupo sem nome',
+                participantsCount: g.participants?.length || 0,
+                desc: typeof g.desc === 'string' ? g.desc : undefined,
+                source: 'sync',
+              });
+            }
+          }
+          this.saveDetectedGroupsToDisk();
+          console.log(`[WhatsApp] Sucesso: ${Object.keys(groups).length} grupo(s) participantes sincronizados.`);
+        }
+      } catch (err: any) {
+        console.warn('[WhatsApp] Aviso ao consultar grupos via API:', err?.message || err);
+      }
+    }
+
+    return this.getDetectedGroups();
+  }
+
+  public async detectGroupByInput(rawInput: string): Promise<{
+    ok: boolean;
+    group?: WhatsAppGroupInfo;
+    error?: string;
+    isInvite?: boolean;
+  }> {
     if (this.status !== 'connected' || !this.sock) {
-      return [];
+      return { ok: false, error: 'WhatsApp não está conectado. Conecte pelo QR Code primeiro.' };
     }
-    try {
-      const groups = await this.sock.groupFetchAllParticipating();
-      return Object.values(groups).map((g: any) => ({
-        id: g.id,
-        subject: g.subject || 'Grupo sem nome',
-        participantsCount: g.participants?.length || 0,
-      }));
-    } catch (err: any) {
-      console.error('[WhatsApp] Erro ao buscar grupos participantes:', err);
-      return [];
+    const input = (rawInput || '').trim();
+    if (!input) {
+      return { ok: false, error: 'Informe um link de convite (ex: https://chat.whatsapp.com/...) ou o ID do grupo.' };
     }
+
+    // 1. Detecção por link de convite ou código de convite
+    const inviteMatch = input.match(/(?:chat\.whatsapp\.com\/|chat\.whatsapp\.com\/invite\/)?([A-Za-z0-9_-]{18,26})/i);
+    const isExplicitInvite = input.includes('chat.whatsapp.com') || (inviteMatch && !input.includes('@') && input.length >= 18 && input.length <= 30);
+
+    if (isExplicitInvite) {
+      const code = inviteMatch ? inviteMatch[1] : input.replace(/^https?:\/\/chat\.whatsapp\.com\//i, '').trim();
+      try {
+        console.log(`[WhatsApp] Consultando informações do grupo pelo convite: ${code}`);
+        const info = await this.sock.groupGetInviteInfo(code);
+        if (info && info.id) {
+          const groupJid = info.id.includes('@') ? info.id : `${info.id}@g.us`;
+          const groupItem: WhatsAppGroupInfo = {
+            id: groupJid,
+            subject: (info.subject || 'Grupo via Convite').trim(),
+            participantsCount: info.size || info.participants?.length || 0,
+            desc: typeof info.desc === 'string' ? info.desc : undefined,
+            source: 'invite',
+            detectedAt: new Date().toISOString(),
+          };
+          this.addOrUpdateDetectedGroup(groupItem);
+          return { ok: true, group: groupItem, isInvite: true };
+        }
+      } catch (inviteErr: any) {
+        console.warn(`[WhatsApp] Falha ao consultar link de convite (${code}):`, inviteErr?.message || inviteErr);
+      }
+    }
+
+    // 2. Detecção por JID ou ID numérico (ex: 12036302847291823@g.us)
+    let candidateJid = input;
+    if (!candidateJid.includes('@')) {
+      const digitsOnly = candidateJid.replace(/[^0-9]/g, '');
+      if (digitsOnly.length >= 10) {
+        candidateJid = `${digitsOnly}@g.us`;
+      }
+    }
+
+    if (candidateJid.endsWith('@g.us')) {
+      try {
+        console.log(`[WhatsApp] Consultando metadados do grupo pelo JID: ${candidateJid}`);
+        const meta = await this.sock.groupMetadata(candidateJid);
+        if (meta && meta.id) {
+          const groupItem: WhatsAppGroupInfo = {
+            id: meta.id,
+            subject: (meta.subject || 'Grupo WhatsApp').trim(),
+            participantsCount: meta.participants?.length || 0,
+            desc: typeof meta.desc === 'string' ? meta.desc : undefined,
+            source: 'manual',
+            detectedAt: new Date().toISOString(),
+          };
+          this.addOrUpdateDetectedGroup(groupItem);
+          return { ok: true, group: groupItem };
+        }
+      } catch (metaErr: any) {
+        console.warn(`[WhatsApp] Falha ao consultar metadados do JID (${candidateJid}):`, metaErr?.message || metaErr);
+      }
+    }
+
+    // 3. Fallback: verificar se já constava nos grupos detectados em memória/disco
+    const cached = this.detectedGroupsMap.get(input) || this.detectedGroupsMap.get(candidateJid);
+    if (cached) {
+      return { ok: true, group: cached };
+    }
+
+    return {
+      ok: false,
+      error: 'Não foi possível detectar o grupo. Verifique se o link/ID é válido ou envie qualquer mensagem no grupo pelo WhatsApp para auto-detecção.',
+    };
   }
 
   public async sendMessage(jid: string, text: string): Promise<boolean> {
