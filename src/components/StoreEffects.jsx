@@ -6,6 +6,7 @@ import Avatar from "@/components/Avatar";
 import MolduraArtCenter from "@/components/MolduraArtCenter";
 import { effectClass, effectCardClass, effectBadgeClass, RARITY_META } from "@/lib/effects";
 import { useAuth } from "@/context/AuthContext";
+import { playEquipThemeSound } from "@/lib/soundEffects";
 
 /**
  * Loja e Painel de Gerenciamento de Valores das Molduras de Perfil.
@@ -58,6 +59,7 @@ export default function StoreEffects() {
     setBusy(eff.id);
     try {
       await api.post("/me/effects/buy", { effect_id: eff.id });
+      playEquipThemeSound(eff.id);
       toast.success(`Comprou a moldura "${eff.name}"! ${eff.emoji}`);
       await load();
       if (refresh) refresh();
@@ -72,6 +74,7 @@ export default function StoreEffects() {
     setBusy(eff.id);
     try {
       await api.post("/me/effects/equip", { effect_id: eff.id === "none" ? null : eff.id });
+      playEquipThemeSound(eff.id);
       toast.success(eff.id === "none" ? "Moldura padrão redefinida" : `Moldura "${eff.name}" ativada com sucesso! 🖼️`);
       setEquipped(eff.id);
       if (refresh) refresh();
@@ -305,7 +308,7 @@ export default function StoreEffects() {
                             effect={cls}
                           />
                         </div>
-                        <div className="truncate text-xs font-heading font-bold">{user?.name || "Seu Nome"}</div>
+                        <div className="truncate text-xs font-heading font-bold text-black">{user?.name || "Seu Nome"}</div>
                         <div className="mt-1.5 flex justify-center">
                           <span className={`nb-badge text-[9px] ${badgeCls}`}>
                             {isAdmin ? "Admin" : "Aluno"}

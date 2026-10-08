@@ -57,8 +57,16 @@ export function AIStatusProvider({ children }) {
           }
         },
         (err) => {
-          // Fallback gracefully without breaking UI
-          console.warn("[AIStatusContext] Firestore listener notice:", err?.message || err);
+          // Quando a cota diária do Firestore gratuito é atingida, encerra o listener
+          // para evitar loops de reconexão gRPC e usa a API local perfeitamente
+          if (unsubscribeSystem) {
+            try {
+              unsubscribeSystem();
+            } catch {
+              // ignore
+            }
+            unsubscribeSystem = null;
+          }
         }
       );
     } catch (e) {

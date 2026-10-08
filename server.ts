@@ -262,6 +262,10 @@ const DEFAULT_EFFECTS = [
   { id: 'riverdale', name: 'Moldura Riverdale (Bulldogs & Serpents)', emoji: '🐍', description: 'Moldura inspirada no universo de Riverdale com azul e ouro dos Bulldogs, verde das Serpentes do Sul e o clássico Pop\'s Chock\'lit Shoppe!', cost: 180, css: 'fx-riverdale', rarity: 'rare' },
   { id: 'spongebob', name: 'Moldura Bob Esponja', emoji: '🍍', description: 'Moldura alegre da Fenda do Biquíni com arte tropical submarina central e aura dourada!', cost: 120, css: 'fx-spongebob', rarity: 'rare' },
   { id: 'mentalist', name: 'Moldura O Mentalista', emoji: '🔍', description: 'Moldura inspirada na série O Mentalista com arte central vermelha e bege e Patrick Jane.', cost: 160, css: 'fx-mentalist', rarity: 'rare' },
+  { id: 'one_piece', name: 'Moldura One Piece', emoji: '🏴‍☠️', description: 'Moldura épica do Rei dos Piratas com cartaz Wanted, bússola náutica, ondas do Grand Line e moedas de ouro de tesouro!', cost: 280, css: 'fx-one-piece', rarity: 'epic' },
+  { id: 'chemistry_lab', name: 'Moldura Laboratório Químico', emoji: '🧪', description: 'Moldura científica de química com frascos erlenmeyer borbulhantes, neon esmeralda bioluminescente, fitas moleculares e reações atômicas!', cost: 240, css: 'fx-chemistry-lab', rarity: 'rare' },
+  { id: 'japan', name: 'Moldura Japão Tradicional', emoji: '⛩️', description: 'Moldura zen do Japão imperial com o majestoso Monte Fuji, portal Torii carmesim, galhos e pétalas de sakura e lanternas orientais!', cost: 300, css: 'fx-japan', rarity: 'epic' },
+  { id: 'minecraft', name: 'Moldura Minecraft', emoji: '🟩', description: 'Autêntico bloco de grama do Minecraft preenchendo completamente o perfil com textura 16x16 pixel-art clássica de grama e terra.', cost: 320, css: 'fx-minecraft', rarity: 'epic' },
   { id: 'neon_pulse', name: 'Moldura Neon Pulse', emoji: '💠', description: 'Halo azul pulsante futurista que envolve todo o bloco do perfil.', cost: 50, css: 'fx-neon-pulse', rarity: 'common' },
   { id: 'sunset', name: 'Moldura Pôr do Sol', emoji: '🌅', description: 'Borda giratória em degradê laranja e rosa quente com brilho solar envolvente.', cost: 80, css: 'fx-sunset', rarity: 'common' },
   { id: 'golden', name: 'Moldura Ouro Imperial', emoji: '🥇', description: 'Borda dourada reluzente com rotação e brilho nobre.', cost: 150, css: 'fx-golden', rarity: 'rare' },
@@ -273,6 +277,9 @@ const DEFAULT_EFFECTS = [
   { id: 'sakura', name: 'Moldura Sakura Zen', emoji: '🌸', description: 'Borda suave com tons de pétalas de cerejeira florescente.', cost: 300, css: 'fx-sunset', rarity: 'epic' },
   { id: 'emerald_forest', name: 'Moldura Esmeralda Mística', emoji: '🌲', description: 'Verde esmeralda cintilante com sabedoria ancestral.', cost: 400, css: 'fx-neon-pulse', rarity: 'epic' },
   { id: 'phoenix', name: 'Moldura Fênix Lendária', emoji: '🔴', description: 'Aura suprema de renascimento em rubi e ouro lendário.', cost: 900, css: 'fx-phoenix', rarity: 'legendary' },
+  { id: 'cyberpunk', name: 'Moldura Cyberpunk Neon', emoji: '⚡', description: 'Aura futurista de Night City com glitch dourado e magenta, grade neon e visores cibernéticos!', cost: 350, css: 'fx-cyberpunk', rarity: 'epic' },
+  { id: 'hogwarts', name: 'Moldura Castelo da Magia', emoji: '🧙', description: 'Moldura mística inspirada no mundo bruxo com céu estrelado, brasão dourado e faíscas de feitiço!', cost: 380, css: 'fx-hogwarts', rarity: 'epic' },
+  { id: 'pixel_art', name: 'Moldura Pixel Arcade 8-Bit', emoji: '👾', description: 'Estilo retrô 8-bits com borda pixelada, corações de vida e moedas douradas de videogame!', cost: 260, css: 'fx-pixel-art', rarity: 'rare' },
 ];
 
 const DEFAULT_APP_INFO = {

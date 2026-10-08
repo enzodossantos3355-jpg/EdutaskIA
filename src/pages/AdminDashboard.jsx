@@ -22,6 +22,7 @@ import ZipDataTransferPanel from "@/components/ZipDataTransferPanel";
 import StudentButtonsPanel from "@/components/StudentButtonsPanel";
 import { effectClass, pullScreenToStore } from "@/lib/effects";
 import { getPriority, formatDateBR } from "@/lib/priority";
+import { playWinnerFanfareSound } from "@/lib/soundEffects";
 
 const STATUS_OPTS = [
   { key: "active", label: "Ativo", icon: CheckCircle, bg: "bg-emerald-200" },
@@ -1813,19 +1814,112 @@ function LoginLogsPanel() {
 function StatsPanel() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const { data } = await api.get("/admin/stats");
+      setStats(data);
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    api.get("/admin/stats")
-      .then(({ data }) => setStats(data))
-      .catch((e) => toast.error(formatApiError(e?.response?.data?.detail)))
-      .finally(() => setLoading(false));
-  }, []);
+    fetchStats();
+    window.addEventListener("prize-updated", fetchStats);
+    return () => window.removeEventListener("prize-updated", fetchStats);
+  }, [fetchStats]);
+
+  const handleChooseWinner = async (chosen) => {
+    setActionLoading(true);
+    try {
+      const onTimeVal = chosen.on_time_month ?? chosen.on_time_completions ?? 0;
+      await api.post("/monthly-prize/confirm-winner", {
+        winner_id: chosen.id,
+        winner_name: chosen.name,
+        score: chosen.score || 98,
+        is_tie: false,
+        tied_winners: null,
+        on_time_month: onTimeVal,
+        justification: `Aluno(a) escolhido(a) oficialmente pelo administrador para o Prêmio do Mês entre os alunos empatados no 1º lugar (${onTimeVal} tarefas no prazo e zero pendências).`,
+        criteria: [
+          `${onTimeVal} entrega(s) rigorosamente no prazo`,
+          (chosen.uncompleted_count === 0 || chosen.uncompleted_tasks === 0) ? "Zero pendências no mês" : "Maior compromisso com prazos",
+          "Decisão administrativa de desempate"
+        ]
+      });
+      toast.success(`🎉 ${chosen.name} foi escolhido(a) como vencedor(a) do prêmio!`);
+      playWinnerFanfareSound();
+      window.dispatchEvent(new CustomEvent("prize-updated"));
+      fetchStats();
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail) || "Erro ao definir vencedor");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConfirmJointTie = async () => {
+    const leaders = stats?.ai_monthly?.leaders || [];
+    if (leaders.length === 0) return;
+    setActionLoading(true);
+    try {
+      const onTimeVal = leaders[0].on_time_month ?? leaders[0].on_time_completions ?? 0;
+      await api.post("/monthly-prize/confirm-winner", {
+        winner_id: leaders[0].id,
+        winner_name: leaders.map((l) => l.name).join(" & "),
+        score: leaders[0].score || 98,
+        is_tie: true,
+        tied_winners: leaders,
+        on_time_month: onTimeVal,
+        justification: `Empate conjunto oficializado pelo administrador entre ${leaders.map((l) => l.name).join(' e ')} (${onTimeVal} tarefas no prazo e zero pendências).`,
+        criteria: [
+          `${onTimeVal} entrega(s) rigorosamente no prazo`,
+          "Empate conjunto no 1º lugar",
+          "Ambos reconhecidos como vencedores conjuntos"
+        ]
+      });
+      toast.success("👑 Empate conjunto oficializado como vencedores do mês!");
+      playWinnerFanfareSound();
+      window.dispatchEvent(new CustomEvent("prize-updated"));
+      fetchStats();
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail) || "Erro ao oficializar empate");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRemoveWinnerChoice = async () => {
+    setActionLoading(true);
+    try {
+      await api.delete("/monthly-prize/winner");
+      toast.success("Escolha de vencedor removida! O resultado retornou ao estado original de empate.");
+      window.dispatchEvent(new CustomEvent("prize-updated"));
+      fetchStats();
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail) || "Erro ao remover escolha");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   if (loading) return <p className="text-neutral-500">Carregando...</p>;
   if (!stats) return null;
 
   const maxDayCount = Math.max(1, ...stats.completions_per_day.map((d) => d.count));
   const maxSubjCount = Math.max(1, ...(stats.top_subjects || []).map((s) => s.count));
+
+  const isTie = Boolean(stats.ai_monthly?.is_tie_top1 || (stats.ai_monthly?.leaders && stats.ai_monthly.leaders.length > 1));
+  const leaders = stats.ai_monthly?.leaders && stats.ai_monthly.leaders.length > 0
+    ? stats.ai_monthly.leaders
+    : (stats.ai_monthly?.leader ? [stats.ai_monthly.leader] : []);
+  const activeWinner = stats.ai_monthly?.ai_winner;
+  const hasCustomWinner = Boolean(activeWinner && !activeWinner.is_tie);
+  const hasJointTieWinner = Boolean(activeWinner && activeWinner.is_tie);
 
   return (
     <div className="space-y-8">
@@ -1836,47 +1930,200 @@ function StatsPanel() {
 
       <PrizeEditor />
 
-      {/* AI Monthly Leader Spotlight */}
-      {stats.ai_monthly?.leader && (
+      {/* AI Monthly Leader / Tie Spotlight */}
+      {stats.ai_monthly && leaders.length > 0 && (
         <div className="nb-card bg-gradient-to-br from-amber-300 via-amber-200 to-amber-300 p-5 sm:p-6 border-3 border-black relative overflow-hidden" data-testid="admin-ai-leader-card">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="nb-badge bg-black text-amber-300 text-xs font-black uppercase tracking-wider">
-              👑 Pessoa que está liderando segundo a IA ({stats.ai_monthly.month_label})
-            </span>
-            <span className="nb-badge bg-white text-neutral-900 text-xs font-bold">
-              Nota IA: {stats.ai_monthly.leader.score}/100
-            </span>
+          {/* Header Badges */}
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="nb-badge bg-black text-amber-300 text-xs font-black uppercase tracking-wider">
+                {isTie
+                  ? `👑 Empate no 1º Lugar (${leaders.length} alunos empatados) • ${stats.ai_monthly.month_label}`
+                  : `👑 Líder da Avaliação Pedagógica IA • ${stats.ai_monthly.month_label}`}
+              </span>
+              <span className="nb-badge bg-white text-neutral-900 text-xs font-bold">
+                Nota IA: {leaders[0]?.score || stats.ai_monthly.leader?.score || 98}/100
+              </span>
+            </div>
+
+            {activeWinner && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`nb-badge text-xs font-black ${hasCustomWinner ? "bg-emerald-300 text-emerald-950 border-emerald-950" : "bg-amber-400 text-amber-950 border-amber-950"}`}>
+                  {hasCustomWinner ? `🏆 Vencedor Escolhido: ${activeWinner.winner_name}` : `👑 Empate Oficializado: ${activeWinner.winner_name}`}
+                </span>
+                <button
+                  onClick={handleRemoveWinnerChoice}
+                  disabled={actionLoading}
+                  className="nb-btn bg-red-200 hover:bg-red-300 text-red-950 text-xs py-1 px-2.5 font-black flex items-center gap-1 border-2 border-red-950 shadow-[1px_1px_0px_0px_#000]"
+                  title="Tirar a escolha e voltar ao resultado original de empate"
+                  data-testid="remove-winner-choice-btn"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Tirar a escolha
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-start sm:items-center gap-4 flex-wrap sm:flex-nowrap mt-3">
-            <Avatar
-              userId={stats.ai_monthly.leader.id}
-              name={stats.ai_monthly.leader.name}
-              size={64}
-              hasAvatar={stats.ai_monthly.leader.has_avatar}
-              bg="bg-sky-300"
-              effect={effectClass(stats.ai_monthly.leader.equipped_effect)}
-            />
-            <div className="flex-1 min-w-0">
-              <h3 className="font-heading font-black text-2xl text-neutral-900 leading-tight">
-                {stats.ai_monthly.leader.name}
-              </h3>
-              <div className="flex flex-wrap items-center gap-2 mt-1">
-                <span className="nb-badge bg-white text-emerald-900 text-xs font-bold flex items-center gap-1">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                  {stats.ai_monthly.leader.on_time_month} tarefa(s) no prazo
-                </span>
-                <span className="nb-badge bg-white text-neutral-900 text-xs font-bold flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-amber-600" />
-                  {stats.ai_monthly.leader.uncompleted_count === 0 ? "Zero pendências" : `${stats.ai_monthly.leader.uncompleted_count} pendência(s)`}
-                </span>
-                <span className="nb-badge bg-white text-violet-950 text-xs font-bold">
-                  🛍️ {stats.ai_monthly.leader?.points || 0} pts (p/ molduras)
+          {/* Tie or Single Leader Layout */}
+          {isTie ? (
+            <div className="space-y-4">
+              <div className="bg-amber-100/90 border-2 border-amber-900/30 rounded-xl p-3 text-xs text-amber-950 font-bold flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-800 flex-shrink-0" />
+                  <span>
+                    <strong>Informação de Empate:</strong> Os alunos abaixo obtiveram a mesma pontuação máxima de pontualidade ({leaders[0]?.on_time_month || 0} no prazo) e zero pendências.
+                  </span>
+                </div>
+                <span className="text-[11px] bg-amber-300 px-2 py-0.5 rounded border border-amber-900/40">
+                  Você pode escolher quem vai ganhar ou manter o empate!
                 </span>
               </div>
-            </div>
-          </div>
 
+              {/* Grid dos alunos empatados com opção de escolha individual */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {leaders.map((l) => {
+                  const isSelectedAsWinner = hasCustomWinner && (activeWinner.winner_id === l.id || activeWinner.winner_name === l.name);
+                  return (
+                    <div
+                      key={l.id}
+                      className={`nb-card p-4 transition-all duration-200 flex flex-col justify-between ${
+                        isSelectedAsWinner
+                          ? "bg-emerald-100 border-3 border-emerald-900 shadow-[4px_4px_0px_0px_#064e3b]"
+                          : "bg-white/95 border-2 border-black"
+                      }`}
+                      data-testid={`tied-candidate-${l.id}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <Avatar
+                          userId={l.id}
+                          name={l.name}
+                          size={56}
+                          hasAvatar={l.has_avatar}
+                          bg="bg-sky-300"
+                          effect={effectClass(l.equipped_effect)}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className="font-heading font-black text-lg text-neutral-900 leading-tight truncate">
+                              {l.name}
+                            </h4>
+                            <span className="nb-badge bg-amber-200 text-amber-900 text-[10px] font-black">
+                              👑 1º Lugar
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="nb-badge bg-emerald-100 text-emerald-900 text-[10px] font-bold flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3 text-emerald-600" />
+                              {l.on_time_month || 0} no prazo
+                            </span>
+                            <span className="nb-badge bg-white text-neutral-800 text-[10px] font-bold">
+                              {l.uncompleted_count === 0 ? "0 pendências" : `${l.uncompleted_count} pend.`}
+                            </span>
+                            <span className="nb-badge bg-violet-100 text-violet-950 text-[10px] font-bold">
+                              🛍️ {l.points || 0} pts
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Botão de Escolha para este aluno */}
+                      <div className="mt-3 pt-2.5 border-t border-neutral-200 flex items-center justify-between gap-2">
+                        {isSelectedAsWinner ? (
+                          <span className="nb-badge bg-emerald-300 text-emerald-950 font-black text-xs py-1.5 px-3 border border-emerald-900 flex items-center justify-center gap-1 w-full">
+                            <Trophy className="w-3.5 h-3.5" /> Vencedor(a) Escolhido(a)
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleChooseWinner(l)}
+                            disabled={actionLoading}
+                            className="nb-btn bg-white hover:bg-emerald-200 text-xs py-1.5 px-3 font-bold flex items-center gap-1.5 shadow-[2px_2px_0px_0px_#000] w-full justify-center"
+                            title={`Escolher ${l.name} para vencer o prêmio individualmente`}
+                            data-testid={`choose-winner-${l.id}`}
+                          >
+                            👉 Escolher {l.name} como Vencedor(a)
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Barra de Ações Coletivas do Empate */}
+              <div className="flex items-center gap-3 flex-wrap pt-2">
+                <button
+                  onClick={handleConfirmJointTie}
+                  disabled={actionLoading}
+                  className={`nb-btn text-xs py-2 px-3.5 font-bold flex items-center gap-1.5 ${
+                    hasJointTieWinner
+                      ? "bg-amber-400 text-amber-950 border-2 border-black"
+                      : "bg-white hover:bg-amber-100 text-neutral-900"
+                  }`}
+                  data-testid="confirm-joint-tie-btn"
+                >
+                  <Users className="w-4 h-4 text-amber-700" />
+                  {hasJointTieWinner ? "✅ Empate Conjunto Oficializado (Ambos Vencem)" : "🤝 Oficializar Empate Conjunto (Ambos Vencem)"}
+                </button>
+
+                {activeWinner && (
+                  <button
+                    onClick={handleRemoveWinnerChoice}
+                    disabled={actionLoading}
+                    className="nb-btn bg-red-200 hover:bg-red-300 text-red-950 text-xs py-2 px-3.5 font-black flex items-center gap-1.5 border-2 border-red-900"
+                    data-testid="remove-choice-btn"
+                  >
+                    <Trash2 className="w-4 h-4" /> Tirar a Escolha (Voltar ao Empate)
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Caso de líder único */
+            <div className="space-y-4">
+              <div className="flex items-start sm:items-center gap-4 flex-wrap sm:flex-nowrap mt-3">
+                <Avatar
+                  userId={stats.ai_monthly.leader.id}
+                  name={stats.ai_monthly.leader.name}
+                  size={64}
+                  hasAvatar={stats.ai_monthly.leader.has_avatar}
+                  bg="bg-sky-300"
+                  effect={effectClass(stats.ai_monthly.leader.equipped_effect)}
+                />
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-heading font-black text-2xl text-neutral-900 leading-tight">
+                    {stats.ai_monthly.leader.name}
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className="nb-badge bg-white text-emerald-900 text-xs font-bold flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      {stats.ai_monthly.leader.on_time_month} tarefa(s) no prazo
+                    </span>
+                    <span className="nb-badge bg-white text-neutral-900 text-xs font-bold flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      {stats.ai_monthly.leader.uncompleted_count === 0 ? "Zero pendências" : `${stats.ai_monthly.leader.uncompleted_count} pendência(s)`}
+                    </span>
+                    <span className="nb-badge bg-white text-violet-950 text-xs font-bold">
+                      🛍️ {stats.ai_monthly.leader?.points || 0} pts (p/ molduras)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {activeWinner && (
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    onClick={handleRemoveWinnerChoice}
+                    disabled={actionLoading}
+                    className="nb-btn bg-red-200 hover:bg-red-300 text-red-950 text-xs py-1.5 px-3 font-bold flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Tirar a Escolha
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Parecer Pedagógico da IA */}
           <div className="mt-4 nb-card bg-white/95 p-3.5 border-2 border-black text-xs sm:text-sm text-neutral-800 leading-relaxed font-medium">
             <div className="text-[10px] font-black uppercase tracking-wider text-amber-900 mb-1 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-amber-600" /> Parecer Pedagógico da IA:
@@ -1909,14 +2156,30 @@ function StatsPanel() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {stats.top_students.map((s, i) => {
+              const tiedIds = new Set((stats.ai_monthly?.leaders || []).map((l) => l.id));
+              const isTiedWithTop = isTie && tiedIds.has(s.id);
               return (
                 <div key={s.id} className="nb-card p-4 bg-white flex items-center gap-3" data-testid={`top-student-${s.id}`}>
-                  <div className={`font-heading font-black text-2xl w-8 text-center ${i === 0 ? "text-amber-500" : i === 1 ? "text-gray-400" : i === 2 ? "text-orange-700" : "text-neutral-500"}`}>
-                    #{i + 1}
+                  <div className={`font-heading font-black text-2xl w-12 text-center flex flex-col items-center justify-center leading-none ${
+                    isTiedWithTop || i === 0 ? "text-amber-500" : i === 1 ? "text-gray-400" : i === 2 ? "text-orange-700" : "text-neutral-500"
+                  }`}>
+                    <span>{isTiedWithTop ? "#1" : `#${i + 1}`}</span>
+                    {isTiedWithTop && (
+                      <span className="text-[8px] uppercase tracking-wider font-bold bg-amber-200 text-amber-950 px-1 py-0.5 rounded mt-0.5 leading-none">
+                        Empate
+                      </span>
+                    )}
                   </div>
                   <Avatar userId={s.id} name={s.name} size={48} hasAvatar={s.has_avatar} bg="bg-sky-200" />
                   <div className="flex-1 min-w-0">
-                    <div className="font-heading font-bold truncate">{s.name}</div>
+                    <div className="font-heading font-bold truncate flex items-center gap-1.5">
+                      <span>{s.name}</span>
+                      {isTiedWithTop && (
+                        <span className="nb-badge bg-amber-100 text-amber-900 text-[9px] font-bold">
+                          👑 Top 1
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
                       <span className="nb-badge bg-emerald-100 text-emerald-900 text-[10px] font-bold">
                         🎯 {s.on_time_completions || 0} no prazo
@@ -2142,9 +2405,58 @@ function PrizeEditor() {
                 {data.prize.description && <p className="text-sm text-neutral-700 mt-1">{data.prize.description}</p>}
                 <p className="text-xs text-neutral-600 mt-2">
                   Restam {data.days_remaining} dia{data.days_remaining === 1 ? "" : "s"}
-                  {data.leader && (
-                    <span> • Liderando: <span className="font-bold">{data.leader.name}</span> ({(data.leader?.on_time_month ?? data.leader?.on_time ?? 0)} no prazo • {data.leader?.points || 0} pts)</span>
-                  )}
+                  {data.is_tie_top1 && data.leaders?.length > 1 ? (
+                    <span>
+                      {" "}• 👑 <span className="font-bold text-amber-950">Empate no 1º lugar:</span>{" "}
+                      {data.leaders.map((l) => l.name).join(" e ")} ({(data.leaders[0]?.on_time_month ?? data.leaders[0]?.on_time ?? 0)} no prazo)
+                      {data.ai_winner && (
+                        <span className="ml-1">
+                          • <span className="font-bold text-emerald-900">[Vencedor: {data.ai_winner.winner_name}]</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await api.delete("/monthly-prize/winner");
+                                toast.success("Escolha de vencedor removida!");
+                                window.dispatchEvent(new CustomEvent("prize-updated"));
+                                load();
+                              } catch (e) {
+                                toast.error("Falha ao remover escolha");
+                              }
+                            }}
+                            className="ml-2 text-xs font-bold text-red-700 hover:text-red-900 underline"
+                          >
+                            Tirar escolha
+                          </button>
+                        </span>
+                      )}
+                    </span>
+                  ) : data.leader ? (
+                    <span>
+                      {" "}• Liderando: <span className="font-bold">{data.leader.name}</span> ({(data.leader?.on_time_month ?? data.leader?.on_time ?? 0)} no prazo • {data.leader?.points || 0} pts)
+                      {data.ai_winner && (
+                        <span className="ml-1">
+                          • <span className="font-bold text-emerald-900">[Vencedor: {data.ai_winner.winner_name}]</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await api.delete("/monthly-prize/winner");
+                                toast.success("Escolha de vencedor removida!");
+                                window.dispatchEvent(new CustomEvent("prize-updated"));
+                                load();
+                              } catch (e) {
+                                toast.error("Falha ao remover escolha");
+                              }
+                            }}
+                            className="ml-2 text-xs font-bold text-red-700 hover:text-red-900 underline"
+                          >
+                            Tirar escolha
+                          </button>
+                        </span>
+                      )}
+                    </span>
+                  ) : null}
                 </p>
               </div>
             </div>

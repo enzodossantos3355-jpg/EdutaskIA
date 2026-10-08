@@ -20,6 +20,7 @@ import { getPriority, formatDateBR, daysUntil } from "@/lib/priority";
 import { fireConfetti } from "@/lib/celebrate";
 import { getTheme } from "@/lib/themes";
 import { pullScreenToStore } from "@/lib/effects";
+import { playTaskCompleteSound, playTaskUncheckSound } from "@/lib/soundEffects";
 
 const subjectColors = ["bg-sky-200", "bg-amber-200", "bg-red-200", "bg-emerald-200", "bg-violet-200", "bg-rose-200"];
 const colorFor = (s) => subjectColors[(s || "").length % subjectColors.length];
@@ -150,11 +151,13 @@ export default function StudentDashboard() {
     try {
       if (task.completed) {
         await api.post(`/tasks/${task.id}/uncomplete`);
+        playTaskUncheckSound();
         toast("Tarefa desmarcada");
       } else {
         const { data } = await api.post(`/tasks/${task.id}/complete`);
         const earned = data?.points_earned || 0;
         const onTime = data?.on_time;
+        playTaskCompleteSound();
         toast.success(
           earned > 0
             ? `+${earned} pontos! ${onTime ? "🎯 No prazo!" : "Entregue com atraso"}`

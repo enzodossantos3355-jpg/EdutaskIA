@@ -1,6 +1,13 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, getFirestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, setLogLevel } from 'firebase/firestore';
+
+// Suprime logs de depuração internos do gRPC/Listen do Firestore
+try {
+  setLogLevel('error');
+} catch {
+  // Ignora se não for suportado
+}
 
 const defaultConfig = {
   apiKey: "AIzaSyDsAo1hTSOe6Q21QcNeHmGNt650rkzBBmc",

@@ -84,10 +84,50 @@ export default function AIAdminPanel() {
         criteria: prizeEval.criteria,
       });
       toast.success(`🎉 ${prizeEval.winner_name} foi oficializado como vencedor(a) do mês!`);
+      window.dispatchEvent(new CustomEvent("prize-updated"));
     } catch (e) {
       toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao confirmar vencedor");
     } finally {
       setConfirmingWinner(false);
+    }
+  };
+
+  const chooseTiedWinner = async (chosen) => {
+    setConfirmingWinner(true);
+    try {
+      const onTimeVal = chosen.on_time_month || 0;
+      await api.post("/monthly-prize/confirm-winner", {
+        winner_id: chosen.id,
+        winner_name: chosen.name,
+        score: chosen.score || prizeEval?.winner_score || 98,
+        is_tie: false,
+        tied_winners: null,
+        on_time_month: onTimeVal,
+        justification: `Aluno(a) escolhido(a) oficialmente pelo administrador para o Prêmio do Mês entre os alunos empatados no 1º lugar (${onTimeVal} tarefas no prazo e zero pendências).`,
+        criteria: [
+          `${onTimeVal} entrega(s) rigorosamente no prazo`,
+          "Zero pendências no mês",
+          "Decisão administrativa de desempate"
+        ],
+      });
+      toast.success(`🎉 ${chosen.name} foi escolhido(a) como vencedor(a) do prêmio!`);
+      window.dispatchEvent(new CustomEvent("prize-updated"));
+      runEval();
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao escolher vencedor");
+    } finally {
+      setConfirmingWinner(false);
+    }
+  };
+
+  const removeWinnerChoice = async () => {
+    try {
+      await api.delete("/monthly-prize/winner");
+      toast.success("Escolha de vencedor removida! O resultado retornou ao empate.");
+      window.dispatchEvent(new CustomEvent("prize-updated"));
+      runEval();
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao remover escolha");
     }
   };
 
@@ -222,26 +262,44 @@ export default function AIAdminPanel() {
 
               {/* Se houver empate no 1º lugar, exibe os avatares de todos os empatados em primeiro */}
               {prizeEval.tied_winners && prizeEval.tied_winners.length > 1 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                  {prizeEval.tied_winners.map((tw) => (
-                    <div key={tw.id} className="p-3 bg-amber-50 rounded-xl border-2 border-black flex items-center gap-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                      <Avatar
-                        userId={tw.id}
-                        name={tw.name}
-                        size={46}
-                        hasAvatar={tw.has_avatar}
-                        bg="bg-amber-200"
-                        effect={effectClass(tw.equipped_effect)}
-                      />
-                      <div className="min-w-0">
-                        <div className="font-heading font-black text-sm text-neutral-900 truncate">{tw.name}</div>
-                        <div className="text-[10px] font-bold text-amber-900">👑 1º Lugar Empatado(a)</div>
-                        <div className="text-[10px] text-neutral-700 font-medium">
-                          {tw.on_time_month || 0} no prazo • {tw.uncompleted_count === 0 ? "zero pendências" : `${tw.uncompleted_count} pend.`}
+                <div className="space-y-2 mb-4">
+                  <div className="text-xs font-bold text-amber-950 flex items-center justify-between">
+                    <span>👑 Alunos Empatados no 1º Lugar:</span>
+                    <span className="text-[10px] text-neutral-600 font-normal">Você pode oficializar todos ou escolher um(a):</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {prizeEval.tied_winners.map((tw) => (
+                      <div key={tw.id} className="p-3 bg-amber-50 rounded-xl border-2 border-black flex flex-col justify-between shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        <div className="flex items-center gap-3">
+                          <Avatar
+                            userId={tw.id}
+                            name={tw.name}
+                            size={46}
+                            hasAvatar={tw.has_avatar}
+                            bg="bg-amber-200"
+                            effect={effectClass(tw.equipped_effect)}
+                          />
+                          <div className="min-w-0">
+                            <div className="font-heading font-black text-sm text-neutral-900 truncate">{tw.name}</div>
+                            <div className="text-[10px] font-bold text-amber-900">👑 1º Lugar Empatado(a)</div>
+                            <div className="text-[10px] text-neutral-700 font-medium">
+                              {tw.on_time_month || 0} no prazo • {tw.uncompleted_count === 0 ? "zero pendências" : `${tw.uncompleted_count} pend.`}
+                            </div>
+                          </div>
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={() => chooseTiedWinner(tw)}
+                          disabled={confirmingWinner}
+                          className="mt-2.5 nb-btn bg-white hover:bg-emerald-200 text-neutral-900 text-xs py-1 px-2 font-bold flex items-center justify-center gap-1 shadow-[1px_1px_0px_0px_#000]"
+                          title={`Escolher ${tw.name} para vencer o prêmio individualmente`}
+                        >
+                          👉 Escolher {tw.name} como Vencedor(a)
+                        </button>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -278,6 +336,14 @@ export default function AIAdminPanel() {
                 >
                   <Trophy className="w-4 h-4 text-emerald-950" />
                   {confirmingWinner ? "Publicando..." : prizeEval.is_tie ? "Oficializar Vencedores Empatados no Mural" : "Oficializar Vencedor e Publicar no Mural"}
+                </button>
+                <button
+                  type="button"
+                  onClick={removeWinnerChoice}
+                  className="nb-btn bg-red-200 hover:bg-red-300 text-red-950 px-3 py-2 text-xs flex items-center gap-1.5 font-bold"
+                  title="Tirar a escolha e voltar ao resultado original de empate"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Tirar a Escolha
                 </button>
                 <button
                   onClick={() => {

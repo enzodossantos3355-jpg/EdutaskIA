@@ -202,7 +202,7 @@ export default function LoginPage() {
                               effect={!meta.dim ? effectClass(p.equipped_effect) : null}
                             />
                           </div>
-                          <div className="font-heading font-bold text-base leading-tight truncate">{p.name}</div>
+                          <div className="font-heading font-bold text-base leading-tight truncate text-black">{p.name}</div>
                           {meta.label ? (
                             <span className={`nb-badge mt-2 inline-flex items-center gap-1 ${meta.bg}`} data-testid={`profile-status-${p.id}`}>
                               {StatusIcon && <StatusIcon className="w-3 h-3" strokeWidth={2.5} />}

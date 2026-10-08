@@ -61,10 +61,10 @@ export default function MyProfileBanner({ bg = null, onOpenStore = null }) {
               compact={false}
             />
             <div className="min-w-0 flex-1">
-              <p className="font-heading font-bold text-base sm:text-lg leading-tight flex items-center gap-2 flex-wrap">
+              <p className="font-heading font-bold text-base sm:text-lg leading-tight flex items-center gap-2 flex-wrap text-black">
                 <span className="truncate">{user.name}</span>
               </p>
-              <p className="text-xs opacity-85 font-medium">{user.role === "admin" ? "Administrador" : "Aluno"}</p>
+              <p className="text-xs font-semibold text-black/85">{user.role === "admin" ? "Administrador" : "Aluno"}</p>
               {user.role === "admin" && (
                 <button
                   onClick={() => setEditing(true)}
