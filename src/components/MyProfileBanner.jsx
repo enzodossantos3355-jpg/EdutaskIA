@@ -22,9 +22,20 @@ export default function MyProfileBanner({ bg = null, onOpenStore = null }) {
   const bannerBg = bg || currentTheme.dashboardBannerClass || "bg-amber-200 border-2 border-black";
 
   useEffect(() => {
-    if (user?.role === "aluno") {
-      api.get("/me/stats").then(({ data }) => setStats(data)).catch(() => {});
-    }
+    const fetchMyStats = () => {
+      if (user?.role === "aluno") {
+        api.get("/me/stats").then(({ data }) => setStats(data)).catch(() => {});
+      }
+    };
+    fetchMyStats();
+    window.addEventListener("task-completed", fetchMyStats);
+    window.addEventListener("tasks-updated", fetchMyStats);
+    window.addEventListener("prize-updated", fetchMyStats);
+    return () => {
+      window.removeEventListener("task-completed", fetchMyStats);
+      window.removeEventListener("tasks-updated", fetchMyStats);
+      window.removeEventListener("prize-updated", fetchMyStats);
+    };
   }, [user?.role]);
 
   if (!user) return null;

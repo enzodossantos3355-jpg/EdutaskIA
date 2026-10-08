@@ -2143,7 +2143,7 @@ function PrizeEditor() {
                 <p className="text-xs text-neutral-600 mt-2">
                   Restam {data.days_remaining} dia{data.days_remaining === 1 ? "" : "s"}
                   {data.leader && (
-                    <span> • Liderando: <span className="font-bold">{data.leader.name}</span> ({data.leader?.points || 0} pts)</span>
+                    <span> • Liderando: <span className="font-bold">{data.leader.name}</span> ({(data.leader?.on_time_month ?? data.leader?.on_time ?? 0)} no prazo • {data.leader?.points || 0} pts)</span>
                   )}
                 </p>
               </div>

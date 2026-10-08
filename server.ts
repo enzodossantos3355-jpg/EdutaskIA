@@ -687,7 +687,20 @@ class Database {
       }
 
       if (completions && completions.length > 0) {
-        this.completions = completions;
+        const compMap = new Map<string, any>();
+        (this.completions || []).forEach((c: any) => {
+          const k = c.id || `${c.user_id}_${c.task_id}`;
+          compMap.set(k, { ...c, id: k });
+        });
+        completions.forEach((c: any) => {
+          const k = c.id || `${c.user_id}_${c.task_id}`;
+          if (!compMap.has(k)) {
+            compMap.set(k, { ...c, id: k });
+          } else {
+            compMap.set(k, { ...compMap.get(k), ...c });
+          }
+        });
+        this.completions = Array.from(compMap.values());
       }
 
       if (comments && comments.length > 0) {
@@ -698,8 +711,24 @@ class Database {
 
       if (settings) {
         this.monthly_prize = settings.monthly_prize || null;
-        if (settings.task_cleanup_config) this.task_cleanup_config = { ...this.task_cleanup_config, ...settings.task_cleanup_config };
-        if (settings.whatsapp_config) this.whatsapp_config = { ...this.whatsapp_config, ...settings.whatsapp_config };
+        if (settings.task_cleanup_config) {
+          const prevRunDate = this.task_cleanup_config?.last_run_date;
+          this.task_cleanup_config = { ...this.task_cleanup_config, ...settings.task_cleanup_config };
+          if (prevRunDate && !this.task_cleanup_config.last_run_date) {
+            this.task_cleanup_config.last_run_date = prevRunDate;
+          }
+        }
+        if (settings.whatsapp_config) {
+          const prevReminderRunDate = this.whatsapp_config?.daily_reminder?.last_run_date;
+          const prevAutoActivationRunDate = this.whatsapp_config?.auto_activation_schedule?.last_run_date;
+          this.whatsapp_config = { ...this.whatsapp_config, ...settings.whatsapp_config };
+          if (prevReminderRunDate && this.whatsapp_config?.daily_reminder) {
+            this.whatsapp_config.daily_reminder.last_run_date = prevReminderRunDate;
+          }
+          if (prevAutoActivationRunDate && this.whatsapp_config?.auto_activation_schedule) {
+            this.whatsapp_config.auto_activation_schedule.last_run_date = prevAutoActivationRunDate;
+          }
+        }
         if (settings.app_info) this.app_info = settings.app_info;
         if (settings.effect_overrides) this.effect_overrides = settings.effect_overrides;
       } else {
@@ -1108,7 +1137,16 @@ api.get('/me/stats', requireAuth, (req, res) => {
   const points = user.points || 0;
 
   const myCompletions = db.completions.filter((c) => c.user_id === user.id);
-  const onTimeCount = myCompletions.filter((c) => c.on_time).length;
+  const onTimeCount = myCompletions.filter((c) => {
+    if (Boolean(c.on_time)) return true;
+    const task = db.tasks.get(c.task_id);
+    if (!task || !task.due_date) return true;
+    const compYMD = parseDateYMD(c.completed_at);
+    const dueYMD = parseDateYMD(task.due_date);
+    if (!dueYMD) return true;
+    if (!compYMD) return true;
+    return compYMD <= dueYMD;
+  }).length;
 
   res.json({
     points, // Pontos obtidos exclusivamente para a loja de molduras
@@ -2876,7 +2914,7 @@ export function checkMonthlyRollover() {
 function calculateMonthlyAILeaderboard(reqUser?: User) {
   checkMonthlyRollover();
   const range = getCurrentMonthRange();
-  const students = Array.from(db.users.values()).filter((u) => u.role === 'aluno' && u.status === 'active');
+  const students = Array.from(db.users.values()).filter((u) => u.role === 'aluno' && (u.status as string) !== 'inactive' && u.status !== 'blocked');
   const allTasks = Array.from(db.tasks.values());
 
   // 1. Tarefas do MÊS (entrega marcada dentro do mês ou criadas no mês)
@@ -2900,12 +2938,13 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
   const studentMetrics = students.map((s) => {
     const sComps = monthlyCompletions.filter((c) => c.user_id === s.id);
     const onTime = sComps.filter((c) => {
-      if (c.on_time === true) return true;
+      if (Boolean(c.on_time)) return true;
       const task = db.tasks.get(c.task_id);
       if (!task || !task.due_date) return true;
       const compYMD = parseDateYMD(c.completed_at);
       const dueYMD = parseDateYMD(task.due_date);
       if (!dueYMD) return true;
+      if (!compYMD) return true;
       return compYMD <= dueYMD;
     }).length;
     const late = sComps.length - onTime;
@@ -3032,9 +3071,24 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
       )
     );
     const isAdmin = Boolean(reqUser && reqUser.role === 'admin');
+    const winnerMetrics = studentMetrics.find((m) => m.id === raw.winner_id);
+    const winnerOnTime = raw.on_time_month !== undefined
+      ? raw.on_time_month
+      : (winnerMetrics?.on_time_month ?? top?.on_time_month ?? 0);
+
+    const tiedWithOnTime = (raw.tied_winners || []).map((tw: any) => {
+      const m = studentMetrics.find((sm) => sm.id === tw.id);
+      return {
+        ...tw,
+        on_time_month: tw.on_time_month ?? m?.on_time_month ?? winnerOnTime,
+      };
+    });
+
     if (isWinner || isAdmin) {
       sanitizedWinner = {
         ...raw,
+        on_time_month: winnerOnTime,
+        tied_winners: tiedWithOnTime.length > 0 ? tiedWithOnTime : raw.tied_winners,
         is_me: isWinner,
       };
     } else {
@@ -3042,8 +3096,10 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
         winner_id: raw.winner_id,
         winner_name: raw.winner_name,
         winner_score: raw.winner_score || raw.score || 98,
+        on_time_month: winnerOnTime,
+        criteria: raw.criteria || [`${winnerOnTime} entrega(s) no prazo`, 'Zero pendências no mês'],
         is_tie: Boolean(raw.is_tie),
-        tied_winners: raw.tied_winners || null,
+        tied_winners: tiedWithOnTime.length > 0 ? tiedWithOnTime : raw.tied_winners,
         is_me: false,
       };
     }
@@ -3129,7 +3185,7 @@ api.put('/monthly-prize', requireAdmin, (req, res) => {
 });
 
 api.post('/monthly-prize/confirm-winner', requireAdmin, (req, res) => {
-  const { winner_id, winner_name, justification, criteria, score, is_tie, tied_winners } = req.body || {};
+  const { winner_id, winner_name, justification, criteria, score, is_tie, tied_winners, on_time_month } = req.body || {};
   if (!winner_name) return res.status(400).json({ detail: 'Nome do vencedor obrigatório' });
 
   if (!db.monthly_prize) {
@@ -3137,14 +3193,27 @@ api.post('/monthly-prize/confirm-winner', requireAdmin, (req, res) => {
   }
 
   const range = getCurrentMonthRange();
+  const board = calculateMonthlyAILeaderboard();
+  const foundLeader = board.rankings.find((r: any) => r.id === winner_id) || board.leader;
+  const determinedOnTime = on_time_month !== undefined ? Number(on_time_month) : (foundLeader?.on_time_month ?? 0);
+
+  const enhancedTiedWinners = (tied_winners || []).map((tw: any) => {
+    const rankInfo = board.rankings.find((r: any) => r.id === tw.id);
+    return {
+      ...tw,
+      on_time_month: tw.on_time_month !== undefined ? Number(tw.on_time_month) : (rankInfo?.on_time_month ?? determinedOnTime),
+    };
+  });
+
   db.monthly_prize.ai_winner = {
     winner_id,
     winner_name,
     score: score || 95,
+    on_time_month: determinedOnTime,
     is_tie: Boolean(is_tie || (tied_winners && tied_winners.length > 1)),
-    tied_winners: tied_winners || null,
+    tied_winners: enhancedTiedWinners.length > 0 ? enhancedTiedWinners : null,
     justification: justification || 'Aluno(a) eleito(a) com base na Avaliação Mensal de Desempenho e Pontualidade por Inteligência Artificial.',
-    criteria: criteria || ['Entregas no prazo', 'Consistência nos estudos'],
+    criteria: criteria || [`${determinedOnTime} tarefa(s) no prazo`, 'Consistência nos estudos'],
     confirmed_at: new Date().toISOString(),
     month_key: range.monthKey,
   };
@@ -3491,6 +3560,7 @@ api.post(['/whatsapp/send-firmware', '/firmware/send-whatsapp'], requireAdmin, u
 });
 
 api.post(['/whatsapp/test-tomorrow-reminder', '/whatsapp/dispatch-reminders', '/whatsapp/dispatch-tomorrow-reminder'], requireAdmin, async (req, res) => {
+  const { group1_extra, tomorrow_caption } = req.body || {};
   const status = whatsappService.getStatus();
   if (status.status !== 'connected') {
     return res.status(400).json({ detail: 'WhatsApp não está conectado. Conecte na aba "WhatsApp" primeiro.' });
@@ -3500,7 +3570,7 @@ api.post(['/whatsapp/test-tomorrow-reminder', '/whatsapp/dispatch-reminders', '/
   }
 
   try {
-    const outcome = await executeTomorrowTasksDispatch(true);
+    const outcome = await executeTomorrowTasksDispatch(true, group1_extra, tomorrow_caption);
     if (!outcome.dispatched) {
       return res.json({
         ok: true,
@@ -3520,14 +3590,14 @@ api.post(['/whatsapp/test-tomorrow-reminder', '/whatsapp/dispatch-reminders', '/
 });
 
 // Helper para disparo de tarefas do dia seguinte
-async function executeTomorrowTasksDispatch(isTest = false) {
+async function executeTomorrowTasksDispatch(isTest = false, overrideExtra?: string, overrideCaption?: string) {
   const clock = getSystemClock();
   const tomorrowDateObj = new Date(clock.timestamp + 24 * 60 * 60 * 1000);
   const tomorrowClock = getSystemClockForDate(tomorrowDateObj);
   const tomorrowStr = tomorrowClock.yearMonthDay;
   const tomorrowDateBR = tomorrowClock.dateStr;
 
-  let tomorrowTasks = Array.from(db.tasks.values()).filter((t) => t.due_date === tomorrowStr);
+  let tomorrowTasks = Array.from(db.tasks.values()).filter((t) => parseDateYMD(t.due_date) === tomorrowStr);
 
   if (tomorrowTasks.length === 0 && isTest) {
     // Se for teste manual e não houver tarefas com entrega exatamente amanhã, pega as 2 tarefas mais recentes para demonstração
@@ -3563,8 +3633,8 @@ async function executeTomorrowTasksDispatch(isTest = false) {
       points: t.points,
       description: t.description,
     })),
-    custom_caption_template: templates.tomorrow_caption,
-    group1_extra: templates.group1_tomorrow_extra || undefined,
+    custom_caption_template: overrideCaption !== undefined ? overrideCaption : templates.tomorrow_caption,
+    group1_extra: overrideExtra !== undefined ? overrideExtra : (templates.group1_tomorrow_extra || undefined),
     photo_buffer: photoBuffer,
     photo_content_type: photoContentType,
     group1_enabled: true,
@@ -3619,6 +3689,7 @@ async function checkWhatsAppAutoActivationScheduler() {
 }
 
 // Background scheduler para lembrete diário de tarefas
+let lastDailyReminderRunMinuteKey = '';
 async function checkDailyTomorrowReminder() {
   try {
     const config = db.whatsapp_config;
@@ -3629,7 +3700,10 @@ async function checkDailyTomorrowReminder() {
     const todayStr = clock.yearMonthDay;
 
     const targetTime = (config.daily_reminder.time || '19:00').trim();
-    if (currentTimeStr === targetTime && config.daily_reminder.last_run_date !== todayStr) {
+    const runKey = `${todayStr}_${targetTime}`;
+
+    if (currentTimeStr === targetTime && config.daily_reminder.last_run_date !== todayStr && lastDailyReminderRunMinuteKey !== runKey) {
+      lastDailyReminderRunMinuteKey = runKey;
       console.log(`[WhatsApp Reminder] Horário agendado atingido pelo Relógio do Sistema (${currentTimeStr}). Disparando lembrete de tarefas para amanhã...`);
       config.daily_reminder.last_run_date = todayStr;
       db.saveToDisk();

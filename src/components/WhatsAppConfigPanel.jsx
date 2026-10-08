@@ -484,7 +484,10 @@ export default function WhatsAppConfigPanel() {
   const handleTestTomorrowReminder = async () => {
     setTestingTomorrow(true);
     try {
-      const { data } = await api.post("/whatsapp/test-tomorrow-reminder");
+      const { data } = await api.post("/whatsapp/test-tomorrow-reminder", {
+        group1_extra: group1TomorrowExtra,
+        tomorrow_caption: tomorrowCaption,
+      });
       toast.success(`📲 ${data.message || "Lembrete de tarefas para amanhã disparado com sucesso!"}`);
     } catch (e) {
       toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao disparar lembrete de teste");
@@ -1390,7 +1393,7 @@ export default function WhatsAppConfigPanel() {
               data-testid="input-daily-reminder-time"
             />
             <p className="text-[10px] text-neutral-600 mt-1">
-              Verifica diariamente se há tarefas para o dia seguinte e envia aos 2 grupos.
+              Verifica diariamente se há tarefas para o dia seguinte e envia aos 2 grupos no horário exato.
             </p>
           </div>
 
@@ -1408,6 +1411,66 @@ export default function WhatsAppConfigPanel() {
             <p className="text-[10px] text-neutral-600">
               Tags dinâmicas: <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{data_amanha}"}</code>, <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{total_tarefas}"}</code>, <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{lista_tarefas}"}</code>
             </p>
+          </div>
+        </div>
+
+        {/* Mensagem Extra para o Grupo 1 (sem interferir na pré-pronta do Grupo 1) */}
+        <div className="mt-3 pt-3 border-t border-amber-300/80 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <label className="block text-xs font-heading font-black text-amber-950 flex items-center gap-1.5">
+                <span>📌 Mensagem Extra para o Grupo 1 (Lembrete de Tarefas de Amanhã)</span>
+              </label>
+              <p className="text-[11px] text-amber-900 font-medium">
+                Esta mensagem é anexada ao final do lembrete oficial no <b>Grupo 1</b> sem interferir na mensagem pré-pronta original (que lista as tarefas, matérias, prazos e notas).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setGroup1TomorrowExtra(
+                  "📌 *Aviso Extra da Turma:*\nOrganizem seus horários para não deixar nada para a última hora!"
+                )
+              }
+              className="nb-btn bg-white hover:bg-amber-100 text-[10px] font-bold px-2 py-1 border border-black"
+            >
+              Restaurar Mensagem Padrão
+            </button>
+          </div>
+
+          <textarea
+            rows={3}
+            value={group1TomorrowExtra}
+            onChange={(e) => setGroup1TomorrowExtra(e.target.value)}
+            className="nb-input bg-white text-xs font-sans resize-y"
+            placeholder="Digite a mensagem extra que deseja anexar ao lembrete do Grupo 1 (opcional)..."
+            data-testid="input-daily-reminder-group1-extra"
+          />
+
+          {/* Prévia Grupo 1: Mostra o texto oficial pré-pronto intacto + mensagem extra */}
+          <div className="bg-neutral-900 text-neutral-100 p-3.5 rounded-xl text-xs space-y-1.5 font-mono border-2 border-black">
+            <div className="flex items-center justify-between text-[10px] font-black uppercase text-emerald-400">
+              <span>📱 Prévia do Lembrete no Grupo 1 (Texto Pré-Pronto + Sua Mensagem Extra):</span>
+              <span className="text-[9px] bg-emerald-950/80 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30">Texto Base 100% Preservado</span>
+            </div>
+            <div className="whitespace-pre-wrap font-sans text-xs pt-1 leading-relaxed text-neutral-200">
+              {`🚨 *LEMBRETE DIÁRIO DE TAREFAS*\n\n` +
+               `📅 *Entrega Amanhã:* 09/10/2026\n` +
+               `📚 *Total de Tarefas:* 2\n\n` +
+               `🔹 *1. [Matemática] Frações e Equações*\n   🎁 *Pontos:* 10 pts\n` +
+               `🔹 *2. [História] Capítulo 1 de História*\n   🎁 *Pontos:* 10 pts\n\n` +
+               `👉 _Acessem o Edutask para conferir as questões e enviar suas respostas no prazo!_`}
+            </div>
+            {group1TomorrowExtra ? (
+              <div className="mt-2 pt-2 border-t border-dashed border-emerald-500/40 text-emerald-300 font-sans text-xs whitespace-pre-wrap bg-emerald-950/40 p-2 rounded">
+                <span className="text-[9px] uppercase font-bold text-amber-300 block mb-1">⬇️ Sua Mensagem Extra Anexada:</span>
+                {group1TomorrowExtra}
+              </div>
+            ) : (
+              <div className="text-[10px] text-neutral-400 italic pt-1 border-t border-neutral-700">
+                (Nenhuma mensagem extra digitada. O Grupo 1 receberá apenas a estrutura oficial pré-pronta.)
+              </div>
+            )}
           </div>
         </div>
 

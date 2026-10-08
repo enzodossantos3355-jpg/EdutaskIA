@@ -163,6 +163,9 @@ export default function StudentDashboard() {
         fireConfetti();
       }
       load();
+      window.dispatchEvent(new CustomEvent("task-completed"));
+      window.dispatchEvent(new CustomEvent("tasks-updated"));
+      window.dispatchEvent(new CustomEvent("prize-updated"));
     } catch (e) {
       try {
         if (task.completed) {
@@ -180,6 +183,9 @@ export default function StudentDashboard() {
           fireConfetti();
         }
         load();
+        window.dispatchEvent(new CustomEvent("task-completed"));
+        window.dispatchEvent(new CustomEvent("tasks-updated"));
+        window.dispatchEvent(new CustomEvent("prize-updated"));
       } catch (e2) {
         toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao atualizar status");
       }

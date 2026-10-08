@@ -69,6 +69,8 @@ export default function PrizeBanner() {
 
   const topLeaders = leaders && leaders.length > 0 ? leaders : leader ? [leader] : [];
   const hasTie = Boolean(is_tie_top1 || topLeaders.length > 1);
+  const leaderOnTime = Number(leader?.on_time_month ?? leader?.on_time_completions ?? leader?.on_time_tasks ?? leader?.on_time ?? 0);
+  const topLeaderOnTime = Number(topLeaders[0]?.on_time_month ?? topLeaders[0]?.on_time_completions ?? topLeaders[0]?.on_time_tasks ?? topLeaders[0]?.on_time ?? leaderOnTime);
 
   return (
     <div className="nb-card p-3 sm:p-5 mb-4 sm:mb-8 bg-gradient-to-br from-amber-200 via-amber-100 to-amber-200 relative overflow-hidden" data-testid="prize-banner">
@@ -83,7 +85,7 @@ export default function PrizeBanner() {
               {ai_winner ? `🏆 Vencedor • ${month_label}` : hasTie ? `👑 Empate Top 1 • ${days_remaining}d` : `Prêmio do mês • ${days_remaining}d restantes`}
             </div>
             <div className="font-heading font-black text-xs text-neutral-900 truncate">
-              {ai_winner ? `🎉 ${ai_winner.winner_name}` : hasTie ? `👑 ${topLeaders.map(l => l.name).join(' & ')}` : leader ? `👑 ${leader.name}` : prize.title}
+              {ai_winner ? `🎉 ${ai_winner.winner_name}` : hasTie ? `👑 ${topLeaders.map(l => l.name).join(' & ')} (${topLeaderOnTime} no prazo)` : leader ? `👑 ${leader.name} (${leaderOnTime} no prazo)` : prize.title}
             </div>
           </div>
         </div>
@@ -125,16 +127,24 @@ export default function PrizeBanner() {
                   <div>
                     <div className="font-heading font-black text-sm text-neutral-900 leading-tight">{tw.name}</div>
                     <span className="text-[10px] font-bold text-amber-900">👑 1º Lugar Empatado</span>
+                    <div className="text-[10px] font-bold text-emerald-800">
+                      ✓ {tw.on_time_month ?? topLeaderOnTime} no prazo
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="font-heading font-black text-xl sm:text-2xl text-neutral-900 flex items-center gap-2 flex-wrap">
-              <span>🎉 {ai_winner.winner_name}</span>
-              {isWinner && (
-                <span className="nb-badge bg-emerald-300 text-emerald-950 text-xs font-bold">É você! Parabéns!</span>
-              )}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="font-heading font-black text-xl sm:text-2xl text-neutral-900 flex items-center gap-2 flex-wrap">
+                <span>🎉 {ai_winner.winner_name}</span>
+                {isWinner && (
+                  <span className="nb-badge bg-emerald-300 text-emerald-950 text-xs font-bold">É você! Parabéns!</span>
+                )}
+              </div>
+              <span className="nb-badge bg-emerald-200 text-emerald-950 text-xs font-bold">
+                🎯 {ai_winner.on_time_month ?? leaderOnTime} tarefa(s) no prazo
+              </span>
             </div>
           )}
 
@@ -202,7 +212,7 @@ export default function PrizeBanner() {
                   {topLeaders.map((l) => l.name).join(" & ")}
                 </div>
                 <div className="text-[10px] font-bold text-emerald-700">
-                  {topLeaders[0]?.on_time_month || 0} no prazo • {topLeaders[0]?.uncompleted_count === 0 ? "0 pendências" : `${topLeaders[0]?.uncompleted_count} pend.`}
+                  {topLeaderOnTime} no prazo • {topLeaders[0]?.uncompleted_count === 0 ? "0 pendências" : `${topLeaders[0]?.uncompleted_count} pend.`}
                 </div>
               </div>
             </div>
@@ -212,7 +222,7 @@ export default function PrizeBanner() {
               <div className="leading-tight">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-600">Destaque Pontualidade</div>
                 <div className="font-heading font-bold text-sm flex items-center gap-1">{leader.name} <Star className="w-3 h-3 text-amber-500" fill="currentColor" /></div>
-                <div className="text-[10px] font-bold text-emerald-700">{leader.on_time_month || 0} no prazo</div>
+                <div className="text-[10px] font-bold text-emerald-700">{leaderOnTime} no prazo</div>
               </div>
             </div>
           ) : null}
