@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, ShoppingBag, Palette } from "lucide-react";
+import { Pencil, ShoppingBag, Palette, Bot } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 import AvatarUploader from "@/components/AvatarUploader";
@@ -63,8 +63,15 @@ export default function MyProfileBanner({ bg = null, onOpenStore = null }) {
             <div className="min-w-0 flex-1">
               <p className="font-heading font-bold text-base sm:text-lg leading-tight flex items-center gap-2 flex-wrap text-black">
                 <span className="truncate">{user.name}</span>
+                {user.status === "bot" && (
+                  <span className="nb-badge bg-cyan-200 text-cyan-950 border border-black inline-flex items-center gap-1 text-[11px] font-black">
+                    <Bot className="w-3 h-3" /> Perfil de Teste (Bot)
+                  </span>
+                )}
               </p>
-              <p className="text-xs font-semibold text-black/85">{user.role === "admin" ? "Administrador" : "Aluno"}</p>
+              <p className="text-xs font-semibold text-black/85">
+                {user.role === "admin" ? "Administrador" : user.status === "bot" ? "Aluno (Sandbox Teste)" : "Aluno"}
+              </p>
               {user.role === "admin" && (
                 <button
                   onClick={() => setEditing(true)}

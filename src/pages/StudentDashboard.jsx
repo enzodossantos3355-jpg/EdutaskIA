@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { Calendar as CalendarIcon, Paperclip, Check, BookOpen, Filter, Megaphone, LayoutGrid, CalendarDays, Sparkles, ShoppingBag, BarChart3, HelpCircle, Star, ExternalLink, Image as ImageIcon, Loader2, Copy, CheckCheck, FileText, ChevronDown, ChevronUp, Lock } from "lucide-react";
+import { Calendar as CalendarIcon, Paperclip, Check, BookOpen, Filter, Megaphone, LayoutGrid, CalendarDays, Sparkles, ShoppingBag, BarChart3, HelpCircle, Star, ExternalLink, Image as ImageIcon, Loader2, Copy, CheckCheck, FileText, ChevronDown, ChevronUp, Lock, Bot, Coins, RotateCcw, Volume2 } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import { useAuth } from "@/context/AuthContext";
@@ -24,6 +24,108 @@ import { playTaskCompleteSound, playTaskUncheckSound } from "@/lib/soundEffects"
 
 const subjectColors = ["bg-sky-200", "bg-amber-200", "bg-red-200", "bg-emerald-200", "bg-violet-200", "bg-rose-200"];
 const colorFor = (s) => subjectColors[(s || "").length % subjectColors.length];
+
+function BotSandboxBanner({ onPointsUpdated }) {
+  const [loading, setLoading] = useState(false);
+
+  const addPoints = async (delta) => {
+    setLoading(true);
+    try {
+      await api.post("/me/bot-test-points", { delta });
+      toast.success(`+${delta} pontos de teste adicionados!`);
+      if (onPointsUpdated) onPointsUpdated();
+      window.dispatchEvent(new Event("profile-updated"));
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao adicionar pontos");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPoints = async () => {
+    setLoading(true);
+    try {
+      await api.post("/me/bot-test-points", { reset: true });
+      toast.success("Pontos de teste zerados!");
+      if (onPointsUpdated) onPointsUpdated();
+      window.dispatchEvent(new Event("profile-updated"));
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao zerar pontos");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testSound = () => {
+    playTaskCompleteSound("pixel_art");
+    toast.success("Efeito sonoro de teste disparado!");
+  };
+
+  return (
+    <div className="mb-6 nb-card bg-cyan-100 border-2 border-black p-4 shadow-[4px_4px_0_0_#000]" data-testid="bot-sandbox-banner">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 nb-card bg-cyan-300 border-2 border-black flex items-center justify-center flex-shrink-0">
+            <Bot className="w-6 h-6 text-cyan-950" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-heading font-black text-base sm:text-lg text-cyan-950">
+                Perfil de Teste (Bot / Sandbox)
+              </h2>
+              <span className="nb-badge bg-cyan-300 text-cyan-950 border border-black text-xs font-black">
+                Ambiente de Simulação
+              </span>
+            </div>
+            <p className="text-xs text-neutral-800 mt-0.5">
+              Este perfil possui atributos de teste e cortes aplicados para não interferir nas contas reais.
+            </p>
+          </div>
+        </div>
+
+        {/* Ferramentas de teste sandbox */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => addPoints(100)}
+            disabled={loading}
+            className="nb-btn bg-amber-300 hover:bg-amber-400 px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 shadow-[2px_2px_0_0_#000]"
+            title="Adicionar 100 pontos para testar compras na loja"
+          >
+            <Coins className="w-3.5 h-3.5" /> +100 Pts Teste
+          </button>
+          <button
+            onClick={resetPoints}
+            disabled={loading}
+            className="nb-btn bg-white hover:bg-neutral-100 px-2.5 py-1.5 text-xs font-bold flex items-center gap-1"
+            title="Resetar saldo de pontos"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Zerar Pts
+          </button>
+          <button
+            onClick={testSound}
+            className="nb-btn bg-purple-200 hover:bg-purple-300 px-2.5 py-1.5 text-xs font-bold flex items-center gap-1"
+            title="Ouvir efeitos sonoros temáticos"
+          >
+            <Volume2 className="w-3.5 h-3.5" /> Testar Som
+          </button>
+        </div>
+      </div>
+
+      {/* Cortes explicativos */}
+      <div className="mt-3 pt-3 border-t border-cyan-800/20 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+        <div className="flex items-center gap-1.5 text-neutral-800 bg-white/70 p-1.5 border border-black/30">
+          <span className="font-black text-cyan-950">✂️ Corte 1:</span> Fora do ranking e prêmio mensal da IA
+        </div>
+        <div className="flex items-center gap-1.5 text-neutral-800 bg-white/70 p-1.5 border border-black/30">
+          <span className="font-black text-cyan-950">✂️ Corte 2:</span> Bloqueado de disparos de WhatsApp
+        </div>
+        <div className="flex items-center gap-1.5 text-neutral-800 bg-white/70 p-1.5 border border-black/30">
+          <span className="font-black text-cyan-950">✂️ Corte 3:</span> Não afeta médias gerais da turma
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function StudentDashboard() {
   const { user } = useAuth();
@@ -205,6 +307,9 @@ export default function StudentDashboard() {
       <AppHeader title="Minhas tarefas" />
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-28 sm:pb-8">
         <MyProfileBanner onOpenStore={handleOpenStore} />
+        {user?.status === "bot" && (
+          <BotSandboxBanner onPointsUpdated={load} />
+        )}
         <PrizeBanner />
         <AIDailySummary />
 

@@ -307,7 +307,7 @@ interface User {
   password_hash: string;
   password_plain?: string;
   role: 'admin' | 'aluno';
-  status: 'active' | 'maintenance' | 'blocked';
+  status: 'active' | 'maintenance' | 'blocked' | 'bot';
   points: number;
   streak_count: number;
   longest_streak: number;
@@ -864,6 +864,26 @@ class Database {
       created_at: new Date().toISOString(),
     });
 
+    // Default Bot Test user
+    const botId = 'bot-user-001';
+    if (!this.users.has(botId)) {
+      this.users.set(botId, {
+        id: botId,
+        email: 'bot.teste@escola.com',
+        name: 'Bot Alfa (Teste)',
+        password_hash: bcrypt.hashSync('123', 10),
+        password_plain: '123',
+        role: 'aluno',
+        status: 'bot',
+        points: 150,
+        streak_count: 0,
+        longest_streak: 0,
+        owned_effects: ['none', 'pixel_art'],
+        equipped_effect: 'pixel_art',
+        created_at: new Date().toISOString(),
+      });
+    }
+
     // Default subjects
     const subjects = ['Matemática', 'Português', 'Ciências', 'História', 'Geografia', 'Inglês', 'Artes', 'Educação Física'];
     subjects.forEach((name, i) => {
@@ -1110,6 +1130,7 @@ api.post('/auth/login', (req, res) => {
       email: user.email,
       name: user.name,
       role: user.role,
+      status: user.status,
       created_at: user.created_at,
       has_avatar: Boolean(user.avatar_data),
     },
@@ -1191,7 +1212,7 @@ api.get('/users', requireAuth, (req, res) => {
 });
 
 api.post('/users', requireAdmin, async (req, res) => {
-  const { name, password } = req.body || {};
+  const { name, password, status } = req.body || {};
   if (!name || !password) {
     return res.status(400).json({ detail: 'Nome e senha são obrigatórios' });
   }
@@ -1207,7 +1228,7 @@ api.post('/users', requireAdmin, async (req, res) => {
     password_hash: bcrypt.hashSync(password, 10),
     password_plain: password,
     role: 'aluno',
-    status: 'active',
+    status: status === 'bot' ? 'bot' : 'active',
     points: 0,
     streak_count: 0,
     longest_streak: 0,
@@ -1236,7 +1257,7 @@ api.patch('/users/:user_id/status', requireAdmin, async (req, res) => {
   const { status } = req.body || {};
   const user = db.users.get(user_id);
   if (!user) return res.status(404).json({ detail: 'Usuário não encontrado' });
-  if (!['active', 'maintenance', 'blocked'].includes(status)) {
+  if (!['active', 'maintenance', 'blocked', 'bot'].includes(status)) {
     return res.status(400).json({ detail: 'Status inválido' });
   }
   user.status = status;
@@ -1244,6 +1265,23 @@ api.patch('/users/:user_id/status', requireAdmin, async (req, res) => {
   await firebaseService.saveUser(user).catch(console.warn);
 
   res.json({ ok: true, status: user.status });
+});
+
+api.post('/me/bot-test-points', requireAuth, async (req, res) => {
+  const user = (req as any).user as User;
+  if (user.status !== 'bot' && user.role !== 'admin') {
+    return res.status(403).json({ detail: 'Apenas perfis de teste (bot) podem usar este recurso de sandbox' });
+  }
+  const { delta, reset } = req.body || {};
+  if (reset) {
+    user.points = 0;
+  } else {
+    const d = typeof delta === 'number' ? delta : 100;
+    user.points = Math.max(0, (user.points || 0) + d);
+  }
+  db.saveToDisk();
+  await firebaseService.saveUser(user).catch(console.warn);
+  res.json({ ok: true, points: user.points, status: user.status });
 });
 
 api.patch('/users/:user_id', requireAdmin, async (req, res) => {
@@ -2921,7 +2959,8 @@ export function checkMonthlyRollover() {
 function calculateMonthlyAILeaderboard(reqUser?: User) {
   checkMonthlyRollover();
   const range = getCurrentMonthRange();
-  const students = Array.from(db.users.values()).filter((u) => u.role === 'aluno' && (u.status as string) !== 'inactive' && u.status !== 'blocked');
+  // Alunos elegíveis para ranking oficial: exclui inativos, bloqueados e bots de teste
+  const students = Array.from(db.users.values()).filter((u) => u.role === 'aluno' && (u.status as string) !== 'inactive' && u.status !== 'blocked' && u.status !== 'bot');
   const allTasks = Array.from(db.tasks.values());
 
   // 1. Tarefas do MÊS (entrega marcada dentro do mês ou criadas no mês)

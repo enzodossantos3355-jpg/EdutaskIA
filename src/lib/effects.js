@@ -359,6 +359,29 @@ export function effectBadgeClass(effectId) {
   return eff.badgeClass || DEFAULT_EFFECTS.none.badgeClass;
 }
 
+export const DARK_THEME_IDS = new Set([
+  "stranger_things",
+  "mentalist",
+  "one_piece",
+  "chemistry_lab",
+  "japan",
+  "minecraft",
+  "cyberpunk",
+  "hogwarts",
+  "pixel_art",
+  "shadow",
+  "galaxy",
+  "fire",
+  "phoenix",
+  "emerald_forest",
+  "neon_pulse",
+]);
+
+export function isDarkTheme(effectId) {
+  if (!effectId) return false;
+  return DARK_THEME_IDS.has(effectId);
+}
+
 export const getTheme = getEffect;
 
 export function getThemeByEffectOrId(effectOrId) {

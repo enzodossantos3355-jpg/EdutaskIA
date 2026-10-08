@@ -713,22 +713,43 @@ h4,
   background-color: #38591b !important;
 }
 
-/* Todas as letras dos perfis e do painel mantêm cor preta padrão */
-[data-testid="profiles-grid"] .font-heading,
-[data-testid="profiles-grid"] button,
+/* Painel de perfil e cabeçalho mantêm as letras em preto */
 [data-testid="my-profile-banner"] p,
-[data-testid="my-profile-banner"] span,
-.card-moldura-mentalist .font-heading,
-.card-moldura-stranger-things .font-heading,
-.card-moldura-riverdale .font-heading,
-.card-moldura-cyberpunk .font-heading,
-.card-moldura-hogwarts .font-heading,
-.card-moldura-pixel .font-heading,
-.card-moldura-one-piece .font-heading,
-.card-moldura-chemistry .font-heading,
-.card-moldura-japan .font-heading,
-.card-moldura-minecraft .font-heading {
+[data-testid="my-profile-banner"] span {
   color: #000000 !important;
+}
+
+/* Na TELA DE SELEÇÃO ([data-testid="profiles-grid"]):
+   Em temas com fundos escuros, a cor da letra do nome do perfil fica BRANCA */
+[data-testid="profiles-grid"] .card-moldura-mentalist .font-heading,
+[data-testid="profiles-grid"] .card-moldura-stranger-things .font-heading,
+[data-testid="profiles-grid"] .card-moldura-cyberpunk .font-heading,
+[data-testid="profiles-grid"] .card-moldura-hogwarts .font-heading,
+[data-testid="profiles-grid"] .card-moldura-pixel .font-heading,
+[data-testid="profiles-grid"] .card-moldura-one-piece .font-heading,
+[data-testid="profiles-grid"] .card-moldura-chemistry .font-heading,
+[data-testid="profiles-grid"] .card-moldura-japan .font-heading,
+[data-testid="profiles-grid"] .card-moldura-minecraft .font-heading,
+[data-testid="profiles-grid"] .card-moldura-shadow .font-heading,
+[data-testid="profiles-grid"] .card-moldura-galaxy .font-heading,
+[data-testid="profiles-grid"] .card-moldura-fire .font-heading,
+[data-testid="profiles-grid"] .card-moldura-phoenix .font-heading,
+[data-testid="profiles-grid"] .card-moldura-emerald .font-heading,
+[data-testid="profiles-grid"] .card-moldura-neon .font-heading {
+  color: #ffffff !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* Temas com fundos claros na tela de seleção mantêm letras pretas */
+[data-testid="profiles-grid"] .card-moldura-spongebob .font-heading,
+[data-testid="profiles-grid"] .card-moldura-riverdale .font-heading,
+[data-testid="profiles-grid"] .card-moldura-golden .font-heading,
+[data-testid="profiles-grid"] .card-moldura-rainbow .font-heading,
+[data-testid="profiles-grid"] .card-moldura-ice .font-heading,
+[data-testid="profiles-grid"] .card-moldura-sakura .font-heading,
+[data-testid="profiles-grid"] .card-moldura-sunset .font-heading {
+  color: #000000 !important;
+  text-shadow: none !important;
 }
 
 

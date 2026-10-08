@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2 } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import AppHeader from "@/components/AppHeader";
@@ -26,6 +26,7 @@ import { playWinnerFanfareSound } from "@/lib/soundEffects";
 
 const STATUS_OPTS = [
   { key: "active", label: "Ativo", icon: CheckCircle, bg: "bg-emerald-200" },
+  { key: "bot", label: "Bot (Teste)", icon: Bot, bg: "bg-cyan-200" },
   { key: "maintenance", label: "Em manutenção", icon: Wrench, bg: "bg-orange-300" },
   { key: "blocked", label: "Bloqueado", icon: Lock, bg: "bg-neutral-300" },
 ];
@@ -975,13 +976,23 @@ function StudentsPanel() {
           <h1 className="font-heading font-black text-3xl sm:text-5xl tracking-tight">Alunos</h1>
           <p className="text-neutral-600 mt-1">Gerencie as contas dos seus alunos e veja as senhas.</p>
         </div>
-        <button
-          onClick={() => setCreating(true)}
-          className="nb-btn bg-amber-300 px-5 py-3 flex items-center gap-2"
-          data-testid="open-create-student-button"
-        >
-          <Plus className="w-4 h-4" strokeWidth={3} /> Novo aluno
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCreating({ isBot: true })}
+            className="nb-btn bg-cyan-200 hover:bg-cyan-300 px-4 py-3 flex items-center gap-2 text-sm font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+            data-testid="open-create-bot-button"
+            title="Criar perfil simulado para testes rápidos"
+          >
+            <Bot className="w-4 h-4" strokeWidth={2.5} /> + Novo Bot de Teste
+          </button>
+          <button
+            onClick={() => setCreating({ isBot: false })}
+            className="nb-btn bg-amber-300 px-5 py-3 flex items-center gap-2"
+            data-testid="open-create-student-button"
+          >
+            <Plus className="w-4 h-4" strokeWidth={3} /> Novo aluno
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -1079,11 +1090,24 @@ function StudentsPanel() {
                   </div>
                 </div>
 
+                {status === "bot" && (
+                  <div className="mt-3 p-2.5 bg-cyan-50 border-2 border-cyan-800 text-xs text-cyan-950 font-medium">
+                    <div className="flex items-center gap-1 font-black text-cyan-950 mb-1">
+                      <Bot className="w-3.5 h-3.5 text-cyan-800" /> Perfil de Teste • Sandbox Ativo
+                    </div>
+                    <div className="flex flex-col gap-1 text-[11px] text-neutral-700 font-semibold mt-1">
+                      <span>✂️ Fora do ranking oficial mensal</span>
+                      <span>✂️ Sem disparos de WhatsApp</span>
+                      <span>✂️ Não polui médias da escola</span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-4 nb-card bg-amber-50 p-3">
                   <div className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1">Senha de Acesso</div>
                   <div className="flex items-center justify-between gap-2">
                     <code className="text-sm font-mono font-bold truncate select-all" data-testid={`student-password-${s.id}`}>
-                      {revealed ? (s.password || s.password_plain || "123") : "••••••••"}
+                      {revealed ? (s.password || s.password_plain || "—") : "••••••••"}
                     </code>
                     <button
                       onClick={() => toggleReveal(s.id)}
@@ -1102,7 +1126,13 @@ function StudentsPanel() {
         </div>
       )}
 
-      {creating && <CreateStudentDialog onClose={() => setCreating(false)} onCreated={() => { setCreating(false); load(); }} />}
+      {creating && (
+        <CreateStudentDialog
+          initialIsBot={Boolean(creating?.isBot)}
+          onClose={() => setCreating(false)}
+          onCreated={() => { setCreating(false); load(); }}
+        />
+      )}
       {editing && (
         <EditProfileDialog
           userId={editing.id}
@@ -1137,36 +1167,45 @@ function StudentsPanel() {
   );
 }
 
-function CreateStudentDialog({ onClose, onCreated }) {
-  const [name, setName] = useState("");
+function CreateStudentDialog({ initialIsBot = false, onClose, onCreated }) {
+  const [isBot, setIsBot] = useState(initialIsBot);
+  const [name, setName] = useState(initialIsBot ? "Bot Alfa (Teste)" : "");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const toggleBot = (checked) => {
+    setIsBot(checked);
+    if (checked && (!name || name === "")) {
+      setName("Bot de Teste");
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    const chosenStatus = isBot ? "bot" : "active";
     try {
-      await api.post("/users", { name, password });
-      toast.success(`Aluno ${name} criado`);
+      await api.post("/users", { name, password, status: chosenStatus });
+      toast.success(isBot ? `Bot de teste ${name} criado!` : `Aluno ${name} criado!`);
       onCreated();
     } catch (err) {
       try {
-        const id = `aluno-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const id = `${isBot ? "bot" : "aluno"}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
         const email = `${name.toLowerCase().replace(/\s+/g, '.')}-${Date.now().toString().slice(-4)}@escola.com`;
         await firebaseService.saveUser({
           id,
           name: name.trim(),
           email,
           role: "aluno",
-          status: "active",
+          status: chosenStatus,
           password_plain: password,
-          points: 0,
+          points: isBot ? 100 : 0,
           created_at: new Date().toISOString(),
         });
-        toast.success(`Aluno ${name} criado`);
+        toast.success(isBot ? `Bot de teste ${name} criado!` : `Aluno ${name} criado!`);
         onCreated();
       } catch (err2) {
-        toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao criar aluno");
+        toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao criar usuário");
       }
     } finally {
       setSubmitting(false);
@@ -1177,23 +1216,72 @@ function CreateStudentDialog({ onClose, onCreated }) {
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-3 sm:p-4" data-testid="create-student-dialog">
       <div className="nb-card bg-white w-full max-w-md p-5 sm:p-7">
         <div className="flex items-center justify-between mb-5">
-          <h3 className="font-heading font-black text-xl sm:text-2xl">Novo aluno</h3>
+          <h3 className="font-heading font-black text-xl sm:text-2xl flex items-center gap-2">
+            {isBot ? <Bot className="w-6 h-6 text-cyan-600" /> : null}
+            {isBot ? "Novo Bot de Teste" : "Novo aluno"}
+          </h3>
           <button onClick={onClose} className="nb-btn bg-white px-2 py-2"><X className="w-4 h-4" /></button>
         </div>
+
+        {/* Bot sandbox toggle */}
+        <div className={`p-3 border-2 mb-4 transition-colors ${isBot ? "bg-cyan-100 border-cyan-800" : "bg-neutral-50 border-neutral-300"}`}>
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isBot}
+              onChange={(e) => toggleBot(e.target.checked)}
+              className="mt-1 w-4 h-4 accent-cyan-600 cursor-pointer"
+            />
+            <div>
+              <span className="font-bold text-sm text-neutral-900 flex items-center gap-1.5">
+                <Bot className="w-4 h-4 text-cyan-800" /> Criar como Perfil de Teste (Bot)
+              </span>
+              <p className="text-xs text-neutral-600 mt-0.5">
+                Perfil de sandbox com cortes automáticos: isolado de rankings oficiais e bloqueado de envio de WhatsApp.
+              </p>
+            </div>
+          </label>
+        </div>
+
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="block text-sm font-bold mb-1.5">Nome do aluno</label>
-            <input required value={name} onChange={(e) => setName(e.target.value)} className="nb-input" placeholder="Ex.: Ana Beatriz" data-testid="student-name-input" />
+            <label className="block text-sm font-bold mb-1.5">
+              {isBot ? "Nome do Bot de Teste" : "Nome do aluno"}
+            </label>
+            <input
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="nb-input"
+              placeholder={isBot ? "Ex.: Bot Alfa (Teste)" : "Ex.: Ana Beatriz"}
+              data-testid="student-name-input"
+            />
           </div>
           <div>
             <label className="block text-sm font-bold mb-1.5">Senha</label>
-            <input required type="text" minLength={4} value={password} onChange={(e) => setPassword(e.target.value)} className="nb-input" placeholder="Mínimo 4 caracteres" data-testid="student-password-input" />
-            <p className="text-xs text-neutral-500 mt-1">Você poderá ver esta senha depois nesta página.</p>
+            <input
+              required
+              type="password"
+              minLength={3}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="nb-input"
+              placeholder="Digite a senha"
+              data-testid="student-password-input"
+            />
+            <p className="text-xs text-neutral-500 mt-1">
+              Mínimo 3 caracteres.
+            </p>
           </div>
           <div className="flex justify-end gap-3 pt-1">
             <button type="button" onClick={onClose} className="nb-btn bg-white px-5 py-2.5">Cancelar</button>
-            <button type="submit" disabled={submitting} className="nb-btn bg-amber-300 px-5 py-2.5" data-testid="submit-student-button">
-              {submitting ? "Criando..." : "Criar aluno"}
+            <button
+              type="submit"
+              disabled={submitting}
+              className={`nb-btn px-5 py-2.5 font-bold ${isBot ? "bg-cyan-300 hover:bg-cyan-400" : "bg-amber-300 hover:bg-amber-400"}`}
+              data-testid="submit-student-button"
+            >
+              {submitting ? "Criando..." : isBot ? "Criar Bot de Teste" : "Criar aluno"}
             </button>
           </div>
         </form>

@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, ShieldCheck, User, Wrench, Lock, BookOpen, Pencil } from "lucide-react";
+import { ArrowLeft, ShieldCheck, User, Wrench, Lock, BookOpen, Pencil, Bot } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api, { formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import Logo from "@/components/Logo";
 import Avatar from "@/components/Avatar";
 import MolduraArtCenter from "@/components/MolduraArtCenter";
-import { effectClass, effectCardClass, effectBadgeClass } from "@/lib/effects";
+import { effectClass, effectCardClass, effectBadgeClass, isDarkTheme } from "@/lib/effects";
 
 const STATUS_META = {
   active: { label: null, icon: null, bg: null, dim: false },
+  bot: { label: "Bot (Teste)", icon: Bot, bg: "bg-cyan-200 text-cyan-950 border border-black font-bold", dim: false, isBot: true },
   maintenance: { label: "Manutenção", icon: Wrench, bg: "bg-orange-300", dim: true },
   blocked: { label: "Bloqueado", icon: Lock, bg: "bg-neutral-400", dim: true },
 };
@@ -202,7 +203,18 @@ export default function LoginPage() {
                               effect={!meta.dim ? effectClass(p.equipped_effect) : null}
                             />
                           </div>
-                          <div className="font-heading font-bold text-base leading-tight truncate text-black">{p.name}</div>
+                          {(() => {
+                            const isDark = isDarkTheme(p.equipped_effect);
+                            return (
+                              <div
+                                className={`font-heading font-bold text-base leading-tight truncate ${
+                                  isDark ? "text-white" : "text-black"
+                                }`}
+                              >
+                                {p.name}
+                              </div>
+                            );
+                          })()}
                           {meta.label ? (
                             <span className={`nb-badge mt-2 inline-flex items-center gap-1 ${meta.bg}`} data-testid={`profile-status-${p.id}`}>
                               {StatusIcon && <StatusIcon className="w-3 h-3" strokeWidth={2.5} />}
