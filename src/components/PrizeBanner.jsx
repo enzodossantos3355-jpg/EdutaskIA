@@ -71,9 +71,31 @@ export default function PrizeBanner() {
   const hasTie = Boolean(is_tie_top1 || topLeaders.length > 1);
   const leaderOnTime = Number(leader?.on_time_month ?? leader?.on_time_completions ?? leader?.on_time_tasks ?? leader?.on_time ?? 0);
   const topLeaderOnTime = Number(topLeaders[0]?.on_time_month ?? topLeaders[0]?.on_time_completions ?? topLeaders[0]?.on_time_tasks ?? topLeaders[0]?.on_time ?? leaderOnTime);
+  const isMinecraft = user?.equipped_effect === "minecraft";
 
   return (
-    <div className="nb-card p-3 sm:p-5 mb-4 sm:mb-8 bg-gradient-to-br from-amber-200 via-amber-100 to-amber-200 relative overflow-hidden" data-testid="prize-banner">
+    <div
+      className={
+        isMinecraft
+          ? "border-4 border-[#2b190f] p-3 sm:p-5 mb-4 sm:mb-8 rounded-xl relative overflow-hidden bg-[#8c5e3c] font-minecraft text-white shadow-[0_6px_0_#0a0503,0_10px_25px_rgba(0,0,0,0.6)]"
+          : "nb-card p-3 sm:p-5 mb-4 sm:mb-8 bg-gradient-to-br from-amber-200 via-amber-100 to-amber-200 relative overflow-hidden"
+      }
+      data-testid="prize-banner"
+    >
+      {/* Tochas decorativas estilo Minecraft nas pontas (Imagem 3) */}
+      {isMinecraft && (
+        <>
+          <div className="absolute top-2.5 left-2.5 flex flex-col items-center pointer-events-none select-none z-10">
+            <span className="text-sm animate-pulse filter drop-shadow">🔥</span>
+            <div className="w-1.5 h-4 bg-[#784c28] border border-black -mt-0.5" />
+          </div>
+          <div className="absolute top-2.5 right-2.5 flex flex-col items-center pointer-events-none select-none z-10">
+            <span className="text-sm animate-pulse filter drop-shadow">🔥</span>
+            <div className="w-1.5 h-4 bg-[#784c28] border border-black -mt-0.5" />
+          </div>
+        </>
+      )}
+
       <div className="absolute top-0 right-0 w-32 h-32 opacity-15 text-9xl select-none pointer-events-none">{prize.emoji}</div>
       
       {/* Barra compacta para celular (evita rolagem excessiva) */}
@@ -173,16 +195,30 @@ export default function PrizeBanner() {
 
       <div className="relative z-10 flex items-start justify-between flex-wrap gap-4">
         <div className="flex items-start gap-3">
-          <div className="w-11 h-11 sm:w-12 sm:h-12 nb-card flex items-center justify-center bg-amber-300 text-2xl flex-shrink-0">
+          <div className={
+            isMinecraft
+              ? "w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center bg-[#54381d] border-2 border-black rounded shadow-[inset_2px_2px_0_#75502b,2px_2px_0_#000] text-2xl flex-shrink-0"
+              : "w-11 h-11 sm:w-12 sm:h-12 nb-card flex items-center justify-center bg-amber-300 text-2xl flex-shrink-0"
+          }>
             {prize.emoji}
           </div>
           <div className="min-w-0">
-            <div className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-amber-900">Prêmio do mês • {month_label}</div>
-            <h3 className="font-heading font-black text-lg sm:text-2xl leading-tight">{prize.title}</h3>
+            <div className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${isMinecraft ? "text-[#fef08a]" : "text-amber-900"}`}>
+              PRÊMIO DO MÊS • {month_label}
+            </div>
+            <h3 className={`${isMinecraft ? "font-minecraft font-black text-white text-base sm:text-xl" : "font-heading font-black text-lg sm:text-2xl"} leading-tight`}>
+              {prize.title}
+            </h3>
             {prize.description && (
-              <p className="text-xs sm:text-sm text-neutral-700 mt-1 max-w-md">{prize.description}</p>
+              <p className={`text-xs sm:text-sm ${isMinecraft ? "text-[#e5e5e5]" : "text-neutral-700"} mt-1 max-w-md`}>
+                {prize.description}
+              </p>
             )}
-            <div className="mt-2 text-xs font-medium bg-white/80 inline-block px-2.5 py-1 rounded-md border border-amber-900/20 text-neutral-900">
+            <div className={`mt-2 text-xs font-medium inline-block px-2.5 py-1 rounded-md border ${
+              isMinecraft
+                ? "bg-[#2d1b0f]/80 border-[#6a4224] text-[#fef08a]"
+                : "bg-white/80 border-amber-900/20 text-neutral-900"
+            }`}>
               ✨ Pontos de tarefas servem exclusivamente para a Loja de Molduras.
             </div>
           </div>
@@ -190,7 +226,7 @@ export default function PrizeBanner() {
         <div className="flex items-center gap-2 flex-wrap">
           {/* Se houver empate no 1º lugar, aparecem os ícones de TODOS os empatados em primeiro */}
           {hasTie && topLeaders.length > 1 && !ai_winner ? (
-            <div className="flex items-center gap-2.5 nb-card bg-white px-3 py-2 border-2 border-black" data-testid="prize-leaders-tied">
+            <div className={`flex items-center gap-2.5 ${isMinecraft ? "bg-[#3d2716] text-white rounded" : "nb-card bg-white"} px-3 py-2 border-2 border-black`} data-testid="prize-leaders-tied">
               <div className="flex items-center -space-x-2.5 flex-shrink-0">
                 {topLeaders.map((ld) => (
                   <Avatar
@@ -205,10 +241,10 @@ export default function PrizeBanner() {
                 ))}
               </div>
               <div className="leading-tight min-w-0">
-                <div className="text-[10px] font-black uppercase tracking-wider text-amber-800 flex items-center gap-1">
+                <div className={`text-[10px] font-black uppercase tracking-wider ${isMinecraft ? "text-[#facc15]" : "text-amber-800"} flex items-center gap-1`}>
                   👑 Empate no 1º Lugar ({topLeaders.length})
                 </div>
-                <div className="font-heading font-bold text-xs sm:text-sm text-neutral-900 flex items-center gap-1 truncate max-w-[200px]">
+                <div className={`font-bold text-xs sm:text-sm ${isMinecraft ? "font-minecraft text-white" : "font-heading text-neutral-900"} flex items-center gap-1 truncate max-w-[200px]`}>
                   {topLeaders.map((l) => l.name).join(" & ")}
                 </div>
                 <div className="text-[10px] font-bold text-emerald-700">

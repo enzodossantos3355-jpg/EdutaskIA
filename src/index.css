@@ -678,44 +678,108 @@ h4,
   background-color: #450a0a !important;
 }
 
-/* Minecraft — Bloco de Grama Autêntico */
+/* Minecraft — Remodelado Conforme Referências Autênticas */
+.font-minecraft {
+  font-family: 'Silkscreen', 'Press Start 2P', monospace;
+}
+
 @keyframes fx-minecraft {
   0%, 100% {
-    box-shadow: 0 0 0 3px #5c8e32, 0 0 16px rgba(92, 142, 50, 0.85);
+    box-shadow: 0 0 0 3px #9e9e9e, 0 0 12px rgba(180, 180, 180, 0.7);
     transform: scale(1);
   }
   50% {
-    box-shadow: 0 0 0 4.5px #73a83d, 0 0 24px rgba(115, 168, 61, 1);
+    box-shadow: 0 0 0 4.5px #d4d4d8, 0 0 20px rgba(220, 220, 220, 0.95);
     transform: scale(1.02);
   }
 }
 .fx-minecraft {
   padding: 3.5px;
-  background: linear-gradient(180deg, #5c8e32 0%, #5c8e32 35%, #866043 35%, #5a3c26 100%);
+  background: linear-gradient(135deg, #e4e4e7 0%, #a1a1aa 50%, #52525b 100%);
   border-radius: 50%;
   animation: fx-minecraft 1.8s steps(4) infinite;
 }
 .fx-minecraft > * { border-radius: 50%; }
 
+/* Card Minecraft no Grid de Perfis (Imagem 1: Borda Bedrock + Tábuas de Bétula) */
 .card-moldura-minecraft {
-  background: #866043 !important;
-  border-color: #38591b !important;
+  background: #ebdcb2 !important;
+  border: 10px solid #2a2a2a !important;
+  border-radius: 20px !important;
   color: #000000 !important;
-  box-shadow: 0 0 0 3px #2e4717, 0 4px 14px rgba(0,0,0,0.45) !important;
+  box-shadow: 0 0 0 3px #151515, 0 8px 24px rgba(0,0,0,0.55) !important;
+  outline: none !important;
 }
 .card-moldura-minecraft .font-heading,
 .card-moldura-minecraft span,
 .card-moldura-minecraft p {
   color: #000000 !important;
   text-shadow: none !important;
+  font-family: 'Silkscreen', 'Press Start 2P', monospace;
 }
 .card-moldura-minecraft [data-testid^="avatar-"]:not(:has(img)) {
-  background-color: #38591b !important;
+  background-color: #d1d5db !important;
+}
+
+/* Banner de Perfil do Aluno (Imagem 3: Dark Oak + Borda Obsidiana/Bedrock) */
+.moldura-minecraft-banner {
+  background: #452f19 !important;
+  border: 6px solid #1a1028 !important;
+  border-radius: 14px !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 0 #0d0614, 0 10px 25px rgba(0,0,0,0.6) !important;
+}
+.moldura-minecraft-banner p,
+.moldura-minecraft-banner span {
+  color: #f3e8c8 !important;
+}
+
+/* Botões Estilo Minecraft (Prismarine, Diamante, Pedra, Madeira) */
+.btn-minecraft-diamond {
+  background: #2cc5f6 !important;
+  color: #000000 !important;
+  border: 2px solid #000000 !important;
+  box-shadow: inset 0 2px 0 #7fe3d9, 0 4px 0 #128aa8, 0 6px 0 #000000 !important;
+  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
+}
+.btn-minecraft-diamond:hover {
+  background: #38d0ff !important;
+}
+.btn-minecraft-diamond:active {
+  transform: translateY(3px);
+  box-shadow: inset 0 2px 0 #7fe3d9, 0 1px 0 #128aa8, 0 3px 0 #000000 !important;
+}
+
+.btn-minecraft-prismarine {
+  background: #58baa3 !important;
+  color: #000000 !important;
+  border: 2px solid #000000 !important;
+  box-shadow: inset 0 2px 0 #8be0cb, 0 4px 0 #2b7362, 0 6px 0 #000000 !important;
+  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
+}
+.btn-minecraft-prismarine:hover {
+  background: #68cbb4 !important;
+}
+
+.btn-minecraft-wood {
+  background: #54381d !important;
+  color: #ebd1a9 !important;
+  border: 2px solid #000000 !important;
+  box-shadow: inset 0 2px 0 #7a542e, 0 3px 0 #28190c, 0 4px 0 #000000 !important;
+  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
+}
+
+.btn-minecraft-stone {
+  background: #3b2f21 !important;
+  color: #ebd1a9 !important;
+  border: 2px solid #000000 !important;
+  box-shadow: inset 0 2px 0 #574632, 0 3px 0 #1e1710, 0 4px 0 #000000 !important;
+  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
 }
 
 /* Painel de perfil e cabeçalho mantêm as letras em preto */
-[data-testid="my-profile-banner"] p,
-[data-testid="my-profile-banner"] span {
+[data-testid="my-profile-banner"]:not(.moldura-minecraft-banner) p,
+[data-testid="my-profile-banner"]:not(.moldura-minecraft-banner) span {
   color: #000000 !important;
 }
 
@@ -729,7 +793,6 @@ h4,
 [data-testid="profiles-grid"] .card-moldura-one-piece .font-heading,
 [data-testid="profiles-grid"] .card-moldura-chemistry .font-heading,
 [data-testid="profiles-grid"] .card-moldura-japan .font-heading,
-[data-testid="profiles-grid"] .card-moldura-minecraft .font-heading,
 [data-testid="profiles-grid"] .card-moldura-shadow .font-heading,
 [data-testid="profiles-grid"] .card-moldura-galaxy .font-heading,
 [data-testid="profiles-grid"] .card-moldura-fire .font-heading,

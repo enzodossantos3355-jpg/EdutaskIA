@@ -205,17 +205,31 @@ export default function LoginPage() {
                           </div>
                           {(() => {
                             const isDark = isDarkTheme(p.equipped_effect);
+                            const isMinecraft = p.equipped_effect === "minecraft";
                             return (
                               <div
                                 className={`font-heading font-bold text-base leading-tight truncate ${
-                                  isDark ? "text-white" : "text-black"
+                                  isMinecraft
+                                    ? "font-minecraft text-black tracking-tight text-[15px]"
+                                    : isDark
+                                    ? "text-white"
+                                    : "text-black"
                                 }`}
                               >
                                 {p.name}
                               </div>
                             );
                           })()}
-                          {meta.label ? (
+                          {p.equipped_effect === "minecraft" ? (
+                            <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 bg-[#76e3d9] border-2 border-black rounded shadow-[2px_2px_0_0_#000]">
+                              <span className="w-4 h-4 bg-[#d1d5db] border border-black rounded-xs flex items-center justify-center text-[10px] flex-shrink-0">
+                                🗿
+                              </span>
+                              <span className="font-minecraft text-[10px] font-bold text-black uppercase tracking-tight">
+                                {p.status === "bot" ? "BOT (TESTE)" : p.role === "admin" ? "ADMIN" : "ALUNO"}
+                              </span>
+                            </div>
+                          ) : meta.label ? (
                             <span className={`nb-badge mt-2 inline-flex items-center gap-1 ${meta.bg}`} data-testid={`profile-status-${p.id}`}>
                               {StatusIcon && <StatusIcon className="w-3 h-3" strokeWidth={2.5} />}
                               {meta.label}
@@ -240,62 +254,151 @@ export default function LoginPage() {
                 </div>
               )}
             </div>
-          ) : (
-            <div className="max-w-md mx-auto nb-card bg-white p-6 sm:p-8 lg:p-10 nb-fade-in" data-testid="password-step">
-              <button
-                onClick={() => { setSelected(null); setPassword(""); }}
-                className="nb-btn bg-white hover:bg-neutral-100 px-3 py-1.5 text-sm flex items-center gap-1 mb-6"
-                data-testid="back-to-profiles"
+          ) : (() => {
+            const isMinecraft = selected.equipped_effect === "minecraft";
+            return (
+              <div
+                className={`max-w-md mx-auto nb-fade-in relative ${
+                  isMinecraft
+                    ? "border-[10px] border-[#825432] bg-[#ebd2aa] rounded-2xl p-6 sm:p-8 lg:p-9 shadow-[inset_0_0_0_3px_#4f2f15,0_16px_40px_rgba(0,0,0,0.85)] overflow-hidden"
+                    : "nb-card bg-white p-6 sm:p-8 lg:p-10"
+                }`}
+                data-testid="password-step"
               >
-                <ArrowLeft className="w-4 h-4" /> Trocar perfil
-              </button>
+                {/* Tocha acesa no canto superior direito do pergaminho (Imagem 2) */}
+                {isMinecraft && (
+                  <div className="absolute top-4 right-5 flex flex-col items-center pointer-events-none select-none z-20">
+                    <span className="text-xl animate-pulse filter drop-shadow-[0_0_6px_#f97316]">🔥</span>
+                    <div className="w-2.5 h-7 bg-[#784c28] border border-black shadow-sm -mt-1" />
+                  </div>
+                )}
 
-              <div className="text-center mb-6">
-                <div className="mx-auto inline-block mb-4">
-                  <Avatar
-                    userId={selected.id}
-                    name={selected.name}
-                    size={96}
-                    hasAvatar={selected.has_avatar}
-                    bg={selected.role === "admin" ? "bg-red-300" : "bg-sky-300"}
-                    effect={effectClass(selected.equipped_effect)}
-                  />
-                </div>
-                <h2 className="font-heading font-black text-2xl mb-1 text-neutral-900">Olá, {selected.name}!</h2>
-                <div className="flex items-center justify-center gap-2 flex-wrap">
-                  <span className={`nb-badge inline-flex items-center gap-1 ${selected.role === "admin" ? "bg-red-200 text-red-950 border-black" : "bg-sky-200 text-sky-950 border-black"}`}>
-                    {selected.role === "admin" ? <ShieldCheck className="w-3 h-3" /> : <User className="w-3 h-3" />}
-                    {selected.role === "admin" ? "Admin" : "Aluno"}
-                  </span>
-                </div>
-              </div>
+                {/* Tocha de Redstone na lateral esquerda (Imagem 2) */}
+                {isMinecraft && (
+                  <div className="absolute top-36 left-4 hidden sm:flex flex-col items-center pointer-events-none select-none z-20">
+                    <div className="w-3.5 h-3.5 bg-red-600 rounded-xs shadow-[0_0_8px_#ef4444] border border-black" />
+                    <div className="w-2 h-7 bg-[#784c28] border border-black" />
+                  </div>
+                )}
 
-              <form onSubmit={onSubmit} className="space-y-5" data-testid="login-form">
-                <div>
-                  <label className="block text-sm font-bold mb-2 text-neutral-900">Senha de Acesso</label>
-                  <input
-                    type="password"
-                    required
-                    autoFocus
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="nb-input"
-                    placeholder="••••••••"
-                    data-testid="login-password-input"
-                  />
-                </div>
+                {/* Moldura de item com Livro Encantado na lateral direita (Imagem 2) */}
+                {isMinecraft && (
+                  <div className="absolute top-32 right-4 hidden sm:flex p-2 bg-[#5d3b1f] border-2 border-black rounded shadow-[inset_2px_2px_0_#7e522d,2px_2px_0_#000] items-center justify-center pointer-events-none select-none z-20">
+                    <span className="text-2xl filter drop-shadow">📖</span>
+                  </div>
+                )}
+
                 <button
-                  type="submit"
-                  disabled={submitting}
-                  className="nb-btn nb-btn-primary bg-sky-400 hover:bg-sky-500 text-neutral-950 font-bold w-full px-6 py-3 text-base shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px]"
-                  data-testid="login-submit-button"
+                  onClick={() => { setSelected(null); setPassword(""); }}
+                  className={
+                    isMinecraft
+                      ? "btn-minecraft-stone px-3 py-1.5 text-xs flex items-center gap-1.5 mb-6 hover:brightness-110 active:translate-y-0.5 cursor-pointer"
+                      : "nb-btn bg-white hover:bg-neutral-100 px-3 py-1.5 text-sm flex items-center gap-1 mb-6"
+                  }
+                  data-testid="back-to-profiles"
                 >
-                  {submitting ? "Entrando..." : "Entrar no EduTask"}
+                  <ArrowLeft className="w-4 h-4" /> Trocar perfil
                 </button>
-              </form>
-            </div>
-          )}
+
+                <div className="text-center mb-6">
+                  <div className="mx-auto inline-block mb-4">
+                    <div className={isMinecraft ? "p-1.5 rounded-full border-4 border-[#694424] bg-[#472d16] shadow-md inline-block" : ""}>
+                      <Avatar
+                        userId={selected.id}
+                        name={selected.name}
+                        size={96}
+                        hasAvatar={selected.has_avatar}
+                        bg={selected.role === "admin" ? "bg-red-300" : "bg-sky-300"}
+                        effect={effectClass(selected.equipped_effect)}
+                      />
+                    </div>
+                  </div>
+                  <h2 className={`${isMinecraft ? "font-minecraft text-xl sm:text-2xl text-[#1a140b]" : "font-heading font-black text-2xl text-neutral-900"} mb-1`}>
+                    Olá, {selected.name}!
+                  </h2>
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    {isMinecraft ? (
+                      <span className="px-3 py-1 bg-[#76e3d9] text-black border-2 border-black rounded shadow-[2px_2px_0_0_#000] inline-flex items-center gap-1.5 font-minecraft text-xs font-bold">
+                        <span>👨‍🌾</span> {selected.role === "admin" ? "ADMIN" : "ALUNO"}
+                      </span>
+                    ) : (
+                      <span className={`nb-badge inline-flex items-center gap-1 ${selected.role === "admin" ? "bg-red-200 text-red-950 border-black" : "bg-sky-200 text-sky-950 border-black"}`}>
+                        {selected.role === "admin" ? <ShieldCheck className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                        {selected.role === "admin" ? "Admin" : "Aluno"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <form onSubmit={onSubmit} className="space-y-5" data-testid="login-form">
+                  <div>
+                    <label className={`block ${isMinecraft ? "font-minecraft text-xs text-[#382614]" : "text-sm font-bold text-neutral-900"} mb-2`}>
+                      Senha de Acesso
+                    </label>
+
+                    {isMinecraft ? (
+                      /* Slot Bar Hotbar de 9 compartimentos do Minecraft (Imagem 2) */
+                      <div className="relative group cursor-text" onClick={() => document.getElementById("mc-pass-input")?.focus()}>
+                        <div className="grid grid-cols-9 gap-1 sm:gap-1.5 p-1.5 bg-[#4a3421] border-2 border-black rounded shadow-[inset_2px_2px_0_#2b1c10,2px_2px_0_#000]">
+                          {Array.from({ length: 9 }).map((_, idx) => {
+                            const isFilled = idx < password.length;
+                            return (
+                              <div
+                                key={idx}
+                                className="aspect-square bg-[#7d5c3f] border-2 border-[#3d2716] shadow-[inset_2px_2px_0_#28180d,inset_-2px_-2px_0_#9d7653] flex items-center justify-center rounded-xs"
+                              >
+                                {isFilled && (
+                                  <span className="w-2.5 h-2.5 bg-[#1a140b] rounded-xs shadow-sm font-black font-minecraft text-[10px] text-[#fef08a] flex items-center justify-center">
+                                    •
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {/* Input real transparente para digitação acessível e nativa */}
+                        <input
+                          id="mc-pass-input"
+                          type="password"
+                          required
+                          autoFocus
+                          autoComplete="current-password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                          data-testid="login-password-input"
+                        />
+                      </div>
+                    ) : (
+                      <input
+                        type="password"
+                        required
+                        autoFocus
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="nb-input"
+                        placeholder="••••••••"
+                        data-testid="login-password-input"
+                      />
+                    )}
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className={
+                      isMinecraft
+                        ? "btn-minecraft-diamond w-full px-6 py-3.5 text-sm sm:text-base cursor-pointer"
+                        : "nb-btn nb-btn-primary bg-sky-400 hover:bg-sky-500 text-neutral-950 font-bold w-full px-6 py-3 text-base shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px]"
+                    }
+                    data-testid="login-submit-button"
+                  >
+                    {submitting ? "Entrando..." : "Entrar no EduTask"}
+                  </button>
+                </form>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

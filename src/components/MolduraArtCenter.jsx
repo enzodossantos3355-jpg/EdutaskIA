@@ -1002,33 +1002,140 @@ export default function MolduraArtCenter({ effectId }) {
   if (effectId === "minecraft") {
     return (
       <div
-        className="absolute inset-0 z-0 overflow-hidden rounded-[14px] pointer-events-none transition-all duration-300"
+        className="absolute inset-0 z-0 overflow-hidden rounded-[16px] pointer-events-none transition-all duration-300 select-none"
         data-testid="art-minecraft"
       >
-        {/* Único Bloco de Grama do Minecraft preenchendo completamente o card (16x16 pixels autênticos) */}
         <svg
           className="absolute inset-0 w-full h-full"
-          viewBox="0 0 16 16"
+          viewBox="0 0 220 260"
           preserveAspectRatio="none"
           style={{ shapeRendering: "crispEdges" }}
           xmlns="http://www.w3.org/2000/svg"
         >
-          {/* Base de terra preenchendo 100% da área do card */}
-          <rect x="0" y="0" width="16" height="16" fill="#866043" />
+          {/* Fundo de Tábuas de Bétula (Birch Planks) */}
+          <rect x="0" y="0" width="220" height="260" fill="#ebdcb2" />
+          
+          {/* Linhas horizontais separadoras das tábuas */}
+          <line x1="0" y1="52" x2="220" y2="52" stroke="#d5c292" strokeWidth="2.5" />
+          <line x1="0" y1="104" x2="220" y2="104" stroke="#d5c292" strokeWidth="2.5" />
+          <line x1="0" y1="156" x2="220" y2="156" stroke="#d5c292" strokeWidth="2.5" />
+          <line x1="0" y1="208" x2="220" y2="208" stroke="#d5c292" strokeWidth="2.5" />
 
-          {/* Textura e seixos de terra (tons escuros e claros da terra do Minecraft) */}
-          <path fill="#5a3c26" d="M9,7h1v1h-1zM3,8h1v1h-1zM13,8h1v1h-1zM7,9h1v1h-1zM3,10h1v1h-1zM12,10h1v1h-1zM6,11h1v1h-1zM10,12h1v1h-1zM15,12h1v1h-1zM3,13h1v1h-1zM7,14h1v1h-1zM13,14h1v1h-1zM1,15h1v1h-1zM6,15h1v1h-1zM10,15h1v1h-1zM15,15h1v1h-1z" />
-          <path fill="#6c4d33" d="M7,3h1v1h-1zM2,4h1v1h-1zM12,4h1v1h-1zM0,5h1v1h-1zM7,5h1v1h-1zM9,5h1v1h-1zM15,5h1v1h-1zM1,6h1v1h-1zM5,6h1v1h-1zM8,6h1v1h-1zM14,6h1v1h-1zM2,7h1v1h-1zM4,7h1v1h-1zM10,7h1v1h-1zM13,7h1v1h-1zM0,8h1v1h-1zM4,8h1v1h-1zM7,8h1v1h-1zM9,8h1v1h-1zM15,8h1v1h-1zM1,9h1v1h-1zM5,9h1v1h-1zM8,9h1v1h-1zM11,9h1v1h-1zM13,9h1v1h-1zM2,10h1v1h-1zM6,10h1v1h-1zM10,10h1v1h-1zM13,10h1v1h-1zM1,11h1v1h-1zM4,11h1v1h-1zM7,11h1v1h-1zM9,11h1v1h-1zM12,11h1v1h-1zM0,12h1v1h-1zM3,12h1v1h-1zM5,12h1v1h-1zM8,12h1v1h-1zM11,12h1v1h-1zM14,12h1v1h-1zM1,13h1v1h-1zM6,13h1v1h-1zM10,13h1v1h-1zM13,13h1v1h-1zM15,13h1v1h-1zM2,14h1v1h-1zM4,14h1v1h-1zM8,14h1v1h-1zM11,14h1v1h-1zM0,15h1v1h-1zM5,15h1v1h-1zM9,15h1v1h-1zM12,15h1v1h-1zM14,15h1v1h-1z" />
-          <path fill="#986f4e" d="M7,4h1v1h-1zM3,5h1v1h-1zM13,5h1v1h-1zM7,6h1v1h-1zM12,6h1v1h-1zM1,7h1v1h-1zM7,7h1v1h-1zM14,7h1v1h-1zM5,8h1v1h-1zM10,8h1v1h-1zM3,9h1v1h-1zM14,9h1v1h-1zM0,10h1v1h-1zM5,10h1v1h-1zM8,10h1v1h-1zM15,10h1v1h-1zM11,11h1v1h-1zM1,12h1v1h-1zM7,12h1v1h-1zM4,13h1v1h-1zM9,13h1v1h-1zM12,13h1v1h-1zM0,14h1v1h-1zM5,14h1v1h-1zM14,14h1v1h-1zM3,15h1v1h-1zM8,15h1v1h-1z" />
-          <path fill="#ab7f5a" d="M6,7h1v1h-1zM11,8h1v1h-1zM2,9h1v1h-1zM9,10h1v1h-1zM14,11h1v1h-1zM2,12h1v1h-1zM8,13h1v1h-1z" />
+          {/* Textura e nós de madeira de bétula */}
+          <g fill="#dec999" opacity="0.6">
+            <rect x="18" y="24" width="6" height="2" />
+            <rect x="75" y="38" width="10" height="2" />
+            <rect x="160" y="16" width="12" height="2" />
+            <rect x="30" y="78" width="14" height="2" />
+            <rect x="180" y="86" width="8" height="2" />
+            <rect x="15" y="128" width="10" height="2" />
+            <rect x="195" y="138" width="12" height="2" />
+            <rect x="45" y="180" width="16" height="2" />
+            <rect x="150" y="190" width="8" height="2" />
+            <rect x="80" y="235" width="14" height="2" />
+          </g>
+          <g fill="#f8f0dc" opacity="0.8">
+            <rect x="50" y="22" width="12" height="1.5" />
+            <rect x="130" y="42" width="16" height="1.5" />
+            <rect x="90" y="82" width="20" height="1.5" />
+            <rect x="25" y="140" width="12" height="1.5" />
+            <rect x="140" y="170" width="18" height="1.5" />
+          </g>
 
-          {/* Camadas de grama verde com raízes escorrendo na terra (textura clássica 16x16) */}
-          <path fill="#38591b" d="M15,2h1v1h-1zM2,3h1v1h-1zM12,3h1v1h-1zM9,4h1v1h-1zM1,5h1v1h-1zM5,5h1v1h-1zM11,5h1v1h-1zM4,6h1v1h-1zM10,6h1v1h-1z" />
-          <path fill="#4c7828" d="M2,1h1v1h-1zM7,1h1v1h-1zM10,1h1v1h-1zM15,1h1v1h-1zM0,2h1v1h-1zM6,2h1v1h-1zM11,2h1v1h-1zM1,3h1v1h-1zM6,3h1v1h-1zM9,3h1v1h-1zM15,3h1v1h-1zM1,4h1v1h-1zM5,4h1v1h-1zM11,4h1v1h-1zM14,4h1v1h-1zM4,5h1v1h-1zM10,5h1v1h-1z" />
-          <path fill="#5c8e32" d="M2,0h1v1h-1zM7,0h1v1h-1zM10,0h1v1h-1zM15,0h1v1h-1zM0,1h1v1h-1zM3,1h1v1h-1zM6,1h1v1h-1zM8,1h1v1h-1zM11,1h1v1h-1zM14,1h1v1h-1zM1,2h2v1h-2zM5,2h1v1h-1zM7,2h2v1h-2zM10,2h1v1h-1zM12,2h1v1h-1zM14,2h1v1h-1zM0,3h1v1h-1zM4,3h1v1h-1zM8,3h1v1h-1zM11,3h1v1h-1zM14,3h1v1h-1zM4,4h1v1h-1zM10,4h1v1h-1z" />
-          <path fill="#73a83d" d="M0,0h1v1h-1zM3,0h1v1h-1zM6,0h1v1h-1zM8,0h1v1h-1zM11,0h1v1h-1zM14,0h1v1h-1zM1,1h1v1h-1zM5,1h1v1h-1zM9,1h1v1h-1zM12,1h1v1h-1zM3,2h2v1h-2zM9,2h1v1h-1zM13,2h1v1h-1zM5,3h1v1h-1zM10,3h1v1h-1z" />
-          <path fill="#87c348" d="M1,0h1v1h-1zM5,0h1v1h-1zM9,0h1v1h-1zM12,0h1v1h-1zM4,1h1v1h-1zM13,1h1v1h-1z" />
-          <path fill="#9bd654" d="M4,0h1v1h-1zM13,0h1v1h-1z" />
+          {/* Moldura circular de pedra pixelada (Stone Ring) ao redor do avatar (centro: 110, 58) */}
+          <g>
+            {/* Sombra da moldura */}
+            <circle cx="110" cy="59" r="45" fill="none" stroke="#222222" strokeWidth="6" opacity="0.35" />
+            {/* Anel de pedra exterior */}
+            <circle cx="110" cy="57" r="44" fill="none" stroke="#8c8c8c" strokeWidth="5.5" />
+            {/* Borda interna de pedra polida */}
+            <circle cx="110" cy="57" r="41.5" fill="none" stroke="#d4d4d8" strokeWidth="3" />
+            <circle cx="110" cy="57" r="39" fill="none" stroke="#606060" strokeWidth="1.5" opacity="0.5" />
+          </g>
+
+          {/* Topo Direito: Escudo com Iron Golem (Iron Golem Crest) */}
+          <g transform="translate(168, 6) scale(0.92)">
+            {/* Sombra do escudo */}
+            <path d="M4,2 L40,2 L40,32 L22,46 L4,32 Z" fill="#000000" opacity="0.35" transform="translate(2, 3)" />
+            {/* Borda dourada do escudo */}
+            <path d="M4,2 L40,2 L40,32 L22,46 L4,32 Z" fill="#d4af37" stroke="#000" strokeWidth="1.5" />
+            {/* Placa prateada de ferro */}
+            <path d="M7,5 L37,5 L37,30 L22,42 L7,30 Z" fill="#e4e4e7" stroke="#a1a1aa" strokeWidth="1" />
+            {/* Sprite do Iron Golem dentro do escudo */}
+            {/* Cabeça e nariz */}
+            <rect x="18" y="9" width="8" height="9" fill="#d1d5db" />
+            <rect x="21" y="14" width="2" height="4" fill="#9ca3af" /> {/* Nariz */}
+            <rect x="19" y="12" width="1.5" height="1.5" fill="#ef4444" /> {/* Olho esq */}
+            <rect x="23.5" y="12" width="1.5" height="1.5" fill="#ef4444" /> {/* Olho dir */}
+            {/* Corpo e vinhas verdes */}
+            <rect x="15" y="18" width="14" height="14" fill="#e5e7eb" stroke="#9ca3af" strokeWidth="0.5" />
+            <rect x="17" y="19" width="3" height="5" fill="#4d7c0f" /> {/* Vinha */}
+            <rect x="23" y="24" width="4" height="4" fill="#4d7c0f" /> {/* Vinha */}
+            {/* Braços de ferro */}
+            <rect x="12" y="18" width="3" height="18" fill="#d1d5db" />
+            <rect x="29" y="18" width="3" height="18" fill="#d1d5db" />
+            {/* Pernas */}
+            <rect x="17" y="32" width="4" height="7" fill="#9ca3af" />
+            <rect x="23" y="32" width="4" height="7" fill="#9ca3af" />
+          </g>
+
+          {/* Moita de grama alta na lateral direita com pétalas de cerejeira (Cherry Blossom) */}
+          <g transform="translate(162, 115) scale(0.95)">
+            {/* Grama pixelada */}
+            <rect x="6" y="2" width="2" height="16" fill="#4d822b" />
+            <rect x="4" y="6" width="2" height="12" fill="#5c9a33" />
+            <rect x="8" y="8" width="2" height="10" fill="#66aa39" />
+            <rect x="12" y="4" width="2" height="14" fill="#4d822b" />
+            <rect x="14" y="8" width="2" height="10" fill="#5c9a33" />
+            <rect x="18" y="3" width="2" height="15" fill="#66aa39" />
+            <rect x="22" y="7" width="2" height="11" fill="#4d822b" />
+            <rect x="2" y="12" width="24" height="6" fill="#3f6d22" />
+            {/* Pétalas de cerejeira caindo */}
+            <rect x="-10" y="8" width="4" height="2" fill="#f472b6" rx="1" />
+            <rect x="5" y="-6" width="3" height="2" fill="#fbcfe8" rx="1" />
+            <rect x="26" y="14" width="4" height="2" fill="#ec4899" rx="1" />
+            <rect x="-2" y="22" width="3" height="2" fill="#f472b6" rx="1" />
+          </g>
+
+          {/* Moita de grama no canto inferior esquerdo */}
+          <g transform="translate(16, 204) scale(0.85)">
+            <rect x="4" y="2" width="2" height="14" fill="#4d822b" />
+            <rect x="8" y="5" width="2" height="11" fill="#5c9a33" />
+            <rect x="12" y="3" width="2" height="13" fill="#66aa39" />
+            <rect x="16" y="6" width="2" height="10" fill="#4d822b" />
+            <rect x="2" y="10" width="18" height="6" fill="#3f6d22" />
+            <rect x="-3" y="8" width="3" height="2" fill="#f472b6" rx="1" />
+          </g>
+
+          {/* Criatura azul Allay voando perto do crachá inferior esquerdo */}
+          <g transform="translate(32, 168) scale(0.95)">
+            {/* Sombra */}
+            <ellipse cx="12" cy="24" rx="8" ry="2" fill="#000000" opacity="0.25" />
+            {/* Asas brilhantes do Allay */}
+            <path d="M4,4 C-2,0 -2,12 4,14 Z" fill="#93c5fd" opacity="0.85" />
+            <path d="M16,4 C22,0 22,12 16,14 Z" fill="#93c5fd" opacity="0.85" />
+            {/* Corpo do Allay */}
+            <rect x="6" y="2" width="8" height="8" fill="#38bdf8" rx="1" />
+            {/* Olhos do Allay */}
+            <rect x="7" y="4" width="2" height="2" fill="#ffffff" />
+            <rect x="11" y="4" width="2" height="2" fill="#ffffff" />
+            {/* Pequeno corpo e mãozinhas */}
+            <rect x="7" y="10" width="6" height="5" fill="#0284c7" />
+            <rect x="5" y="11" width="2" height="3" fill="#38bdf8" />
+            <rect x="13" y="11" width="2" height="3" fill="#38bdf8" />
+          </g>
+
+          {/* Picareta de Ferro inclinada no canto inferior direito */}
+          <g transform="translate(166, 178) rotate(15) scale(0.92)">
+            {/* Cabo de madeira (diagonal) */}
+            <path d="M4,40 L34,10 L37,13 L7,43 Z" fill="#854d0e" stroke="#000" strokeWidth="1" />
+            <path d="M8,36 L30,14" stroke="#a16207" strokeWidth="1.5" />
+            {/* Cabeça da picareta de ferro */}
+            <path d="M22,2 L44,8 L40,16 L32,12 L30,20 L24,18 L26,10 L18,12 L16,4 Z" fill="#e4e4e7" stroke="#000" strokeWidth="1.2" />
+            {/* Detalhe metálico */}
+            <path d="M26,5 L39,9 L36,13 L25,7 Z" fill="#f4f4f5" />
+            <rect x="29" y="9" width="3" height="3" fill="#71717a" />
+          </g>
         </svg>
       </div>
     );
