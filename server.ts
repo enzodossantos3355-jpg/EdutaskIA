@@ -139,128 +139,21 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 45000): Promise<T
 
 const quotaExhaustedModels = new Map<string, number>();
 
-function isAIConfigured(): boolean {
-  if (db.ai_config && db.ai_config.apiKey && db.ai_config.apiKey.trim()) {
-    return true;
-  }
-  return Boolean(genAI);
-}
-
-// Universal AI invocation supporting Gemini, ChatGPT/OpenAI, and Emergent LLMs
+// Robust Gemini invocation with automatic model fallbacks (gemini-3.1-flash-lite as primary)
 async function callGeminiGenerate(params: {
   contents: any;
   config?: any;
   preferredModel?: string;
   timeoutMs?: number;
 }): Promise<any> {
-  const aiCfg: { provider?: string; apiKey?: string; model?: string } = db.ai_config || {};
-  const provider = aiCfg.provider || 'gemini';
-  const customKey = (aiCfg.apiKey || '').trim();
-  const customModel = (aiCfg.model || '').trim();
-
-  // 1) OPENAI / CHATGPT PROVIDER
-  if (provider === 'openai' && customKey) {
-    const activeModel = customModel || params.preferredModel || 'gpt-4o-mini';
-    const promptText = typeof params.contents === 'string'
-      ? params.contents
-      : Array.isArray(params.contents)
-        ? params.contents.map((c: any) => (typeof c === 'string' ? c : c.text || JSON.stringify(c))).join('\n')
-        : String(params.contents);
-
-    const reqBody: any = {
-      model: activeModel,
-      messages: [{ role: 'user', content: promptText }],
-      temperature: 0.7,
-    };
-
-    if (params.config?.responseMimeType === 'application/json') {
-      reqBody.response_format = { type: 'json_object' };
-    }
-
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${customKey}`,
-      },
-      body: JSON.stringify(reqBody),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`OpenAI Error (${res.status}): ${errText}`);
-    }
-
-    const data = await res.json();
-    const text = data?.choices?.[0]?.message?.content || '';
-    return { text };
-  }
-
-  // 2) EMERGENT LLM PROVIDER
-  if (provider === 'emergent' && customKey) {
-    const activeModel = customModel || params.preferredModel || 'emergent-v1';
-    const promptText = typeof params.contents === 'string'
-      ? params.contents
-      : Array.isArray(params.contents)
-        ? params.contents.map((c: any) => (typeof c === 'string' ? c : c.text || JSON.stringify(c))).join('\n')
-        : String(params.contents);
-
-    const reqBody: any = {
-      model: activeModel,
-      messages: [{ role: 'user', content: promptText }],
-      temperature: 0.7,
-    };
-
-    if (params.config?.responseMimeType === 'application/json') {
-      reqBody.response_format = { type: 'json_object' };
-    }
-
-    let res = await fetch('https://api.emergentmind.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${customKey}`,
-      },
-      body: JSON.stringify(reqBody),
-    }).catch(() => null);
-
-    if (!res || !res.ok) {
-      res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${customKey}`,
-        },
-        body: JSON.stringify(reqBody),
-      });
-    }
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Emergent Error (${res.status}): ${errText}`);
-    }
-
-    const data = await res.json();
-    const text = data?.choices?.[0]?.message?.content || '';
-    return { text };
-  }
-
-  // 3) GOOGLE GEMINI (DEFAULT OR WITH CUSTOM KEY)
-  let activeGenAI = genAI;
-  if (provider === 'gemini' && customKey) {
-    activeGenAI = new GoogleGenAI({
-      apiKey: customKey,
-      httpOptions: { headers: { 'User-Agent': 'aistudio-build-custom' } },
-    });
-  }
-
-  if (!activeGenAI) throw new Error('API do Gemini não configurada');
+  if (!genAI) throw new Error('Gemini API não configurada');
   const now = Date.now();
 
   for (const [model, exp] of quotaExhaustedModels.entries()) {
     if (now > exp) quotaExhaustedModels.delete(model);
   }
 
+  // gemini-3.1-flash-lite is the active, stable model with available quota
   const defaultModels = [
     'gemini-3.1-flash-lite',
     'gemini-flash-latest',
@@ -269,10 +162,11 @@ async function callGeminiGenerate(params: {
   ];
 
   const candidateModels = [
-    customModel || params.preferredModel || 'gemini-3.1-flash-lite',
+    params.preferredModel || 'gemini-3.1-flash-lite',
     ...defaultModels,
   ];
 
+  // Prioritize models that are not in 429 quota exhaustion
   const nonExhausted = candidateModels.filter((m) => !quotaExhaustedModels.has(m));
   const modelsToTry = Array.from(new Set(nonExhausted.length > 0 ? nonExhausted : candidateModels));
   let lastError: any = null;
@@ -280,7 +174,7 @@ async function callGeminiGenerate(params: {
   for (const model of modelsToTry) {
     try {
       const response = await withTimeout(
-        activeGenAI.models.generateContent({
+        genAI.models.generateContent({
           model,
           contents: params.contents,
           ...(params.config ? { config: params.config } : {}),
@@ -698,11 +592,6 @@ class Database {
   };
   app_info: any = { ...DEFAULT_APP_INFO };
   ai_enabled: boolean = true;
-  ai_config: { provider: string; apiKey: string; model: string } = {
-    provider: 'gemini',
-    apiKey: '',
-    model: '',
-  };
   webhook_logs: any[] = [];
   task_student_answers: Map<string, GeneratedTaskAnswer> = new Map();
 
@@ -909,7 +798,6 @@ class Database {
         whatsapp_config: this.whatsapp_config,
         app_info: this.app_info,
         ai_enabled: this.ai_enabled,
-        ai_config: this.ai_config,
         task_student_answers: Array.from(this.task_student_answers.entries()),
       };
       fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
@@ -938,7 +826,6 @@ class Database {
         if (data.whatsapp_config) this.whatsapp_config = { ...this.whatsapp_config, ...data.whatsapp_config };
         if (data.app_info) this.app_info = data.app_info;
         if (data.ai_enabled !== undefined) this.ai_enabled = data.ai_enabled;
-        if (data.ai_config) this.ai_config = { ...this.ai_config, ...data.ai_config };
         if (data.task_student_answers) this.task_student_answers = new Map(data.task_student_answers);
         // Ensure admin does not have a trivial '123' password
         for (const u of this.users.values()) {
@@ -2192,7 +2079,7 @@ api.post('/tasks/:task_id/generate-answer', requireAuth, async (req, res) => {
 
   let generatedText = '';
 
-  if (isAIConfigured()) {
+  if (genAI) {
     try {
       const contentsParts: any[] = [];
       for (const img of imageFiles.slice(0, 10)) {
@@ -4565,142 +4452,12 @@ api.put(['/ai/status', '/ai-status'], requireAdmin, (req, res) => {
   res.json({ ok: true, enabled: db.ai_enabled });
 });
 
-api.get('/ai/config', requireAuth, (req, res) => {
-  const cfg = db.ai_config || { provider: 'gemini', apiKey: '', model: '' };
-  const rawKey = (cfg.apiKey || '').trim();
-  const masked = rawKey.length > 8
-    ? `${rawKey.slice(0, 4)}...${rawKey.slice(-4)}`
-    : rawKey ? '••••••••' : '';
-
-  res.json({
-    enabled: db.ai_enabled,
-    provider: cfg.provider || 'gemini',
-    hasCustomKey: Boolean(rawKey),
-    maskedKey: masked,
-    model: cfg.model || '',
-  });
-});
-
-api.put('/ai/config', requireAdmin, (req, res) => {
-  const { provider, apiKey, model } = req.body || {};
-  db.ai_config = {
-    provider: provider || 'gemini',
-    apiKey: typeof apiKey === 'string' ? apiKey.trim() : (db.ai_config?.apiKey || ''),
-    model: typeof model === 'string' ? model.trim() : (db.ai_config?.model || ''),
-  };
-  db.saveToDisk();
-  res.json({
-    ok: true,
-    provider: db.ai_config.provider,
-    hasCustomKey: Boolean(db.ai_config.apiKey),
-    model: db.ai_config.model,
-  });
-});
-
-api.post('/ai/test-key', requireAdmin, async (req, res) => {
-  const { provider = 'gemini', apiKey = '', model = '' } = req.body || {};
-  const testKey = apiKey.trim() || db.ai_config?.apiKey || '';
-
-  if (!testKey && provider !== 'gemini') {
-    return res.status(400).json({ detail: 'Por favor, informe uma chave de API para testar este provedor.' });
-  }
-
-  try {
-    let responseText = '';
-    const testPrompt = 'Responda apenas com a palavra CONFIRMADO em maiúsculas.';
-
-    if (provider === 'openai') {
-      const activeModel = model.trim() || 'gpt-4o-mini';
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${testKey}`,
-        },
-        body: JSON.stringify({
-          model: activeModel,
-          messages: [{ role: 'user', content: testPrompt }],
-          max_tokens: 30,
-        }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData?.error?.message || `Erro HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      responseText = data?.choices?.[0]?.message?.content || 'Conexão efetuada';
-    } else if (provider === 'emergent') {
-      const activeModel = model.trim() || 'emergent-v1';
-      let response = await fetch('https://api.emergentmind.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${testKey}`,
-        },
-        body: JSON.stringify({
-          model: activeModel,
-          messages: [{ role: 'user', content: testPrompt }],
-          max_tokens: 30,
-        }),
-      }).catch(() => null);
-
-      if (!response || !response.ok) {
-        response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${testKey}`,
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [{ role: 'user', content: testPrompt }],
-            max_tokens: 30,
-          }),
-        });
-      }
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData?.error?.message || `Erro HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      responseText = data?.choices?.[0]?.message?.content || 'Conexão Emergent ativada';
-    } else {
-      // Gemini
-      const client = testKey
-        ? new GoogleGenAI({ apiKey: testKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build-test' } } })
-        : genAI;
-
-      if (!client) throw new Error('Nenhuma chave do Gemini disponível para teste.');
-      const activeModel = model.trim() || 'gemini-3.1-flash-lite';
-      const resp = await client.models.generateContent({
-        model: activeModel,
-        contents: testPrompt,
-      });
-      responseText = resp.text || 'Conexão Gemini OK';
-    }
-
-    res.json({
-      success: true,
-      message: `Conexão bem-sucedida com o provedor ${provider.toUpperCase()}! Resposta: "${responseText.trim()}"`,
-    });
-  } catch (err: any) {
-    res.status(400).json({
-      success: false,
-      detail: `Falha ao conectar com o provedor ${provider.toUpperCase()}: ${err.message || String(err)}`,
-    });
-  }
-});
-
 api.post('/ai/improve-task', requireAdmin, async (req, res) => {
   if (!db.ai_enabled) return res.status(503).json({ detail: 'Recursos de IA desativados' });
   const { title, subject, hint } = req.body || {};
   if (!title) return res.status(400).json({ detail: 'Título obrigatório' });
 
-  if (isAIConfigured()) {
+  if (genAI) {
     try {
       const prompt = `Você é um professor experiente de ensino fundamental e médio no Brasil.
 Elabore uma descrição pedagógica, dicas e objetivos para esta tarefa escolar:
@@ -4750,7 +4507,7 @@ api.post('/ai/generate-announcement', requireAdmin, async (req, res) => {
   const { prompt } = req.body || {};
   if (!prompt) return res.status(400).json({ detail: 'Descreva o aviso' });
 
-  if (isAIConfigured()) {
+  if (genAI) {
     try {
       const response = await callGeminiGenerate({
         contents: `Você é um professor escolar no Brasil redigindo um comunicado aos alunos e responsáveis.
@@ -4783,7 +4540,7 @@ api.post('/ai/check-answer', requireAdmin, async (req, res) => {
   if (!db.ai_enabled) return res.status(503).json({ detail: 'Recursos de IA desativados' });
   const { student_answer, task_description, correct_answer } = req.body || {};
 
-  if (isAIConfigured()) {
+  if (genAI) {
     try {
       const prompt = `Analise a resposta do aluno em relação ao gabarito/tarefa:
 Tarefa: ${task_description || ''}
@@ -4936,7 +4693,7 @@ api.post('/ai/explain-task', requireAuth, async (req, res) => {
   const task = db.tasks.get(task_id);
   if (!task) return res.status(404).json({ detail: 'Tarefa não encontrada' });
 
-  if (isAIConfigured()) {
+  if (genAI) {
     try {
       const prompt = `Você é um professor paciente explicando para um estudante o que esta tarefa escolar pede, SEM ENTREGAR A RESPOSTA PRONTA.
 Matéria: ${task.subject}
@@ -5014,7 +4771,7 @@ api.post('/ai/chat', requireAuth, async (req, res) => {
   const focusedTask = effectiveTaskId ? assignedTasks.find((t) => t.id === effectiveTaskId) : null;
 
   let reply = '';
-  if (isAIConfigured()) {
+  if (genAI) {
     try {
       const historyContents = session.messages.slice(-10).map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
@@ -5140,7 +4897,7 @@ api.get('/ai/daily-summary', requireAuth, async (req, res) => {
   const taskTitles = myTasks.map((t) => `${t.title} (${t.subject}, entrega ${t.due_date})`).join('; ');
   let summary = `Você tem ${myTasks.length} tarefa(s) pendente(s). Mantenha o foco em ${myTasks[0].subject} hoje! 🚀`;
 
-  if (isAIConfigured()) {
+  if (genAI) {
     try {
       const response = await callGeminiGenerate({
         contents: `Escreva uma mensagem motivacional e resumida de 2 linhas para o aluno ${user.name} em português do Brasil sobre suas tarefas pendentes: ${taskTitles}. Comece com energia e dê uma dica de foco.`,
@@ -5236,7 +4993,7 @@ api.get('/ai/prize-evaluate', requireAdmin, async (req, res) => {
     )
     .join('\n');
 
-  if (isAIConfigured()) {
+  if (genAI) {
     try {
       const prompt = `Você é o Comitê Pedagógico de Inteligência Artificial do Edutask.
 Sua missão é escolher o(s) Aluno(s) Vencedor(es) do Prêmio do Mês (${leaderboard.month_label}).

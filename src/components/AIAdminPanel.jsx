@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, Power, Trophy, X, Award, FileText, Loader2, RotateCcw, Calendar, CheckCircle2, History, Key, Cpu, Zap, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Power, Trophy, X, Award, FileText, Loader2, RotateCcw, Calendar, CheckCircle2, History } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { useAIStatus } from "@/context/AIStatusContext";
 import Avatar from "@/components/Avatar";
@@ -23,33 +23,9 @@ export default function AIAdminPanel() {
   const [finalizingMonth, setFinalizingMonth] = useState(false);
   const [monthHistory, setMonthHistory] = useState([]);
 
-  // Manual API Key and Provider state
-  const [provider, setProvider] = useState("gemini");
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [maskedKey, setMaskedKey] = useState("");
-  const [hasCustomKey, setHasCustomKey] = useState(false);
-  const [modelInput, setModelInput] = useState("");
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [testingKey, setTestingKey] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [testResult, setTestResult] = useState(null);
-
-  const loadAiConfig = async () => {
-    try {
-      const { data } = await api.get("/ai/config");
-      setProvider(data.provider || "gemini");
-      setHasCustomKey(Boolean(data.hasCustomKey));
-      setMaskedKey(data.maskedKey || "");
-      setModelInput(data.model || "");
-    } catch (e) {
-      console.warn("Falha ao carregar configurações de IA:", e);
-    }
-  };
-
   useEffect(() => {
     api.get("/users").then(({ data }) => setStudents(data.filter((u) => u.role === "aluno"))).catch(() => {});
     api.get("/monthly-prize/history").then(({ data }) => setMonthHistory(data?.history || [])).catch(() => {});
-    loadAiConfig();
   }, []);
 
   const toggle = async () => {
@@ -172,66 +148,6 @@ export default function AIAdminPanel() {
     }
   };
 
-  const handleSaveConfig = async () => {
-    setSavingConfig(true);
-    setTestResult(null);
-    try {
-      await api.put("/ai/config", {
-        provider,
-        apiKey: apiKeyInput.trim(),
-        model: modelInput.trim(),
-      });
-      toast.success("Configurações do provedor de IA salvas com sucesso!");
-      setApiKeyInput("");
-      await loadAiConfig();
-    } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao salvar chave de IA");
-    } finally {
-      setSavingConfig(false);
-    }
-  };
-
-  const handleTestKey = async () => {
-    setTestingKey(true);
-    setTestResult(null);
-    try {
-      const { data } = await api.post("/ai/test-key", {
-        provider,
-        apiKey: apiKeyInput.trim(),
-        model: modelInput.trim(),
-      });
-      setTestResult({ success: true, message: data.message });
-      toast.success(`Conexão confirmada com ${provider.toUpperCase()}!`);
-    } catch (e) {
-      const errDetail = formatApiError(e?.response?.data?.detail) || "Falha ao testar chave de API";
-      setTestResult({ success: false, message: errDetail });
-      toast.error(errDetail);
-    } finally {
-      setTestingKey(false);
-    }
-  };
-
-  const handleRestoreDefaultKey = async () => {
-    if (!window.confirm("Deseja restaurar a chave padrão do sistema (Google Gemini)?")) return;
-    setSavingConfig(true);
-    try {
-      await api.put("/ai/config", {
-        provider: "gemini",
-        apiKey: "",
-        model: "",
-      });
-      toast.success("Chave padrão do sistema restaurada com sucesso!");
-      setApiKeyInput("");
-      setModelInput("");
-      setTestResult(null);
-      await loadAiConfig();
-    } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao restaurar chave padrão");
-    } finally {
-      setSavingConfig(false);
-    }
-  };
-
   return (
     <div className="space-y-6" data-testid="ai-admin-panel">
       <div>
@@ -265,197 +181,6 @@ export default function AIAdminPanel() {
             <Power className="w-4 h-4" strokeWidth={2.5} />
             {toggling ? "Aplicando..." : enabled ? "Desativar IA" : "Ativar IA"}
           </button>
-        </div>
-      </div>
-
-      {/* SEÇÃO: CONFIGURAÇÃO MANUAL DE PROVEDOR E CHAVE DE API (CHATGPT, GEMINI, EMERGENT) */}
-      <div className={`nb-card p-5 sm:p-6 bg-white ${!enabled ? "opacity-60 pointer-events-none" : ""}`} data-testid="ai-key-config-card">
-        <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 nb-card bg-violet-200 flex items-center justify-center">
-              <Key className="w-5 h-5 text-violet-950" strokeWidth={2.5} />
-            </div>
-            <div>
-              <h2 className="font-heading font-black text-xl">Provedor de IA & Chave de API Manual</h2>
-              <p className="text-xs text-neutral-600">
-                Configure uma chave própria para ChatGPT (OpenAI), Google Gemini ou Emergent LLM.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={`nb-badge text-xs font-bold ${hasCustomKey ? "bg-emerald-200 text-emerald-950" : "bg-amber-100 text-amber-900"}`}>
-              {hasCustomKey ? `Chave Manual Ativa (${maskedKey})` : "Chave Padrão do Sistema"}
-            </span>
-          </div>
-        </div>
-
-        <div className="space-y-4 pt-1">
-          {/* Seleção do Provedor */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
-              Escolha o Provedor de IA:
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <button
-                type="button"
-                onClick={() => { setProvider("gemini"); setTestResult(null); }}
-                className={`nb-btn p-3 text-left flex items-start gap-2.5 transition-all ${
-                  provider === "gemini" ? "bg-violet-300 ring-2 ring-violet-900 font-bold" : "bg-neutral-50 hover:bg-neutral-100"
-                }`}
-              >
-                <Sparkles className="w-5 h-5 text-violet-900 mt-0.5 flex-shrink-0" />
-                <div>
-                  <div className="font-bold text-sm">Google Gemini</div>
-                  <div className="text-[11px] text-neutral-600">Gemini 3.1 Flash, 2.5 Flash</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setProvider("openai"); setTestResult(null); }}
-                className={`nb-btn p-3 text-left flex items-start gap-2.5 transition-all ${
-                  provider === "openai" ? "bg-emerald-300 ring-2 ring-emerald-900 font-bold" : "bg-neutral-50 hover:bg-neutral-100"
-                }`}
-              >
-                <Cpu className="w-5 h-5 text-emerald-900 mt-0.5 flex-shrink-0" />
-                <div>
-                  <div className="font-bold text-sm">ChatGPT (OpenAI)</div>
-                  <div className="text-[11px] text-neutral-600">GPT-4o, GPT-4o-mini, GPT-3.5</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setProvider("emergent"); setTestResult(null); }}
-                className={`nb-btn p-3 text-left flex items-start gap-2.5 transition-all ${
-                  provider === "emergent" ? "bg-sky-300 ring-2 ring-sky-900 font-bold" : "bg-neutral-50 hover:bg-neutral-100"
-                }`}
-              >
-                <Zap className="w-5 h-5 text-sky-900 mt-0.5 flex-shrink-0" />
-                <div>
-                  <div className="font-bold text-sm">Emergent LLM</div>
-                  <div className="text-[11px] text-neutral-600">Chaves do ecossistema Emergent</div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Input de Chave de API */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5 flex items-center justify-between">
-              <span>Chave de API Manual ({provider === "gemini" ? "Google Gemini" : provider === "openai" ? "OpenAI / ChatGPT" : "Emergent LLM"})</span>
-              {hasCustomKey && <span className="text-[11px] text-emerald-700 font-bold">✓ Chave personalizada já salva ({maskedKey})</span>}
-            </label>
-            <div className="relative">
-              <input
-                type={showApiKey ? "text" : "password"}
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder={
-                  hasCustomKey
-                    ? "Substituir chave salva por nova..."
-                    : provider === "openai"
-                    ? "sk-proj-..."
-                    : provider === "emergent"
-                    ? "em-..."
-                    : "AIzaSy..."
-                }
-                className="nb-input pr-12 text-sm font-mono"
-                data-testid="ai-api-key-input"
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-neutral-600 hover:text-neutral-900"
-                title={showApiKey ? "Ocultar chave" : "Mostrar chave"}
-              >
-                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <p className="text-[11px] text-neutral-500 mt-1">
-              Deixe em branco para manter a chave salva ou usar a padrão. Sua chave é enviada diretamente ao servidor com criptografia.
-            </p>
-          </div>
-
-          {/* Modelo Opcional */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1">
-              Modelo de IA Específico (Opcional)
-            </label>
-            <input
-              type="text"
-              value={modelInput}
-              onChange={(e) => setModelInput(e.target.value)}
-              placeholder={
-                provider === "openai"
-                  ? "Ex.: gpt-4o-mini, gpt-4o"
-                  : provider === "emergent"
-                  ? "Ex.: emergent-v1, gpt-4o-mini"
-                  : "Ex.: gemini-3.1-flash-lite, gemini-2.5-flash"
-              }
-              className="nb-input text-sm"
-              data-testid="ai-model-input"
-            />
-            <p className="text-[11px] text-neutral-500 mt-1">
-              Nome exato do modelo. Se deixado vazio, o sistema usa o modelo otimizado padrão do provedor.
-            </p>
-          </div>
-
-          {/* Resultado de Teste se houver */}
-          {testResult && (
-            <div
-              className={`p-3 border-2 text-xs font-bold space-y-1 ${
-                testResult.success ? "bg-emerald-100 border-emerald-800 text-emerald-950" : "bg-red-100 border-red-800 text-red-950"
-              }`}
-              data-testid="ai-test-result-box"
-            >
-              <div className="flex items-center gap-1.5 text-sm font-black">
-                {testResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-800" /> : <X className="w-4 h-4 text-red-800" />}
-                <span>{testResult.success ? "Conexão Confirmada" : "Falha na Verificação"}</span>
-              </div>
-              <p>{testResult.message}</p>
-            </div>
-          )}
-
-          {/* Botões de Ação */}
-          <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-neutral-200">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleTestKey}
-                disabled={testingKey}
-                className="nb-btn bg-violet-200 hover:bg-violet-300 px-3.5 py-2 text-xs font-bold flex items-center gap-1.5"
-                data-testid="ai-test-key-btn"
-              >
-                {testingKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                {testingKey ? "Testando Conexão..." : "Testar Conexão de IA"}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSaveConfig}
-                disabled={savingConfig}
-                className="nb-btn bg-emerald-300 hover:bg-emerald-400 px-4 py-2 text-xs font-bold flex items-center gap-1.5"
-                data-testid="ai-save-config-btn"
-              >
-                {savingConfig ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                {savingConfig ? "Salvando..." : "Salvar Configuração"}
-              </button>
-            </div>
-
-            {hasCustomKey && (
-              <button
-                type="button"
-                onClick={handleRestoreDefaultKey}
-                disabled={savingConfig}
-                className="nb-btn bg-neutral-100 hover:bg-neutral-200 text-neutral-800 px-3 py-2 text-xs flex items-center gap-1"
-                data-testid="ai-restore-default-btn"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Restaurar Padrão do Sistema
-              </button>
-            )}
-          </div>
         </div>
       </div>
 
