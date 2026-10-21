@@ -1,18 +1,199 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, Power, Trophy, X, Award, FileText, Loader2, RotateCcw, Calendar, CheckCircle2, History } from "lucide-react";
+import { Sparkles, Power, Trophy, X, Award, FileText, Loader2, RotateCcw, Calendar, CheckCircle2, History, Cpu, Zap, Check, Trash2 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { useAIStatus } from "@/context/AIStatusContext";
 import Avatar from "@/components/Avatar";
 import { effectClass } from "@/lib/effects";
 
+const GEMINI_CATEGORIES = [
+  {
+    title: "⚡ Modelos Flash & Alta Velocidade (Uso Geral)",
+    description: "Modelos ultrarrápidos ideais para respostas pedagógicas, gabaritos e tira-dúvidas em tempo real.",
+    models: [
+      {
+        id: "gemini-3.8-flash",
+        name: "Gemini 3.8 Flash",
+        badge: "Recomendado",
+        badgeBg: "bg-emerald-300 text-emerald-950 border border-emerald-900/30",
+        description: "Mais recente, extremamente rápido e inteligente para todas as tarefas do aplicativo.",
+      },
+      {
+        id: "gemini-3.6-flash",
+        name: "Gemini 3.6 Flash",
+        badge: "Flash Performance",
+        badgeBg: "bg-teal-200 text-teal-950 border border-teal-900/30",
+        description: "Alta velocidade e desempenho excelente para tarefas acadêmicas.",
+      },
+      {
+        id: "gemini-3.5-flash-lite",
+        name: "Gemini 3.5 Flash-Lite",
+        badge: "Flash-Lite Velocidade",
+        badgeBg: "bg-sky-200 text-sky-950 border border-sky-900/30",
+        description: "Resposta ultrarrápida com baixo consumo de recursos.",
+      },
+      {
+        id: "gemini-3.1-flash-lite",
+        name: "Gemini 3.1 Flash-Lite",
+        badge: "Leve & Econômico",
+        badgeBg: "bg-sky-200 text-sky-900 border border-sky-900/30",
+        description: "Versão otimizada com menor consumo de cota e alta velocidade de resposta.",
+      },
+      {
+        id: "gemini-3-flash",
+        name: "Gemini 3 Flash",
+        badge: "Flash Multimodal",
+        badgeBg: "bg-indigo-200 text-indigo-950 border border-indigo-900/30",
+        description: "Modelo equilibrado para geração de texto e respostas rápidas.",
+      },
+      {
+        id: "gemini-flash-latest",
+        name: "Gemini Flash (Última Versão)",
+        badge: "Auto Update",
+        badgeBg: "bg-violet-200 text-violet-900 border border-violet-900/30",
+        description: "Aponta automaticamente para o modelo Flash mais recente disponível.",
+      },
+      {
+        id: "gemini-2.5-flash",
+        name: "Gemini 2.5 Flash",
+        badge: "Estável",
+        badgeBg: "bg-amber-200 text-amber-900 border border-amber-900/30",
+        description: "Versão anterior consolidada para tarefas de alta demanda.",
+      },
+      {
+        id: "gemini-2.5-flash-lite",
+        name: "Gemini 2.5 Flash-Lite",
+        badge: "Lite Estável",
+        badgeBg: "bg-orange-200 text-orange-950 border border-orange-900/30",
+        description: "Edição compacta do Gemini 2.5 para operações velozes.",
+      },
+      {
+        id: "gemini-2-flash-lite",
+        name: "Gemini 2 Flash-Lite",
+        badge: "Ultra Lite",
+        badgeBg: "bg-neutral-200 text-neutral-900 border border-neutral-900/30",
+        description: "Versão compacta com respostas diretas e leves.",
+      },
+    ],
+  },
+  {
+    title: "🧠 Modelos Pro & Raciocínio Profundo",
+    description: "Projetados para tarefas complexas de raciocínio lógico, análises minuciosas de desempenho e provas pedagógicas.",
+    models: [
+      {
+        id: "gemini-4-argon",
+        name: "Gemini 4 Argon",
+        badge: "Raciocínio Máximo",
+        badgeBg: "bg-purple-300 text-purple-950 border border-purple-900/30",
+        description: "Estado da arte em raciocínio analítico, resolução de problemas e lógica avançada.",
+      },
+      {
+        id: "gemini-3.8-live-extended-thinking",
+        name: "Gemini 3.8 Live Extended Thinking",
+        badge: "Deep Thinking",
+        badgeBg: "bg-indigo-300 text-indigo-950 border border-indigo-900/30",
+        description: "Capacidade de raciocínio expandido para diagnósticos e avaliações detalhadas.",
+      },
+    ],
+  },
+  {
+    title: "🖼️ Modelos de Visão & Geração de Imagens",
+    description: "Especializados em leitura OCR de fotos de cadernos, gabaritos manuscritos e geração de imagens.",
+    models: [
+      {
+        id: "gemini-3.1-flash-lite-image",
+        name: "Gemini 3.1 Flash-Lite Image",
+        badge: "Visão OCR Rápida",
+        badgeBg: "bg-blue-200 text-blue-950 border border-blue-900/30",
+        description: "Análise expressa e leitura OCR de imagens de tarefas escolares.",
+      },
+      {
+        id: "gemini-nano-banana-2.1",
+        name: "Gemini Nano Banana 2.1",
+        badge: "Geração de Imagem",
+        badgeBg: "bg-yellow-300 text-yellow-950 border border-yellow-900/30",
+        description: "Geração e edição ágil de ilustrações e materiais visuais.",
+      },
+      {
+        id: "gemini-3-pro-image",
+        name: "Gemini 3 Pro Image",
+        badge: "Studio HQ",
+        badgeBg: "bg-fuchsia-300 text-fuchsia-950 border border-fuchsia-900/30",
+        description: "Geração de imagens de altíssima definição e riqueza visual.",
+      },
+    ],
+  },
+  {
+    title: "🎙️ Modelos de Áudio & Síntese de Voz (TTS)",
+    description: "Modelos para transcrição de explicações em áudio e leitura por voz natural.",
+    models: [
+      {
+        id: "gemini-3.5-transcribe",
+        name: "Gemini 3.5 Transcribe",
+        badge: "Transcrição",
+        badgeBg: "bg-cyan-200 text-cyan-950 border border-cyan-900/30",
+        description: "Converte gravações de aulas e áudios de dúvidas em texto preciso.",
+      },
+      {
+        id: "gemini-3.8-flash-lite-tts",
+        name: "Gemini 3.8 Flash-Lite TTS",
+        badge: "Voz Rápida",
+        badgeBg: "bg-teal-200 text-teal-950 border border-teal-900/30",
+        description: "Síntese de voz em tempo real com narração fluida.",
+      },
+      {
+        id: "gemini-3.8-flash-tts",
+        name: "Gemini 3.8 Flash TTS",
+        badge: "Voz HQ",
+        badgeBg: "bg-emerald-200 text-emerald-950 border border-emerald-900/30",
+        description: "Geração de voz natural com entonação expressiva para narração.",
+      },
+      {
+        id: "gemini-3.8-live",
+        name: "Gemini 3.8 Live",
+        badge: "Realtime Voice",
+        badgeBg: "bg-rose-200 text-rose-950 border border-rose-900/30",
+        description: "Conversação direta em voz com baixíssima latência.",
+      },
+    ],
+  },
+  {
+    title: "🎵 Modelos Multimodais & Criação Musical",
+    description: "Avançados em interações omni e composição de vinhetas/músicas educacionais.",
+    models: [
+      {
+        id: "gemini-omni-1.1-flash",
+        name: "Gemini Omni 1.1 Flash",
+        badge: "Omni Multimodal",
+        badgeBg: "bg-pink-300 text-pink-950 border border-pink-900/30",
+        description: "Processamento simultâneo de texto, áudio, imagens e fluxos de dados.",
+      },
+      {
+        id: "lyria-3-clip-preview",
+        name: "Lyria 3 Clip Preview",
+        badge: "IA Musical",
+        badgeBg: "bg-amber-300 text-amber-950 border border-amber-900/30",
+        description: "Criação de vinhetas, jingles e clipes musicais educativos.",
+      },
+      {
+        id: "lyria-3-pro-preview",
+        name: "Lyria 3 Pro Preview",
+        badge: "Music Studio",
+        badgeBg: "bg-orange-300 text-orange-950 border border-orange-900/30",
+        description: "Estúdio completo de composição musical por inteligência artificial.",
+      },
+    ],
+  },
+];
+
 /**
- * Admin AI control panel: global on/off toggle, monthly report generator,
- * AI prize winner evaluation, tied top 1 support, and monthly cycle reset.
+ * Admin AI control panel: global on/off toggle, Gemini model selection,
+ * monthly report generator, AI prize winner evaluation, tied top 1 support, and monthly cycle reset.
  */
 export default function AIAdminPanel() {
-  const { enabled, refresh } = useAIStatus();
+  const { enabled, model, changeModel, refresh } = useAIStatus();
   const [toggling, setToggling] = useState(false);
+  const [modelChanging, setModelChanging] = useState(false);
   const [students, setStudents] = useState([]);
   const [reportStudent, setReportStudent] = useState(null);
   const [reportData, setReportData] = useState(null);
@@ -38,6 +219,19 @@ export default function AIAdminPanel() {
       toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao alterar");
     } finally {
       setToggling(false);
+    }
+  };
+
+  const handleSelectModel = async (modelId) => {
+    if (modelId === model) return;
+    setModelChanging(true);
+    try {
+      await changeModel(modelId);
+      toast.success(`Modelo Gemini alterado com sucesso para "${modelId}"!`);
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao alterar modelo da IA");
+    } finally {
+      setModelChanging(false);
     }
   };
 
@@ -181,6 +375,91 @@ export default function AIAdminPanel() {
             <Power className="w-4 h-4" strokeWidth={2.5} />
             {toggling ? "Aplicando..." : enabled ? "Desativar IA" : "Ativar IA"}
           </button>
+        </div>
+      </div>
+
+      {/* Gemini AI Model Selector */}
+      <div className={`nb-card p-5 sm:p-6 bg-white ${!enabled ? "opacity-60 pointer-events-none" : ""}`} data-testid="ai-model-selector-card">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-4 pb-3 border-b-2 border-neutral-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 nb-card bg-violet-300 flex items-center justify-center">
+              <Cpu className="w-5 h-5 text-violet-950" strokeWidth={2.5} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-heading font-black text-xl text-neutral-900">Modelo Gemini Ativo no Sistema</h2>
+                {modelChanging && <Loader2 className="w-4 h-4 animate-spin text-violet-600" />}
+              </div>
+              <p className="text-xs text-neutral-600 mt-0.5">
+                Escolha o modelo de Inteligência Artificial do Gemini que executará as funções de gabarito, chat, relatórios e prêmio do mês.
+              </p>
+            </div>
+          </div>
+
+          <div className="nb-card bg-violet-100 border-2 border-violet-900/40 px-3 py-1.5 flex items-center gap-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+            <Zap className="w-4 h-4 text-violet-800" strokeWidth={2.5} />
+            <span className="text-xs font-bold text-neutral-700">Modelo em Uso:</span>
+            <span className="font-mono font-black text-xs text-violet-950 bg-violet-300 px-2 py-0.5 rounded border border-violet-900/40">
+              {model || "gemini-3.8-flash"}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          {GEMINI_CATEGORIES.map((cat, idx) => (
+            <div key={idx} className="space-y-3">
+              <div className="bg-neutral-100/80 p-2.5 rounded-xl border border-neutral-200">
+                <h3 className="font-heading font-bold text-sm text-neutral-900">{cat.title}</h3>
+                <p className="text-[11px] text-neutral-600 mt-0.5">{cat.description}</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {cat.models.map((m) => {
+                  const isSelected = model === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => handleSelectModel(m.id)}
+                      disabled={modelChanging}
+                      className={`nb-btn text-left p-3.5 transition-all flex flex-col justify-between ${
+                        isSelected
+                          ? "bg-emerald-50 border-2 border-emerald-600 ring-2 ring-emerald-400/40 shadow-[3px_3px_0px_0px_rgba(16,185,129,1)]"
+                          : "bg-white hover:bg-neutral-50 border-2 border-neutral-200 hover:border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]"
+                      }`}
+                      data-testid={`model-card-${m.id}`}
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${m.badgeBg}`}>
+                            {m.badge}
+                          </span>
+                          {isSelected && (
+                            <span className="nb-badge bg-emerald-300 text-emerald-950 text-[10px] font-black flex items-center gap-1 border border-emerald-900/40">
+                              <Check className="w-3 h-3" strokeWidth={3} /> ATIVO
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="font-heading font-black text-base text-neutral-900 mt-1 flex items-center justify-between">
+                          <span>{m.name}</span>
+                        </div>
+                        <div className="text-[10px] font-mono text-neutral-500 mb-1.5">{m.id}</div>
+                        <p className="text-xs text-neutral-600 leading-relaxed">{m.description}</p>
+                      </div>
+
+                      <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px]">
+                        <span className={`font-bold ${isSelected ? "text-emerald-800" : "text-neutral-500"}`}>
+                          {isSelected ? "✓ Modelo Selecionado" : "Clique para Usar Este Modelo"}
+                        </span>
+                        <span className="text-[10px] text-neutral-400 font-mono">SDK @google/genai</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

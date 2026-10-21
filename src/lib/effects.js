@@ -122,16 +122,16 @@ export const DEFAULT_EFFECTS = {
   minecraft: {
     id: "minecraft",
     name: "Moldura Minecraft",
-    emoji: "⛏️",
-    description: "Tema Minecraft autêntico com moldura Bedrock, tábuas de bétula, escudo de Iron Golem, Allay, picareta e interface de mapa e pergaminho.",
+    emoji: "🟩",
+    description: "Autêntico bloco de grama do Minecraft preenchendo completamente o perfil com textura 16x16 pixel-art clássica de grama e terra.",
     cost: 320,
     rarity: "epic",
     avatarEffect: "fx-minecraft",
-    cardClass: "card-moldura-minecraft text-black",
+    cardClass: "card-moldura-minecraft text-white",
     badgeClass: "badge-minecraft",
-    avatarBg: "bg-stone-300",
-    avatarBgHex: "#c8c8c8",
-    avatarTextColor: "#1a1a1a",
+    avatarBg: "bg-emerald-950",
+    avatarBgHex: "#064e3b",
+    avatarTextColor: "#86efac",
     dashboardBannerClass: "moldura-minecraft-banner",
   },
   neon_pulse: {
@@ -374,6 +374,7 @@ export const DARK_THEME_IDS = new Set([
   "phoenix",
   "emerald_forest",
   "neon_pulse",
+  "minecraft",
 ]);
 
 export function isDarkTheme(effectId) {

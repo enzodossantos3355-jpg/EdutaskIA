@@ -153,16 +153,20 @@ async function callGeminiGenerate(params: {
     if (now > exp) quotaExhaustedModels.delete(model);
   }
 
-  // gemini-3.1-flash-lite is the active, stable model with available quota
   const defaultModels = [
+    'gemini-3.8-flash',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
     'gemini-3.1-flash-lite',
+    'gemini-3-flash',
     'gemini-flash-latest',
     'gemini-2.5-flash',
-    'gemini-3.8-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2-flash-lite',
   ];
 
   const candidateModels = [
-    params.preferredModel || 'gemini-3.1-flash-lite',
+    params.preferredModel || db.ai_model || 'gemini-3.8-flash',
     ...defaultModels,
   ];
 
@@ -592,6 +596,7 @@ class Database {
   };
   app_info: any = { ...DEFAULT_APP_INFO };
   ai_enabled: boolean = true;
+  ai_model: string = 'gemini-3.8-flash';
   webhook_logs: any[] = [];
   task_student_answers: Map<string, GeneratedTaskAnswer> = new Map();
 
@@ -738,6 +743,8 @@ class Database {
         }
         if (settings.app_info) this.app_info = settings.app_info;
         if (settings.effect_overrides) this.effect_overrides = settings.effect_overrides;
+        if (settings.ai_model) this.ai_model = settings.ai_model;
+        if (settings.ai_enabled !== undefined) this.ai_enabled = settings.ai_enabled;
       } else {
         await firebaseService.saveSettings('system', {
           monthly_prize: this.monthly_prize,
@@ -745,6 +752,8 @@ class Database {
           whatsapp_config: this.whatsapp_config,
           app_info: this.app_info,
           effect_overrides: this.effect_overrides,
+          ai_enabled: this.ai_enabled,
+          ai_model: this.ai_model,
         });
       }
 
@@ -798,6 +807,7 @@ class Database {
         whatsapp_config: this.whatsapp_config,
         app_info: this.app_info,
         ai_enabled: this.ai_enabled,
+        ai_model: this.ai_model,
         task_student_answers: Array.from(this.task_student_answers.entries()),
       };
       fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
@@ -826,6 +836,7 @@ class Database {
         if (data.whatsapp_config) this.whatsapp_config = { ...this.whatsapp_config, ...data.whatsapp_config };
         if (data.app_info) this.app_info = data.app_info;
         if (data.ai_enabled !== undefined) this.ai_enabled = data.ai_enabled;
+        if (data.ai_model) this.ai_model = data.ai_model;
         if (data.task_student_answers) this.task_student_answers = new Map(data.task_student_answers);
         // Ensure admin does not have a trivial '123' password
         for (const u of this.users.values()) {
@@ -4444,12 +4455,26 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
 // AI Features (Gemini with Smart Fallbacks)
 // ---------------------------------------------------------------------------
 api.get(['/ai/status', '/ai-status'], requireAuth, (req, res) => {
-  res.json({ enabled: db.ai_enabled });
+  res.json({
+    enabled: db.ai_enabled,
+    model: db.ai_model || 'gemini-3.8-flash',
+  });
 });
 
 api.put(['/ai/status', '/ai-status'], requireAdmin, (req, res) => {
-  db.ai_enabled = Boolean(req.body?.enabled);
-  res.json({ ok: true, enabled: db.ai_enabled });
+  if (req.body?.enabled !== undefined) {
+    db.ai_enabled = Boolean(req.body.enabled);
+  }
+  if (req.body?.model && typeof req.body.model === 'string') {
+    db.ai_model = req.body.model.trim();
+  }
+  db.saveToDisk();
+  saveSystemSettingsToFirestore();
+  res.json({
+    ok: true,
+    enabled: db.ai_enabled,
+    model: db.ai_model || 'gemini-3.8-flash',
+  });
 });
 
 api.post('/ai/improve-task', requireAdmin, async (req, res) => {

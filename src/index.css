@@ -678,60 +678,79 @@ h4,
   background-color: #450a0a !important;
 }
 
-/* Minecraft — Remodelado Conforme Referências Autênticas */
+/* Minecraft — Bloco de Grama Clássico Pixel Art (Topo Grama Verde + Terra) */
 .font-minecraft {
   font-family: 'Silkscreen', 'Press Start 2P', monospace;
 }
 
-@keyframes fx-minecraft {
+@keyframes fx-minecraft-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 3px #9e9e9e, 0 0 12px rgba(180, 180, 180, 0.7);
+    box-shadow: 0 0 0 3px #5c8e32, 0 0 16px 4px rgba(92, 142, 50, 0.85);
     transform: scale(1);
   }
   50% {
-    box-shadow: 0 0 0 4.5px #d4d4d8, 0 0 20px rgba(220, 220, 220, 0.95);
-    transform: scale(1.02);
+    box-shadow: 0 0 0 4.5px #7cbd3a, 0 0 24px 8px rgba(124, 189, 58, 1);
+    transform: scale(1.025);
   }
 }
+
 .fx-minecraft {
   padding: 3.5px;
-  background: linear-gradient(135deg, #e4e4e7 0%, #a1a1aa 50%, #52525b 100%);
+  background: conic-gradient(from 0deg, #5c8e32, #7cbd3a, #866043, #573d26, #5c8e32);
   border-radius: 50%;
-  animation: fx-minecraft 1.8s steps(4) infinite;
+  animation: fx-minecraft-pulse 2s ease-in-out infinite, fx-spin 6s linear infinite;
 }
 .fx-minecraft > * { border-radius: 50%; }
 
-/* Card Minecraft no Grid de Perfis (Imagem 1: Borda Bedrock + Tábuas de Bétula) */
+/* Card Minecraft no Grid de Perfis — Bloco de Grama 16x16 Pixel Art Autêntico */
 .card-moldura-minecraft {
-  background: #ebdcb2 !important;
-  border: 10px solid #2a2a2a !important;
-  border-radius: 20px !important;
-  color: #000000 !important;
-  box-shadow: 0 0 0 3px #151515, 0 8px 24px rgba(0,0,0,0.55) !important;
-  outline: none !important;
+  background: linear-gradient(180deg, #5c8e32 0%, #4a7c29 28%, #866043 28.1%, #573d26 100%) !important;
+  border: 4px solid #1f140a !important;
+  border-radius: 16px !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 3px 0 #7cbd3a, 0 0 20px rgba(92, 142, 50, 0.6), 4px 4px 0px 0px #1f140a !important;
+  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
 }
+
 .card-moldura-minecraft .font-heading,
 .card-moldura-minecraft span,
 .card-moldura-minecraft p {
-  color: #000000 !important;
-  text-shadow: none !important;
-  font-family: 'Silkscreen', 'Press Start 2P', monospace;
-}
-.card-moldura-minecraft [data-testid^="avatar-"]:not(:has(img)) {
-  background-color: #d1d5db !important;
+  color: #ffffff !important;
+  text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000 !important;
+  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
 }
 
-/* Banner de Perfil do Aluno (Imagem 3: Dark Oak + Borda Obsidiana/Bedrock) */
-.moldura-minecraft-banner {
-  background: #452f19 !important;
-  border: 6px solid #1a1028 !important;
-  border-radius: 14px !important;
-  color: #ffffff !important;
-  box-shadow: 0 6px 0 #0d0614, 0 10px 25px rgba(0,0,0,0.6) !important;
+.card-moldura-minecraft [data-testid^="avatar-"]:not(:has(img)) {
+  background-color: #2a1a0a !important;
+  border: 2px solid #7cbd3a !important;
 }
+
+.badge-minecraft {
+  background: #5c8e32 !important;
+  color: #ffffff !important;
+  border: 2px solid #1f140a !important;
+  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
+  text-shadow: 1px 1px 0 #000 !important;
+  box-shadow: inset 0 1px 0 #7cbd3a !important;
+}
+
+/* Banner de Perfil do Aluno com Bloco de Grama */
+.moldura-minecraft-banner {
+  background: linear-gradient(180deg, #5c8e32 0%, #4a7c29 25%, #866043 25.1%, #573d26 100%) !important;
+  border: 4px solid #1f140a !important;
+  border-radius: 16px !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 3px 0 #7cbd3a, 0 6px 20px rgba(0, 0, 0, 0.6) !important;
+  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
+}
+
 .moldura-minecraft-banner p,
-.moldura-minecraft-banner span {
-  color: #f3e8c8 !important;
+.moldura-minecraft-banner span,
+.moldura-minecraft-banner h1,
+.moldura-minecraft-banner h2,
+.moldura-minecraft-banner h3 {
+  color: #ffffff !important;
+  text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000 !important;
 }
 
 /* Botões Estilo Minecraft (Prismarine, Diamante, Pedra, Madeira) */
@@ -798,7 +817,8 @@ h4,
 [data-testid="profiles-grid"] .card-moldura-fire .font-heading,
 [data-testid="profiles-grid"] .card-moldura-phoenix .font-heading,
 [data-testid="profiles-grid"] .card-moldura-emerald .font-heading,
-[data-testid="profiles-grid"] .card-moldura-neon .font-heading {
+[data-testid="profiles-grid"] .card-moldura-neon .font-heading,
+[data-testid="profiles-grid"] .card-moldura-minecraft .font-heading {
   color: #ffffff !important;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }

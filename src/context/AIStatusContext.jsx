@@ -7,15 +7,18 @@ import { useAuth } from "@/context/AuthContext";
 const AIStatusContext = createContext({
   enabled: true,
   aiEnabled: true,
+  model: "gemini-3.8-flash",
   loading: true,
   refresh: async () => {},
   toggleAI: async () => false,
+  changeModel: async () => false,
   setEnabled: () => {},
 });
 
 export function AIStatusProvider({ children }) {
   const { user } = useAuth();
   const [enabled, setEnabledState] = useState(true);
+  const [model, setModelState] = useState("gemini-3.8-flash");
   const [loading, setLoading] = useState(true);
 
   const setEnabled = useCallback((val) => {
@@ -25,8 +28,13 @@ export function AIStatusProvider({ children }) {
   const refresh = useCallback(async () => {
     try {
       const { data } = await api.get("/ai/status");
-      if (data && typeof data.enabled === "boolean") {
-        setEnabledState(data.enabled);
+      if (data) {
+        if (typeof data.enabled === "boolean") {
+          setEnabledState(data.enabled);
+        }
+        if (data.model) {
+          setModelState(data.model);
+        }
       }
     } catch {
       // Default to true or keep current state on network error
@@ -51,14 +59,17 @@ export function AIStatusProvider({ children }) {
         (snapshot) => {
           if (snapshot.exists()) {
             const data = snapshot.data();
-            if (data && typeof data.ai_enabled === "boolean") {
-              setEnabledState(data.ai_enabled);
+            if (data) {
+              if (typeof data.ai_enabled === "boolean") {
+                setEnabledState(data.ai_enabled);
+              }
+              if (data.ai_model) {
+                setModelState(data.ai_model);
+              }
             }
           }
         },
         (err) => {
-          // Quando a cota diária do Firestore gratuito é atingida, encerra o listener
-          // para evitar loops de reconexão gRPC e usa a API local perfeitamente
           if (unsubscribeSystem) {
             try {
               unsubscribeSystem();
@@ -81,16 +92,33 @@ export function AIStatusProvider({ children }) {
   // 3. Global Toggle Function with Firestore & Backend Persistence
   const toggleAI = useCallback(
     async (newStatus) => {
-      // Optimistic update
       setEnabledState(newStatus);
       try {
         const { data } = await api.put("/ai/status", { enabled: newStatus });
-        if (data && typeof data.enabled === "boolean") {
-          setEnabledState(data.enabled);
+        if (data) {
+          if (typeof data.enabled === "boolean") setEnabledState(data.enabled);
+          if (data.model) setModelState(data.model);
         }
         return true;
       } catch (err) {
-        // Revert on failure
+        await refresh();
+        throw err;
+      }
+    },
+    [refresh]
+  );
+
+  // 4. Gemini Model Selector Function
+  const changeModel = useCallback(
+    async (newModel) => {
+      setModelState(newModel);
+      try {
+        const { data } = await api.put("/ai/status", { model: newModel });
+        if (data && data.model) {
+          setModelState(data.model);
+        }
+        return true;
+      } catch (err) {
         await refresh();
         throw err;
       }
@@ -103,9 +131,11 @@ export function AIStatusProvider({ children }) {
       value={{
         enabled,
         aiEnabled: enabled,
+        model,
         loading,
         refresh,
         toggleAI,
+        changeModel,
         setEnabled,
       }}
     >
