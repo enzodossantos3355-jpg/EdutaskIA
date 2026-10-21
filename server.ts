@@ -163,6 +163,8 @@ async function callGeminiGenerate(params: {
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
     'gemini-2-flash-lite',
+    'gemini-2.5-pro',
+    'gemini-1.5-flash',
   ];
 
   const candidateModels = [
@@ -3059,8 +3061,7 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
     leaders = studentMetrics.filter(
       (m) =>
         m.on_time_month === top.on_time_month &&
-        m.uncompleted_count === top.uncompleted_count &&
-        m.completed_month === top.completed_month
+        m.uncompleted_count === top.uncompleted_count
     );
   }
   const isTieTop1 = leaders.length > 1;
@@ -3072,8 +3073,7 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
       const prev = studentMetrics[idx - 1];
       const same =
         prev.on_time_month === m.on_time_month &&
-        prev.uncompleted_count === m.uncompleted_count &&
-        prev.completed_month === m.completed_month;
+        prev.uncompleted_count === m.uncompleted_count;
       if (!same) {
         currentRank = idx + 1;
       }

@@ -704,11 +704,15 @@ h4,
 
 /* Card Minecraft no Grid de Perfis — Bloco de Grama 16x16 Pixel Art Autêntico */
 .card-moldura-minecraft {
-  background: linear-gradient(180deg, #5c8e32 0%, #4a7c29 28%, #866043 28.1%, #573d26 100%) !important;
-  border: 4px solid #1f140a !important;
-  border-radius: 16px !important;
+  background-color: #866043 !important;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges"><rect width="16" height="16" fill="%23866043"/><rect x="2" y="5" width="2" height="2" fill="%23573d26"/><rect x="7" y="6" width="3" height="2" fill="%23573d26"/><rect x="12" y="4" width="2" height="2" fill="%239c6d48"/><rect x="1" y="9" width="3" height="2" fill="%23573d26"/><rect x="6" y="11" width="2" height="2" fill="%239c6d48"/><rect x="10" y="8" width="3" height="3" fill="%23573d26"/><rect x="14" y="10" width="2" height="2" fill="%233d2817"/><rect x="4" y="14" width="3" height="2" fill="%23573d26"/><rect x="9" y="13" width="2" height="2" fill="%239c6d48"/><rect x="1" y="3" width="1" height="1" fill="%23708090"/><rect x="8" y="10" width="1" height="1" fill="%23708090"/><rect x="0" y="0" width="16" height="3" fill="%235c8e32"/><rect x="1" y="3" width="1" height="1" fill="%234a7c29"/><rect x="3" y="3" width="1" height="2" fill="%235c8e32"/><rect x="5" y="3" width="1" height="1" fill="%234a7c29"/><rect x="7" y="3" width="1" height="2" fill="%235c8e32"/><rect x="10" y="3" width="1" height="1" fill="%234a7c29"/><rect x="12" y="3" width="1" height="2" fill="%235c8e32"/><rect x="14" y="3" width="1" height="1" fill="%234a7c29"/><rect x="0" y="0" width="16" height="1" fill="%237cbd3a"/></svg>') !important;
+  background-size: 100% 100% !important;
+  background-repeat: no-repeat !important;
+  image-rendering: pixelated !important;
+  border: 3px solid #1f140a !important;
+  border-radius: 12px !important;
   color: #ffffff !important;
-  box-shadow: inset 0 3px 0 #7cbd3a, 0 0 20px rgba(92, 142, 50, 0.6), 4px 4px 0px 0px #1f140a !important;
+  box-shadow: 3px 3px 0 0 #000000 !important;
   font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
 }
 
@@ -736,11 +740,15 @@ h4,
 
 /* Banner de Perfil do Aluno com Bloco de Grama */
 .moldura-minecraft-banner {
-  background: linear-gradient(180deg, #5c8e32 0%, #4a7c29 25%, #866043 25.1%, #573d26 100%) !important;
-  border: 4px solid #1f140a !important;
-  border-radius: 16px !important;
+  background-color: #866043 !important;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges"><rect width="16" height="16" fill="%23866043"/><rect x="2" y="5" width="2" height="2" fill="%23573d26"/><rect x="7" y="6" width="3" height="2" fill="%23573d26"/><rect x="12" y="4" width="2" height="2" fill="%239c6d48"/><rect x="1" y="9" width="3" height="2" fill="%23573d26"/><rect x="6" y="11" width="2" height="2" fill="%239c6d48"/><rect x="10" y="8" width="3" height="3" fill="%23573d26"/><rect x="14" y="10" width="2" height="2" fill="%233d2817"/><rect x="4" y="14" width="3" height="2" fill="%23573d26"/><rect x="9" y="13" width="2" height="2" fill="%239c6d48"/><rect x="1" y="3" width="1" height="1" fill="%23708090"/><rect x="8" y="10" width="1" height="1" fill="%23708090"/><rect x="0" y="0" width="16" height="3" fill="%235c8e32"/><rect x="1" y="3" width="1" height="1" fill="%234a7c29"/><rect x="3" y="3" width="1" height="2" fill="%235c8e32"/><rect x="5" y="3" width="1" height="1" fill="%234a7c29"/><rect x="7" y="3" width="1" height="2" fill="%235c8e32"/><rect x="10" y="3" width="1" height="1" fill="%234a7c29"/><rect x="12" y="3" width="1" height="2" fill="%235c8e32"/><rect x="14" y="3" width="1" height="1" fill="%234a7c29"/><rect x="0" y="0" width="16" height="1" fill="%237cbd3a"/></svg>') !important;
+  background-size: 100% 100% !important;
+  background-repeat: no-repeat !important;
+  image-rendering: pixelated !important;
+  border: 3px solid #1f140a !important;
+  border-radius: 12px !important;
   color: #ffffff !important;
-  box-shadow: inset 0 3px 0 #7cbd3a, 0 6px 20px rgba(0, 0, 0, 0.6) !important;
+  box-shadow: 4px 4px 0 0 #000000 !important;
   font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
 }
 

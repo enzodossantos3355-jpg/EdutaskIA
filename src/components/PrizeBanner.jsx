@@ -77,24 +77,11 @@ export default function PrizeBanner() {
     <div
       className={
         isMinecraft
-          ? "border-4 border-[#2b190f] p-3 sm:p-5 mb-4 sm:mb-8 rounded-xl relative overflow-hidden bg-[#8c5e3c] font-minecraft text-white shadow-[0_6px_0_#0a0503,0_10px_25px_rgba(0,0,0,0.6)]"
+          ? "moldura-minecraft-banner p-3 sm:p-5 mb-4 sm:mb-8 rounded-xl relative overflow-hidden font-minecraft text-white shadow-[4px_4px_0_0_#000000]"
           : "nb-card p-3 sm:p-5 mb-4 sm:mb-8 bg-gradient-to-br from-amber-200 via-amber-100 to-amber-200 relative overflow-hidden"
       }
       data-testid="prize-banner"
     >
-      {/* Tochas decorativas estilo Minecraft nas pontas (Imagem 3) */}
-      {isMinecraft && (
-        <>
-          <div className="absolute top-2.5 left-2.5 flex flex-col items-center pointer-events-none select-none z-10">
-            <span className="text-sm animate-pulse filter drop-shadow">🔥</span>
-            <div className="w-1.5 h-4 bg-[#784c28] border border-black -mt-0.5" />
-          </div>
-          <div className="absolute top-2.5 right-2.5 flex flex-col items-center pointer-events-none select-none z-10">
-            <span className="text-sm animate-pulse filter drop-shadow">🔥</span>
-            <div className="w-1.5 h-4 bg-[#784c28] border border-black -mt-0.5" />
-          </div>
-        </>
-      )}
 
       <div className="absolute top-0 right-0 w-32 h-32 opacity-15 text-9xl select-none pointer-events-none">{prize.emoji}</div>
       
