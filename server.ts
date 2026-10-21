@@ -306,6 +306,13 @@ const DEFAULT_APP_INFO = {
 // ---------------------------------------------------------------------------
 // In-Memory Database Structure with Persistence
 // ---------------------------------------------------------------------------
+interface UserMonthlyStats {
+  month_key: string;
+  completed_month: number;
+  on_time_month: number;
+  late_month: number;
+}
+
 interface User {
   id: string;
   email: string;
@@ -323,6 +330,8 @@ interface User {
   avatar_data?: string;
   avatar_content_type?: string;
   created_at: string;
+  monthly_stats?: UserMonthlyStats;
+  monthly_history?: Record<string, UserMonthlyStats>;
 }
 
 interface Subject {
@@ -1177,8 +1186,9 @@ api.get('/me/stats', requireAuth, (req, res) => {
   const user = (req as any).user as User;
   const points = user.points || 0;
 
+  const stats = ensureUserMonthlyStats(user);
   const myCompletions = db.completions.filter((c) => c.user_id === user.id);
-  const onTimeCount = myCompletions.filter((c) => {
+  const activeOnTime = myCompletions.filter((c) => {
     if (Boolean(c.on_time)) return true;
     const task = db.tasks.get(c.task_id);
     if (!task || !task.due_date) return true;
@@ -1189,14 +1199,19 @@ api.get('/me/stats', requireAuth, (req, res) => {
     return compYMD <= dueYMD;
   }).length;
 
+  const totalCompleted = Math.max(myCompletions.length, stats.completed_month || 0);
+  const totalOnTime = Math.max(activeOnTime, stats.on_time_month || 0);
+
   res.json({
     points, // Pontos obtidos exclusivamente para a loja de molduras
     points_purpose: 'molduras',
     streak_count: user.streak_count || 0,
     longest_streak: user.longest_streak || 0,
     last_active_date: user.last_active_date,
-    total_completed: myCompletions.length,
-    on_time_completed: onTimeCount,
+    total_completed: totalCompleted,
+    on_time_completed: totalOnTime,
+    completed_month: totalCompleted,
+    on_time_month: totalOnTime,
     tier: null, // Sistema de nível desligado permanentemente
   });
 });
@@ -2398,6 +2413,16 @@ api.post('/tasks/:task_id/complete', requireAuth, async (req, res) => {
   if (user.role === 'aluno') {
     user.points = (user.points || 0) + awarded;
     updateStudentStreak(user.id);
+
+    // Registra permanentemente na contagem mensal do aluno (não é perdida quando a tarefa é limpa/apagada no prazo)
+    const stats = ensureUserMonthlyStats(user);
+    stats.completed_month = (stats.completed_month || 0) + 1;
+    if (onTime) {
+      stats.on_time_month = (stats.on_time_month || 0) + 1;
+    } else {
+      stats.late_month = (stats.late_month || 0) + 1;
+    }
+
     await firebaseService.saveUser(user);
   }
 
@@ -2422,6 +2447,17 @@ api.post('/tasks/:task_id/uncomplete', requireAuth, async (req, res) => {
     const comp = db.completions[idx];
     if (user.role === 'aluno') {
       user.points = Math.max(0, (user.points || 0) - comp.points_awarded);
+
+      const range = getCurrentMonthRange();
+      if (user.monthly_stats && user.monthly_stats.month_key === range.monthKey) {
+        user.monthly_stats.completed_month = Math.max(0, (user.monthly_stats.completed_month || 0) - 1);
+        if (comp.on_time) {
+          user.monthly_stats.on_time_month = Math.max(0, (user.monthly_stats.on_time_month || 0) - 1);
+        } else {
+          user.monthly_stats.late_month = Math.max(0, (user.monthly_stats.late_month || 0) - 1);
+        }
+      }
+
       await firebaseService.saveUser(user).catch(console.warn);
     }
     db.completions.splice(idx, 1);
@@ -2792,8 +2828,13 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
   const allTasks = Array.from(db.tasks.values());
   const enriched = students.map((s) => {
     const pts = s.points || 0;
+    const stats = ensureUserMonthlyStats(s);
     const userCompletions = db.completions.filter((c) => c.user_id === s.id);
-    const onTime = userCompletions.filter((c) => c.on_time).length;
+    const activeOnTime = userCompletions.filter((c) => c.on_time).length;
+
+    const totalCompletions = Math.max(userCompletions.length, stats.completed_month || 0);
+    const totalOnTime = Math.max(activeOnTime, stats.on_time_month || 0);
+
     const assignedTasks = allTasks.filter((t) => t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
     const compSet = new Set(userCompletions.map((c) => c.task_id));
     const uncompleted = assignedTasks.filter((t) => !compSet.has(t.id)).length;
@@ -2801,8 +2842,8 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
       id: s.id,
       name: s.name,
       points: pts,
-      total_completions: userCompletions.length,
-      on_time_completions: onTime,
+      total_completions: totalCompletions,
+      on_time_completions: totalOnTime,
       uncompleted_tasks: uncompleted,
       has_avatar: Boolean(s.avatar_data),
     };
@@ -2938,6 +2979,32 @@ export function getCurrentMonthRange() {
   };
 }
 
+export function ensureUserMonthlyStats(user: User): UserMonthlyStats {
+  const range = getCurrentMonthRange();
+  if (!user.monthly_stats || user.monthly_stats.month_key !== range.monthKey) {
+    if (user.monthly_stats && user.monthly_stats.month_key) {
+      if (!user.monthly_history) user.monthly_history = {};
+      user.monthly_history[user.monthly_stats.month_key] = { ...user.monthly_stats };
+    }
+
+    // Inicializa os dados com base nas conclusões ativas atuais do mês
+    const myComps = db.completions.filter((c) => {
+      if (c.user_id !== user.id) return false;
+      const compYMD = parseDateYMD(c.completed_at);
+      return compYMD && compYMD >= range.monthStartDay && compYMD <= range.monthEndDay;
+    });
+    const onTimeCount = myComps.filter((c) => c.on_time).length;
+
+    user.monthly_stats = {
+      month_key: range.monthKey,
+      completed_month: myComps.length,
+      on_time_month: onTimeCount,
+      late_month: myComps.length - onTimeCount,
+    };
+  }
+  return user.monthly_stats;
+}
+
 export function checkMonthlyRollover() {
   const range = getCurrentMonthRange();
   if (!db.active_month_key) {
@@ -2948,7 +3015,7 @@ export function checkMonthlyRollover() {
 
   // Se o mês corrente do Relógio do Sistema mudou em relação ao mês ativo:
   if (db.active_month_key !== range.monthKey) {
-    console.log(`[MonthlyReset] Mês finalizado (${db.active_month_key}). Realizando reset mensal para ${range.monthKey}...`);
+    console.log(`[MonthlyReset] Mês finalizado (${db.active_month_key}). Realizando reset mensal de alunos e estatísticas para ${range.monthKey}...`);
     const prevKey = db.active_month_key;
     db.monthly_history.unshift({
       month_key: prevKey,
@@ -2958,6 +3025,23 @@ export function checkMonthlyRollover() {
       ai_winner: db.monthly_prize?.ai_winner || null,
     });
     if (db.monthly_history.length > 24) db.monthly_history = db.monthly_history.slice(0, 24);
+
+    // Reseta as estatísticas do mês de cada aluno para o novo ciclo (zerando contadores do novo mês)
+    for (const u of db.users.values()) {
+      if (u.role === 'aluno') {
+        if (u.monthly_stats) {
+          if (!u.monthly_history) u.monthly_history = {};
+          u.monthly_history[u.monthly_stats.month_key] = { ...u.monthly_stats };
+        }
+        u.monthly_stats = {
+          month_key: range.monthKey,
+          completed_month: 0,
+          on_time_month: 0,
+          late_month: 0,
+        };
+        firebaseService.saveUser(u).catch(console.warn);
+      }
+    }
 
     // Reseta o vencedor para o novo ciclo do mês
     if (db.monthly_prize) {
@@ -2995,8 +3079,9 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
   });
 
   const studentMetrics = students.map((s) => {
+    const stats = ensureUserMonthlyStats(s);
     const sComps = monthlyCompletions.filter((c) => c.user_id === s.id);
-    const onTime = sComps.filter((c) => {
+    const activeOnTime = sComps.filter((c) => {
       if (Boolean(c.on_time)) return true;
       const task = db.tasks.get(c.task_id);
       if (!task || !task.due_date) return true;
@@ -3006,30 +3091,35 @@ function calculateMonthlyAILeaderboard(reqUser?: User) {
       if (!compYMD) return true;
       return compYMD <= dueYMD;
     }).length;
-    const late = sComps.length - onTime;
+    const activeLate = sComps.length - activeOnTime;
+
+    // Preserva as contagens registradas mesmo quando as tarefas atingem o prazo e são apagadas na limpeza automática
+    const totalCompletedMonth = Math.max(sComps.length, stats.completed_month || 0);
+    const totalOnTimeMonth = Math.max(activeOnTime, stats.on_time_month || 0);
+    const totalLateMonth = Math.max(activeLate, stats.late_month || 0);
 
     const assignedMonthTasks = monthTasks.filter((t) => !t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
     const compSet = new Set(sComps.map((c) => c.task_id));
-    // Tarefas pendentes do MÊS (atividades do mês não marcadas como feitas)
+    // Tarefas pendentes do MÊS (atividades ativas do mês não marcadas como feitas)
     const uncompletedMonth = assignedMonthTasks.filter((t) => !compSet.has(t.id)).length;
-    const onTimePct = sComps.length > 0 ? Math.round((onTime / sComps.length) * 100) : 0;
+    const onTimePct = totalCompletedMonth > 0 ? Math.round((totalOnTimeMonth / totalCompletedMonth) * 100) : 0;
 
-    // AI score mensal: recompensa pontualidade no mês, penaliza pendências do mês. Streak desativado.
-    let score = 50 + (onTime * 15) - (uncompletedMonth * 10);
-    if (onTime > 0 && uncompletedMonth === 0) score += 15;
+    // AI score mensal: recompensa pontualidade no mês, penaliza pendências ativas do mês.
+    let score = 50 + (totalOnTimeMonth * 15) - (uncompletedMonth * 10);
+    if (totalOnTimeMonth > 0 && uncompletedMonth === 0) score += 15;
     score = Math.min(100, Math.max(30, Math.round(score)));
 
     return {
       id: s.id,
       name: s.name,
       points: s.points || 0,
-      completed_month: sComps.length,
-      completed_tasks: sComps.length,
-      on_time_month: onTime,
-      on_time_completions: onTime,
-      on_time: onTime,
-      on_time_tasks: onTime,
-      late_month: late,
+      completed_month: totalCompletedMonth,
+      completed_tasks: totalCompletedMonth,
+      on_time_month: totalOnTimeMonth,
+      on_time_completions: totalOnTimeMonth,
+      on_time: totalOnTimeMonth,
+      on_time_tasks: totalOnTimeMonth,
+      late_month: totalLateMonth,
       uncompleted_count: uncompletedMonth,
       uncompleted_tasks: uncompletedMonth,
       total_month_tasks: assignedMonthTasks.length,
