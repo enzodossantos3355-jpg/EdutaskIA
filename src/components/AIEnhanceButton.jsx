@@ -18,7 +18,11 @@ export default function AIEnhanceButton({
   testId,
 }) {
   const [loading, setLoading] = useState(false);
-  const { enabled } = useAIStatus();
+  const { enabled, hidden, aiHidden } = useAIStatus();
+
+  if (hidden || aiHidden) {
+    return null;
+  }
 
   if (!enabled) {
     return (

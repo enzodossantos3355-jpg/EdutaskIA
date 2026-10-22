@@ -339,8 +339,19 @@ export const RARITY_META = {
   legendary: { label: "Lendário", bg: "bg-amber-300 text-amber-950 border-amber-500 font-black" },
 };
 
+let globalFramesDisabled = false;
+
+export function setGlobalFramesDisabled(val) {
+  globalFramesDisabled = Boolean(val);
+}
+
+export function isFramesDisabled() {
+  return globalFramesDisabled;
+}
+
 export function getEffect(effectId) {
-  if (!effectId) return DEFAULT_EFFECTS.none;
+  if (globalFramesDisabled) return DEFAULT_EFFECTS.none;
+  if (!effectId || effectId === "minecraft") return DEFAULT_EFFECTS.none;
   return DEFAULT_EFFECTS[effectId] || DEFAULT_EFFECTS.none;
 }
 
@@ -378,14 +389,15 @@ export const DARK_THEME_IDS = new Set([
 ]);
 
 export function isDarkTheme(effectId) {
-  if (!effectId) return false;
+  if (globalFramesDisabled || !effectId || effectId === "minecraft") return false;
   return DARK_THEME_IDS.has(effectId);
 }
 
 export const getTheme = getEffect;
 
 export function getThemeByEffectOrId(effectOrId) {
-  if (!effectOrId || effectOrId === "none") return DEFAULT_EFFECTS.none;
+  if (globalFramesDisabled) return DEFAULT_EFFECTS.none;
+  if (!effectOrId || effectOrId === "none" || effectOrId === "minecraft") return DEFAULT_EFFECTS.none;
   if (DEFAULT_EFFECTS[effectOrId]) return DEFAULT_EFFECTS[effectOrId];
   const found = Object.values(DEFAULT_EFFECTS).find(
     (e) => e.avatarEffect === effectOrId || e.id === effectOrId

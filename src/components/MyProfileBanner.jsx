@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pencil, ShoppingBag, Palette, Bot } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useAIStatus } from "@/context/AIStatusContext";
 import api from "@/lib/api";
 import AvatarUploader from "@/components/AvatarUploader";
 import { effectClass, getTheme } from "@/lib/themes";
@@ -14,6 +15,7 @@ import Avatar from "@/components/Avatar";
  */
 export default function MyProfileBanner({ bg = null, onOpenStore = null }) {
   const { user, refresh } = useAuth();
+  const { framesDisabled } = useAIStatus();
   const [hasAvatar, setHasAvatar] = useState(Boolean(user?.has_avatar));
   const [editing, setEditing] = useState(false);
   const [stats, setStats] = useState(null);
@@ -91,7 +93,7 @@ export default function MyProfileBanner({ bg = null, onOpenStore = null }) {
             </div>
           </div>
 
-          {onOpenStore && (
+          {onOpenStore && !framesDisabled && (
             <div className="w-full sm:w-auto">
               <button
                 onClick={onOpenStore}
@@ -114,7 +116,7 @@ export default function MyProfileBanner({ bg = null, onOpenStore = null }) {
         </div>
         {isAluno && stats && (
           <div className="flex-1 min-w-full sm:min-w-[280px] max-w-2xl">
-            <StatsCard stats={stats} onOpenStore={onOpenStore} />
+            <StatsCard stats={stats} onOpenStore={!framesDisabled ? onOpenStore : null} />
           </div>
         )}
         {!isAluno && (

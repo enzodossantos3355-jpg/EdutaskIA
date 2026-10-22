@@ -208,9 +208,9 @@ export default function LoginPage() {
                             const isMinecraft = p.equipped_effect === "minecraft";
                             return (
                               <div
-                                className={`font-heading font-bold text-base leading-tight truncate ${
+                                className={`font-heading font-bold text-base leading-tight truncate px-1 py-1 rounded ${
                                   isMinecraft
-                                    ? "font-minecraft text-white tracking-tight text-[15px]"
+                                    ? "font-minecraft text-black font-black tracking-tight text-[15px] drop-shadow-[0_1px_0_#fff]"
                                     : isDark
                                     ? "text-white"
                                     : "text-black"
@@ -225,6 +225,12 @@ export default function LoginPage() {
                               {StatusIcon && <StatusIcon className="w-3 h-3" strokeWidth={2.5} />}
                               {meta.label}
                             </span>
+                          ) : p.equipped_effect === "minecraft" ? (
+                            <div className="flex flex-col items-center gap-1 mt-3">
+                              <span className="font-minecraft text-xs font-black text-white bg-[#2cc5f6] border-2 border-[#0f5c71] px-2 py-0.5 rounded flex items-center gap-1 shadow-xs">
+                                <span>🧔</span> {p.role === "admin" ? "ADMIN" : "ALUNO"}
+                              </span>
+                            </div>
                           ) : (
                             <div className="flex flex-col items-center gap-1 mt-2">
                               <span className={`nb-badge inline-flex items-center gap-1 ${p.role === "admin" ? "bg-red-200 text-red-950 border-black" : badgeCls}`}>

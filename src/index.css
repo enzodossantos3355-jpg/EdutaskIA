@@ -709,10 +709,10 @@ h4,
   background-size: 100% 100% !important;
   background-repeat: no-repeat !important;
   image-rendering: pixelated !important;
-  border: 3px solid #1f140a !important;
+  border: 4px solid #1f140a !important;
   border-radius: 12px !important;
   color: #ffffff !important;
-  box-shadow: 3px 3px 0 0 #000000 !important;
+  box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.25), inset -2px -2px 0 rgba(0, 0, 0, 0.6), 4px 4px 0 0 #000000 !important;
   font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
 }
 
@@ -726,7 +726,8 @@ h4,
 
 .card-moldura-minecraft [data-testid^="avatar-"]:not(:has(img)) {
   background-color: #2a1a0a !important;
-  border: 2px solid #7cbd3a !important;
+  border: 3px solid #7cbd3a !important;
+  box-shadow: inset 0 0 8px rgba(0,0,0,0.8) !important;
 }
 
 .badge-minecraft {
@@ -735,7 +736,9 @@ h4,
   border: 2px solid #1f140a !important;
   font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
   text-shadow: 1px 1px 0 #000 !important;
-  box-shadow: inset 0 1px 0 #7cbd3a !important;
+  box-shadow: inset 0 2px 0 #7cbd3a, 2px 2px 0 #000000 !important;
+  padding: 0.2rem 0.6rem !important;
+  border-radius: 4px !important;
 }
 
 /* Banner de Perfil do Aluno com Bloco de Grama */
@@ -745,10 +748,10 @@ h4,
   background-size: 100% 100% !important;
   background-repeat: no-repeat !important;
   image-rendering: pixelated !important;
-  border: 3px solid #1f140a !important;
+  border: 4px solid #1f140a !important;
   border-radius: 12px !important;
   color: #ffffff !important;
-  box-shadow: 4px 4px 0 0 #000000 !important;
+  box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.25), inset -2px -2px 0 rgba(0, 0, 0, 0.6), 5px 5px 0 0 #000000 !important;
   font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
 }
 
@@ -761,47 +764,90 @@ h4,
   text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000 !important;
 }
 
-/* Botões Estilo Minecraft (Prismarine, Diamante, Pedra, Madeira) */
+/* Botões Estilo Minecraft (Prismarine, Diamante, Pedra, Madeira, Esmeralda) */
 .btn-minecraft-diamond {
   background: #2cc5f6 !important;
   color: #000000 !important;
   border: 2px solid #000000 !important;
-  box-shadow: inset 0 2px 0 #7fe3d9, 0 4px 0 #128aa8, 0 6px 0 #000000 !important;
+  box-shadow: inset 0 2px 0 #8be7ff, 0 3px 0 #128aa8, 0 5px 0 #000000 !important;
   font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
+  border-radius: 4px !important;
+  transition: transform 0.1s ease-out !important;
 }
 .btn-minecraft-diamond:hover {
-  background: #38d0ff !important;
+  background: #4cd2fd !important;
 }
 .btn-minecraft-diamond:active {
-  transform: translateY(3px);
-  box-shadow: inset 0 2px 0 #7fe3d9, 0 1px 0 #128aa8, 0 3px 0 #000000 !important;
+  transform: translateY(2px) !important;
+  box-shadow: inset 0 2px 0 #8be7ff, 0 1px 0 #128aa8, 0 3px 0 #000000 !important;
 }
 
 .btn-minecraft-prismarine {
   background: #58baa3 !important;
   color: #000000 !important;
   border: 2px solid #000000 !important;
-  box-shadow: inset 0 2px 0 #8be0cb, 0 4px 0 #2b7362, 0 6px 0 #000000 !important;
+  box-shadow: inset 0 2px 0 #8be0cb, 0 3px 0 #2b7362, 0 5px 0 #000000 !important;
   font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
+  border-radius: 4px !important;
+  transition: transform 0.1s ease-out !important;
 }
 .btn-minecraft-prismarine:hover {
   background: #68cbb4 !important;
+}
+.btn-minecraft-prismarine:active {
+  transform: translateY(2px) !important;
+  box-shadow: inset 0 2px 0 #8be0cb, 0 1px 0 #2b7362, 0 3px 0 #000000 !important;
 }
 
 .btn-minecraft-wood {
   background: #54381d !important;
   color: #ebd1a9 !important;
   border: 2px solid #000000 !important;
-  box-shadow: inset 0 2px 0 #7a542e, 0 3px 0 #28190c, 0 4px 0 #000000 !important;
+  box-shadow: inset 0 2px 0 #7a542e, 0 3px 0 #28190c, 0 5px 0 #000000 !important;
   font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
+  border-radius: 4px !important;
+  transition: transform 0.1s ease-out !important;
+}
+.btn-minecraft-wood:hover {
+  background: #664525 !important;
+}
+.btn-minecraft-wood:active {
+  transform: translateY(2px) !important;
+  box-shadow: inset 0 2px 0 #7a542e, 0 1px 0 #28190c, 0 3px 0 #000000 !important;
 }
 
 .btn-minecraft-stone {
   background: #3b2f21 !important;
   color: #ebd1a9 !important;
   border: 2px solid #000000 !important;
-  box-shadow: inset 0 2px 0 #574632, 0 3px 0 #1e1710, 0 4px 0 #000000 !important;
+  box-shadow: inset 0 2px 0 #574632, 0 3px 0 #1e1710, 0 5px 0 #000000 !important;
   font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
+  border-radius: 4px !important;
+  transition: transform 0.1s ease-out !important;
+}
+.btn-minecraft-stone:hover {
+  background: #4a3c2c !important;
+}
+.btn-minecraft-stone:active {
+  transform: translateY(2px) !important;
+  box-shadow: inset 0 2px 0 #574632, 0 1px 0 #1e1710, 0 3px 0 #000000 !important;
+}
+
+.btn-minecraft-emerald {
+  background: #22c55e !important;
+  color: #000000 !important;
+  border: 2px solid #000000 !important;
+  box-shadow: inset 0 2px 0 #86efac, 0 3px 0 #15803d, 0 5px 0 #000000 !important;
+  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
+  border-radius: 4px !important;
+  transition: transform 0.1s ease-out !important;
+}
+.btn-minecraft-emerald:hover {
+  background: #34d399 !important;
+}
+.btn-minecraft-emerald:active {
+  transform: translateY(2px) !important;
+  box-shadow: inset 0 2px 0 #86efac, 0 1px 0 #15803d, 0 3px 0 #000000 !important;
 }
 
 /* Painel de perfil e cabeçalho mantêm as letras em preto */

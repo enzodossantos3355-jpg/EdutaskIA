@@ -6,6 +6,7 @@ import Avatar from "@/components/Avatar";
 import MolduraArtCenter from "@/components/MolduraArtCenter";
 import { effectClass, effectCardClass, effectBadgeClass, RARITY_META } from "@/lib/effects";
 import { useAuth } from "@/context/AuthContext";
+import { useAIStatus } from "@/context/AIStatusContext";
 import { playEquipThemeSound } from "@/lib/soundEffects";
 
 /**
@@ -15,6 +16,7 @@ import { playEquipThemeSound } from "@/lib/soundEffects";
  */
 export default function StoreEffects() {
   const { user, refresh } = useAuth();
+  const { framesDisabled, toggleFramesDisabled } = useAIStatus();
   const [effects, setEffects] = useState([]);
   const [owned, setOwned] = useState([]);
   const [equipped, setEquipped] = useState("none");
@@ -145,6 +147,29 @@ export default function StoreEffects() {
           </div>
         )}
       </div>
+
+      {/* Banner de aviso se as molduras estiverem desativadas */}
+      {framesDisabled && (
+        <div className="nb-card bg-red-100 border-2 border-black p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[4px_4px_0_0_#000]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-300 border-2 border-black flex items-center justify-center flex-shrink-0 font-bold text-red-950 text-xl">
+              🚫
+            </div>
+            <div>
+              <h3 className="font-heading font-black text-base text-red-950">As Molduras e a Loja estão Desativadas pelo Administrador</h3>
+              <p className="text-xs text-neutral-700 mt-0.5">As molduras visuais foram ocultadas em todo o aplicativo. Quando você reativar, a moldura equipada voltará automaticamente ao seu perfil sem precisar re-equipar.</p>
+            </div>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={() => toggleFramesDisabled(false)}
+              className="nb-btn bg-emerald-300 hover:bg-emerald-400 text-emerald-950 px-4 py-2 text-xs font-black shadow-[2px_2px_0_0_#000] flex-shrink-0"
+            >
+              Reativar Molduras
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Regra explicativa */}
       <div className="nb-card bg-gradient-to-r from-amber-100 via-sky-100 to-emerald-100 p-4 border-2 border-black flex items-start gap-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">

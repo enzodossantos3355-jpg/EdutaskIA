@@ -20,6 +20,7 @@ import WhatsAppConfigPanel from "@/components/WhatsAppConfigPanel";
 import WhatsAppDispatchDialog from "@/components/WhatsAppDispatchDialog";
 import ZipDataTransferPanel from "@/components/ZipDataTransferPanel";
 import StudentButtonsPanel from "@/components/StudentButtonsPanel";
+import { useAIStatus } from "@/context/AIStatusContext";
 import { effectClass, pullScreenToStore } from "@/lib/effects";
 import { getPriority, formatDateBR } from "@/lib/priority";
 import { playWinnerFanfareSound } from "@/lib/soundEffects";
@@ -35,6 +36,7 @@ const subjectColors = ["bg-sky-200", "bg-amber-200", "bg-red-200", "bg-emerald-2
 const colorFor = (s) => subjectColors[(s || "").length % subjectColors.length];
 
 export default function AdminDashboard() {
+  const { framesDisabled } = useAIStatus();
   const [tab, setTab] = useState("tasks");
   const [globalCleanupOpen, setGlobalCleanupOpen] = useState(false);
   const [globalCleanupData, setGlobalCleanupData] = useState(null);
@@ -55,21 +57,22 @@ export default function AdminDashboard() {
   // Listener para evento customizado do botão superior da Loja no AppHeader
   useEffect(() => {
     const handleOpenStore = () => {
+      if (framesDisabled) return;
       setTab("store");
       pullScreenToStore();
     };
     window.addEventListener("open-store-tab", handleOpenStore);
     return () => window.removeEventListener("open-store-tab", handleOpenStore);
-  }, []);
+  }, [framesDisabled]);
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
       <AppHeader title="Painel do Administrador" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-8 pb-24 sm:pb-8">
-        <MyProfileBanner onOpenStore={() => {
+        <MyProfileBanner onOpenStore={!framesDisabled ? () => {
           setTab("store");
           pullScreenToStore();
-        }} />
+        } : null} />
 
         {/* Relógio do Sistema (Garante a hora exata do servidor para auto-exclusão e rotinas) */}
         <AdminSystemClock
@@ -135,17 +138,19 @@ export default function AdminDashboard() {
           >
             <Sparkles className="w-4 h-4 inline mr-1.5 sm:mr-2" /> IA
           </button>
-          <button
-            onClick={() => {
-              setTab("store");
-              pullScreenToStore();
-            }}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "store" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"}`}
-            data-testid="tab-store"
-            title="Acessar Loja de Molduras"
-          >
-            <ShoppingBag className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Loja de Molduras 🖼️
-          </button>
+          {!framesDisabled && (
+            <button
+              onClick={() => {
+                setTab("store");
+                pullScreenToStore();
+              }}
+              className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "store" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"}`}
+              data-testid="tab-store"
+              title="Acessar Loja de Molduras"
+            >
+              <ShoppingBag className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Loja de Molduras 🖼️
+            </button>
+          )}
           <button
             onClick={() => setTab("whatsapp")}
             className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "whatsapp" ? "bg-emerald-400 font-bold" : "bg-white"}`}
@@ -177,7 +182,7 @@ export default function AdminDashboard() {
         {tab === "stats" && <StatsPanel />}
         {tab === "firmware" && <FirmwarePanel />}
         {tab === "ai" && <AIAdminPanel />}
-        {tab === "store" && <StoreEffects />}
+        {tab === "store" && !framesDisabled && <StoreEffects />}
         {tab === "whatsapp" && <WhatsAppConfigPanel />}
         {tab === "buttons" && <StudentButtonsPanel />}
         {tab === "zip_transfer" && <ZipDataTransferPanel />}
@@ -830,16 +835,18 @@ function TaskDialog({ task, onClose, onSaved }) {
                         </button>
                       ))}
                     </div>
-                    <button
-                      type="button"
-                      onClick={generateAnswer}
-                      disabled={generatingAnswer}
-                      className="nb-btn px-2.5 py-1 bg-violet-200 hover:bg-violet-300 text-xs flex items-center gap-1 font-bold"
-                      data-testid="generate-answer-button"
-                    >
-                      <Sparkles className={`w-3.5 h-3.5 ${generatingAnswer ? "animate-spin" : ""}`} />
-                      {generatingAnswer ? "Lendo fotos e resolvendo..." : "Gerar gabarito das fotos (IA)"}
-                    </button>
+                    {!useAIStatus().hidden && !useAIStatus().aiHidden && (
+                      <button
+                        type="button"
+                        onClick={generateAnswer}
+                        disabled={generatingAnswer}
+                        className="nb-btn px-2.5 py-1 bg-violet-200 hover:bg-violet-300 text-xs flex items-center gap-1 font-bold"
+                        data-testid="generate-answer-button"
+                      >
+                        <Sparkles className={`w-3.5 h-3.5 ${generatingAnswer ? "animate-spin" : ""}`} />
+                        {generatingAnswer ? "Lendo fotos e resolvendo..." : "Gerar gabarito das fotos (IA)"}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

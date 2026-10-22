@@ -18,7 +18,7 @@ export default function PrizeBanner() {
   const [tipsOpen, setTipsOpen] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const { user } = useAuth();
-  const { enabled: aiEnabled } = useAIStatus();
+  const { enabled: aiEnabled, hidden: aiHidden } = useAIStatus();
 
   const fetchPrize = useCallback(async () => {
     try {
@@ -57,7 +57,7 @@ export default function PrizeBanner() {
 
   if (!data || !data.prize) return null;
   const { prize, ai_winner, leader, leaders, is_tie_top1, days_remaining, month_label } = data;
-  const showAiButton = aiEnabled && user?.role === "aluno";
+  const showAiButton = aiEnabled && !aiHidden && user?.role === "aluno";
   const isWinner = Boolean(
     ai_winner && (
       user?.id === ai_winner.winner_id ||

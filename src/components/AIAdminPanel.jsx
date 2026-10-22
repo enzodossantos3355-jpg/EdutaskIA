@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, Power, Trophy, X, Award, FileText, Loader2, RotateCcw, Calendar, CheckCircle2, History, Cpu, Zap, Check, Trash2 } from "lucide-react";
+import { Sparkles, Power, Trophy, X, Award, FileText, Loader2, RotateCcw, Calendar, CheckCircle2, History, Cpu, Zap, Check, Trash2, Eye, EyeOff, Lock, Palette } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { useAIStatus } from "@/context/AIStatusContext";
 import Avatar from "@/components/Avatar";
@@ -120,12 +120,14 @@ const GEMINI_CATEGORIES = [
 ];
 
 /**
- * Admin AI control panel: global on/off toggle, Gemini model selection,
+ * Admin AI control panel: global on/off toggle, hide/unhide buttons toggle, Gemini model selection,
  * monthly report generator, AI prize winner evaluation, tied top 1 support, and monthly cycle reset.
  */
 export default function AIAdminPanel() {
-  const { enabled, model, changeModel, refresh } = useAIStatus();
+  const { enabled, hidden, aiHidden, framesDisabled, model, changeModel, toggleAI, toggleHideAI, toggleFramesDisabled, refresh } = useAIStatus();
   const [toggling, setToggling] = useState(false);
+  const [togglingHide, setTogglingHide] = useState(false);
+  const [togglingFrames, setTogglingFrames] = useState(false);
   const [modelChanging, setModelChanging] = useState(false);
   const [students, setStudents] = useState([]);
   const [reportStudent, setReportStudent] = useState(null);
@@ -145,13 +147,42 @@ export default function AIAdminPanel() {
   const toggle = async () => {
     setToggling(true);
     try {
-      await api.put("/ai/status", { enabled: !enabled });
-      await refresh();
-      toast.success(!enabled ? "IA ativada" : "IA desativada");
+      await toggleAI(!enabled);
+      toast.success(!enabled ? "IA ativada" : "IA bloqueada");
     } catch (e) {
       toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao alterar");
     } finally {
       setToggling(false);
+    }
+  };
+
+  const handleToggleHide = async () => {
+    setTogglingHide(true);
+    try {
+      const nextHide = !aiHidden;
+      await toggleHideAI(nextHide);
+      toast.success(nextHide ? "Todos os botões de IA foram ocultados!" : "Recursos e botões de IA visíveis novamente!");
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao alterar visibilidade");
+    } finally {
+      setTogglingHide(false);
+    }
+  };
+
+  const handleToggleFrames = async () => {
+    setTogglingFrames(true);
+    try {
+      const nextDisabled = !framesDisabled;
+      await toggleFramesDisabled(nextDisabled);
+      toast.success(
+        nextDisabled
+          ? "Molduras e Loja desativadas! As molduras sumiram do aplicativo."
+          : "Molduras e Loja reativadas! Molduras equipadas voltaram automaticamente sem re-equipar."
+      );
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao alterar estado das molduras");
+    } finally {
+      setTogglingFrames(false);
     }
   };
 
@@ -285,29 +316,103 @@ export default function AIAdminPanel() {
         <p className="text-neutral-600 mt-1">Controle todos os recursos de inteligência artificial.</p>
       </div>
 
-      {/* Global toggle */}
-      <div className={`nb-card p-5 sm:p-6 ${enabled ? "bg-gradient-to-br from-emerald-100 to-sky-100" : "bg-gradient-to-br from-red-100 to-amber-100"}`} data-testid="ai-global-toggle-card">
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div className="flex items-start gap-3">
-            <div className={`w-11 h-11 nb-card flex items-center justify-center ${enabled ? "bg-emerald-300" : "bg-red-300"}`}>
-              <Power className="w-5 h-5" strokeWidth={2.5} />
+      {/* Global Control Cards: Bloquear IA, Ocultar IA, and Desativar Molduras */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Botão 1: Bloquear / Desativar IA */}
+        <div className={`nb-card p-5 sm:p-6 ${enabled ? "bg-gradient-to-br from-emerald-100 to-sky-100" : "bg-gradient-to-br from-red-100 to-amber-100"}`} data-testid="ai-global-toggle-card">
+          <div className="flex flex-col justify-between h-full gap-4">
+            <div className="flex items-start gap-3">
+              <div className={`w-11 h-11 nb-card flex items-center justify-center flex-shrink-0 ${enabled ? "bg-emerald-300" : "bg-red-300"}`}>
+                <Power className="w-5 h-5" strokeWidth={2.5} />
+              </div>
+              <div>
+                <h2 className="font-heading font-black text-xl flex items-center gap-2">
+                  <span>Bloqueio do Sistema de IA</span>
+                  {!enabled && <span className="nb-badge bg-red-300 text-red-950 text-xs">Bloqueado</span>}
+                </h2>
+                <p className="text-xs sm:text-sm text-neutral-700 mt-1 leading-relaxed">
+                  {enabled
+                    ? "IA Liberada — funções ativas no servidor e respostas operacionais."
+                    : "IA Bloqueada — exibe mensagens de bloqueio e desativa processamento."}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-heading font-black text-xl">Recursos de IA no app</h2>
-              <p className="text-sm text-neutral-700 mt-0.5">
-                {enabled ? "IA ativada — botões de IA aparecem para admin e alunos." : "IA desativada — todas as funções de IA estão bloqueadas (inclusive para o admin)."}
-              </p>
-            </div>
+            <button
+              onClick={toggle}
+              disabled={toggling}
+              className={`nb-btn px-4 py-2.5 flex items-center justify-center gap-2 font-bold w-full ${enabled ? "bg-red-300 hover:bg-red-400 text-red-950" : "bg-emerald-300 hover:bg-emerald-400 text-emerald-950"}`}
+              data-testid="ai-toggle-button"
+            >
+              <Power className="w-4 h-4" strokeWidth={2.5} />
+              {toggling ? "Aplicando..." : enabled ? "Bloquear IA" : "Desbloquear IA"}
+            </button>
           </div>
-          <button
-            onClick={toggle}
-            disabled={toggling}
-            className={`nb-btn px-4 py-2.5 flex items-center gap-2 ${enabled ? "bg-red-300 hover:bg-red-400" : "bg-emerald-300 hover:bg-emerald-400"}`}
-            data-testid="ai-toggle-button"
-          >
-            <Power className="w-4 h-4" strokeWidth={2.5} />
-            {toggling ? "Aplicando..." : enabled ? "Desativar IA" : "Ativar IA"}
-          </button>
+        </div>
+
+        {/* Botão 2: Ocultar / Esconder Recursos de IA na Interface */}
+        <div className={`nb-card p-5 sm:p-6 ${!aiHidden ? "bg-gradient-to-br from-violet-100 to-pink-100" : "bg-gradient-to-br from-slate-200 to-zinc-300"}`} data-testid="ai-hide-toggle-card">
+          <div className="flex flex-col justify-between h-full gap-4">
+            <div className="flex items-start gap-3">
+              <div className={`w-11 h-11 nb-card flex items-center justify-center flex-shrink-0 ${!aiHidden ? "bg-violet-300" : "bg-zinc-800 text-white"}`}>
+                {!aiHidden ? <Eye className="w-5 h-5" strokeWidth={2.5} /> : <EyeOff className="w-5 h-5 text-white" strokeWidth={2.5} />}
+              </div>
+              <div>
+                <h2 className="font-heading font-black text-xl flex items-center gap-2">
+                  <span>Ocultar Recursos de IA</span>
+                  {aiHidden && <span className="nb-badge bg-black text-white text-xs">Ocultado</span>}
+                </h2>
+                <p className="text-xs sm:text-sm text-neutral-700 mt-1 leading-relaxed">
+                  {aiHidden
+                    ? "Ocultado — todos os botões, abas e painéis de IA foram removidos do visual para alunos e admins."
+                    : "Visível — botões de gabarito com IA, resumo do dia, tira-dúvidas e estatísticas visíveis na interface."}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleToggleHide}
+              disabled={togglingHide}
+              className={`nb-btn px-4 py-2.5 flex items-center justify-center gap-2 font-bold w-full ${aiHidden ? "bg-emerald-300 hover:bg-emerald-400 text-emerald-950" : "bg-zinc-900 hover:bg-black text-white"}`}
+              data-testid="ai-hide-toggle-button"
+            >
+              {aiHidden ? <Eye className="w-4 h-4" strokeWidth={2.5} /> : <EyeOff className="w-4 h-4" strokeWidth={2.5} />}
+              {togglingHide ? "Aplicando..." : aiHidden ? "Exibir Recursos de IA" : "Ocultar Recursos de IA"}
+            </button>
+          </div>
+        </div>
+
+        {/* Botão 3: Desativar Molduras & Loja */}
+        <div className={`nb-card p-5 sm:p-6 ${!framesDisabled ? "bg-gradient-to-br from-amber-100 to-yellow-100" : "bg-gradient-to-br from-[#3b2716] to-[#1c1209] text-white"}`} data-testid="frames-toggle-card">
+          <div className="flex flex-col justify-between h-full gap-4">
+            <div className="flex items-start gap-3">
+              <div className={`w-11 h-11 nb-card flex items-center justify-center flex-shrink-0 ${!framesDisabled ? "bg-amber-300 text-amber-950" : "bg-red-400 text-black"}`}>
+                <Palette className="w-5 h-5" strokeWidth={2.5} />
+              </div>
+              <div>
+                <h2 className="font-heading font-black text-xl flex items-center gap-2">
+                  <span>Molduras & Loja</span>
+                  {framesDisabled && <span className="nb-badge bg-red-400 text-black text-xs font-black">Desativadas</span>}
+                </h2>
+                <p className={`text-xs sm:text-sm mt-1 leading-relaxed ${framesDisabled ? "text-[#e5e5e5]" : "text-neutral-700"}`}>
+                  {framesDisabled
+                    ? "Desativadas — a loja sumiu e as molduras foram ocultas. Quando reativadas, as molduras equipadas voltam automaticamente sem re-equipar."
+                    : "Ativas — a loja está online e os perfis exibem as molduras equipadas pelos usuários."}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleToggleFrames}
+              disabled={togglingFrames}
+              className={`nb-btn px-4 py-2.5 flex items-center justify-center gap-2 font-bold w-full ${
+                framesDisabled
+                  ? "bg-emerald-300 hover:bg-emerald-400 text-emerald-950 shadow-[2px_2px_0_0_#000]"
+                  : "bg-red-300 hover:bg-red-400 text-red-950 shadow-[2px_2px_0_0_#000]"
+              }`}
+              data-testid="toggle-frames-button"
+            >
+              <Palette className="w-4 h-4" strokeWidth={2.5} />
+              {togglingFrames ? "Aplicando..." : framesDisabled ? "Reativar Molduras e Loja" : "Desativar Molduras e Loja"}
+            </button>
+          </div>
         </div>
       </div>
 

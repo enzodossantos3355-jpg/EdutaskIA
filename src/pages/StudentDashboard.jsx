@@ -25,6 +25,74 @@ import { playTaskCompleteSound, playTaskUncheckSound } from "@/lib/soundEffects"
 const subjectColors = ["bg-sky-200", "bg-amber-200", "bg-red-200", "bg-emerald-200", "bg-violet-200", "bg-rose-200"];
 const colorFor = (s) => subjectColors[(s || "").length % subjectColors.length];
 
+function MinecraftLandscapeBackground() {
+  return (
+    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none" style={{ shapeRendering: "crispEdges" }}>
+      {/* Blue Sky */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#5ca3ff] via-[#85bdff] to-[#b8dbff]" />
+
+      {/* Floating Pixel Clouds */}
+      <svg className="absolute top-2 left-0 w-full h-32 opacity-90" viewBox="0 0 1000 100" preserveAspectRatio="none">
+        <path fill="#ffffff" opacity="0.95" d="M30,15 h100 v25 h-100 z M60,5 h60 v15 h-60 z M350,25 h140 v30 h-140 z M390,10 h80 v20 h-80 z M750,20 h120 v30 h-120 z M780,8 h70 v18 h-70 z" />
+      </svg>
+
+      {/* Mountains */}
+      <svg className="absolute bottom-24 left-0 w-full h-48 opacity-85" viewBox="0 0 1200 160" preserveAspectRatio="none">
+        <polygon points="0,160 120,60 240,160" fill="#606060" />
+        <polygon points="95,80 120,60 145,80 120,88" fill="#ffffff" />
+        <polygon points="200,160 380,40 560,160" fill="#4d4d4d" />
+        <polygon points="340,70 380,40 420,70 380,80" fill="#ffffff" />
+        <polygon points="650,160 820,50 990,160" fill="#585858" />
+        <polygon points="780,75 820,50 860,75 820,85" fill="#ffffff" />
+      </svg>
+
+      {/* Grass Hills, Oak Trees, Dandelion Flowers, Pigs & Sheep */}
+      <svg className="absolute bottom-0 left-0 w-full h-36" viewBox="0 0 1200 120" preserveAspectRatio="none">
+        <rect x="0" y="70" width="1200" height="50" fill="#5c8e32" />
+        <rect x="0" y="65" width="1200" height="8" fill="#7cbd3a" />
+        <rect x="0" y="90" width="1200" height="30" fill="#866043" />
+
+        <g transform="translate(30, 0)">
+          <rect x="18" y="30" width="10" height="40" fill="#573d26" />
+          <rect x="0" y="0" width="46" height="35" fill="#38591b" />
+          <rect x="5" y="5" width="36" height="25" fill="#4a7c29" />
+        </g>
+        <g transform="translate(1120, 0)">
+          <rect x="18" y="30" width="10" height="40" fill="#573d26" />
+          <rect x="0" y="0" width="46" height="35" fill="#38591b" />
+          <rect x="5" y="5" width="36" height="25" fill="#4a7c29" />
+        </g>
+
+        <g transform="translate(180, 52)">
+          <rect x="1" y="0" width="3" height="3" fill="#facc15" />
+          <rect x="2" y="3" width="1" height="6" fill="#22c55e" />
+        </g>
+        <g transform="translate(850, 52)">
+          <rect x="1" y="0" width="3" height="3" fill="#facc15" />
+          <rect x="2" y="3" width="1" height="6" fill="#22c55e" />
+        </g>
+
+        <g transform="translate(680, 38) scale(0.8)">
+          <rect x="0" y="0" width="28" height="20" rx="2" fill="#f8fafc" stroke="#1e293b" strokeWidth="1" />
+          <rect x="22" y="4" width="10" height="10" rx="1" fill="#f1f5f9" stroke="#1e293b" strokeWidth="1" />
+          <rect x="28" y="6" width="2" height="2" fill="#0f172a" />
+          <rect x="4" y="20" width="4" height="8" fill="#475569" />
+          <rect x="20" y="20" width="4" height="8" fill="#475569" />
+        </g>
+
+        <g transform="translate(980, 44) scale(0.8)">
+          <rect x="0" y="0" width="24" height="16" rx="2" fill="#f472b6" stroke="#831843" strokeWidth="1" />
+          <rect x="-8" y="2" width="10" height="10" rx="1" fill="#f472b6" stroke="#831843" strokeWidth="1" />
+          <rect x="-10" y="6" width="4" height="4" fill="#fb7185" />
+          <rect x="-6" y="4" width="2" height="2" fill="#0f172a" />
+          <rect x="3" y="16" width="3" height="6" fill="#db2777" />
+          <rect x="18" y="16" width="3" height="6" fill="#db2777" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 function BotSandboxBanner({ onPointsUpdated }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -65,65 +133,61 @@ function BotSandboxBanner({ onPointsUpdated }) {
 
   if (isMinecraft) {
     return (
-      <div className="mb-6 p-4 bg-[#150a22] border-4 border-[#2d1b46] shadow-[0_6px_0_#0a0510,0_10px_25px_rgba(0,0,0,0.65)] rounded-xl text-white font-minecraft" data-testid="bot-sandbox-banner">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="mb-6 p-4 bg-[#707070] border-4 border-[#1a0f0a] shadow-[inset_2px_2px_0_rgba(255,255,255,0.3),inset_-2px_-2px_0_rgba(0,0,0,0.5),4px_4px_0_#000] rounded-xl text-white font-minecraft relative overflow-hidden" data-testid="bot-sandbox-banner">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 bg-[#28183e] border-2 border-[#54347c] flex items-center justify-center flex-shrink-0 rounded shadow-inner">
-              <Bot className="w-6 h-6 text-[#76e3d9]" />
+            <div className="w-10 h-10 bg-white border-2 border-black flex items-center justify-center flex-shrink-0 rounded shadow-xs text-black">
+              <Bot className="w-6 h-6 text-black" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-bold text-base sm:text-lg text-white">
+                <h2 className="font-bold text-base sm:text-lg text-white drop-shadow-[1px_1px_0_#000]">
                   Perfil de Teste (Bot / Sandbox)
                 </h2>
                 <span className="px-2.5 py-0.5 bg-[#76e3d9] text-black border border-black text-[10px] font-bold rounded shadow-xs">
                   AMBIENTE DE SIMULAÇÃO
                 </span>
               </div>
-              <p className="text-xs text-[#cbd5e1] mt-0.5">
+              <p className="text-xs text-[#e5e5e5] mt-0.5 drop-shadow-[1px_1px_0_#000]">
                 Este perfil possui atributos de teste e cortes aplicados para não interferir nas contas reais.
               </p>
             </div>
           </div>
 
-          {/* Ferramentas de teste sandbox com botões temáticos Minecraft (Imagem 3) */}
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => addPoints(100)}
               disabled={loading}
-              className="px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 bg-[#eab308] hover:bg-[#facc15] border-2 border-black text-black shadow-[0_3px_0_#a16207,0_4px_0_#000] rounded cursor-pointer active:translate-y-0.5"
-              title="Adicionar 100 pontos para testar compras na loja"
+              className="btn-minecraft-wood px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
             >
-              <Coins className="w-3.5 h-3.5" /> +100 Pts Teste
+              <Coins className="w-3.5 h-3.5 text-amber-300" /> +100 Pts Teste
             </button>
             <button
               onClick={resetPoints}
               disabled={loading}
-              className="px-2.5 py-1.5 text-xs font-bold flex items-center gap-1 bg-[#10b981] hover:bg-[#34d399] border-2 border-black text-black shadow-[0_3px_0_#047857,0_4px_0_#000] rounded cursor-pointer active:translate-y-0.5"
-              title="Resetar saldo de pontos"
+              className="btn-minecraft-stone px-2.5 py-1.5 text-xs font-bold flex items-center gap-1 cursor-pointer"
             >
-              <RotateCcw className="w-3.5 h-3.5" /> Zerar Pts
+              <RotateCcw className="w-3.5 h-3.5 text-white" /> Zerar Pts
             </button>
             <button
               onClick={testSound}
-              className="px-2.5 py-1.5 text-xs font-bold flex items-center gap-1 bg-[#ef4444] hover:bg-[#f87171] border-2 border-black text-white shadow-[0_3px_0_#b91c1c,0_4px_0_#000] rounded cursor-pointer active:translate-y-0.5"
-              title="Ouvir efeitos sonoros temáticos"
+              className="btn-minecraft-wood px-2.5 py-1.5 text-xs font-bold flex items-center gap-1 cursor-pointer"
             >
-              <Volume2 className="w-3.5 h-3.5" /> Tester Som
+              <Volume2 className="w-3.5 h-3.5 text-white" /> Testar Som
             </button>
           </div>
         </div>
 
-        {/* Linha de cortes com efeito de redstone e tesouras (Imagem 3) */}
-        <div className="mt-3 pt-3 border-t border-[#3d245c] grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-          <div className="flex items-center gap-1.5 text-[#e2e8f0] bg-[#0c0515]/90 p-2 border border-[#4c2d73] rounded">
-            <span className="font-bold text-[#f43f5e]">✂️ Corte 1:</span> Fora da ranking e prêmio mensal da IA
+        {/* Oak Fence + Signs row for cuts matching Screenshot 1 */}
+        <div className="mt-3 pt-3 border-t border-[#3d2716] grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs relative z-10">
+          <div className="flex items-center gap-1.5 text-[#fef08a] bg-[#54381d] p-2 border-2 border-[#28190c] rounded shadow-xs">
+            <span className="font-bold text-[#f87171]">🪵 Corte 1:</span> Fora do ranking e prêmio mensal da IA
           </div>
-          <div className="flex items-center gap-1.5 text-[#e2e8f0] bg-[#0c0515]/90 p-2 border border-[#4c2d73] rounded">
-            <span className="font-bold text-[#f43f5e]">✂️ Corte 2:</span> Bloqueado de disparos de WhatsApp
+          <div className="flex items-center gap-1.5 text-[#fef08a] bg-[#54381d] p-2 border-2 border-[#28190c] rounded shadow-xs">
+            <span className="font-bold text-[#f87171]">🪵 Corte 2:</span> Bloqueado de disparos de WhatsApp
           </div>
-          <div className="flex items-center gap-1.5 text-[#e2e8f0] bg-[#0c0515]/90 p-2 border border-[#4c2d73] rounded">
-            <span className="font-bold text-[#f43f5e]">✂️ Corte 3:</span> Não afeta médias gerais de turma
+          <div className="flex items-center gap-1.5 text-[#fef08a] bg-[#54381d] p-2 border-2 border-[#28190c] rounded shadow-xs">
+            <span className="font-bold text-[#f87171]">🪵 Corte 3:</span> Não afeta médias gerais da turma
           </div>
         </div>
       </div>
@@ -198,7 +262,7 @@ function BotSandboxBanner({ onPointsUpdated }) {
 
 export default function StudentDashboard() {
   const { user } = useAuth();
-  const { enabled: aiEnabled } = useAIStatus();
+  const { enabled: aiEnabled, hidden: aiHidden, framesDisabled } = useAIStatus();
   const [tasks, setTasks] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -265,12 +329,13 @@ export default function StudentDashboard() {
   // Listener para evento customizado do botão superior da Loja no AppHeader
   useEffect(() => {
     const handleStoreTabEvent = () => {
+      if (framesDisabled) return;
       setTab("store");
       pullScreenToStore();
     };
     window.addEventListener("open-store-tab", handleStoreTabEvent);
     return () => window.removeEventListener("open-store-tab", handleStoreTabEvent);
-  }, []);
+  }, [framesDisabled]);
 
   // Automatic one-time pop-up trigger on app launch for special announcements
   useEffect(() => {
@@ -367,89 +432,117 @@ export default function StudentDashboard() {
   };
 
   const handleOpenStore = () => {
+    if (framesDisabled) return;
     setTab("store");
     pullScreenToStore();
   };
 
+  const isMinecraft = user?.equipped_effect === "minecraft";
+
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
+    <div className={`min-h-screen ${isMinecraft ? "bg-[#60a5fa] relative overflow-x-hidden font-minecraft text-neutral-900" : "bg-[#FAFAFA]"}`}>
+      {/* Full Minecraft Landscape Background when Minecraft theme is active */}
+      {isMinecraft && <MinecraftLandscapeBackground />}
+
       <AppHeader title="Minhas tarefas" />
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-28 sm:pb-8">
-        <MyProfileBanner onOpenStore={handleOpenStore} />
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-28 sm:pb-8 relative z-10">
+        <MyProfileBanner onOpenStore={!framesDisabled ? handleOpenStore : null} />
         {user?.status === "bot" && (
           <BotSandboxBanner onPointsUpdated={load} />
         )}
         <PrizeBanner />
         <AIDailySummary />
 
-        {/* Dynamic & responsive navigation bar */}
-        <div className="flex items-center gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2 scrollbar-none sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
+        {/* Dynamic & responsive navigation bar matching Screenshot 2 */}
+        <div className="flex items-center gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2 scrollbar-none sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0 relative z-20">
           <button
             onClick={() => setTab("tasks")}
-            className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
-              tab === "tasks" ? "bg-sky-400 font-bold" : "bg-white"
-            }`}
+            className={
+              isMinecraft
+                ? `btn-minecraft-diamond px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${
+                    tab === "tasks" ? "brightness-110" : "opacity-90"
+                  }`
+                : `nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
+                    tab === "tasks" ? "bg-sky-400 font-bold" : "bg-white"
+                  }`
+            }
             data-testid="student-tab-tasks"
           >
-            <BookOpen className="w-4 h-4" /> Minhas tarefas
+            <span>💎</span> Minhas tarefas
           </button>
-          <button
-            onClick={handleOpenStore}
-            className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
-              tab === "store" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"
-            }`}
-            data-testid="student-tab-store"
-          >
-            <ShoppingBag className="w-4 h-4" /> Loja de Molduras 🖼️
-          </button>
-          <button
-            onClick={() => setTab("stats")}
-            className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
-              tab === "stats" ? "bg-violet-300 font-bold" : "bg-white"
-            }`}
-            data-testid="student-tab-stats"
-          >
-            <BarChart3 className="w-4 h-4" /> Estatísticas & Líder IA
-          </button>
-          <button
-            onClick={() => {
-              if (!aiEnabled) {
-                toast.error("A Inteligência Artificial foi desativada temporariamente pelo administrador.");
-                return;
+          {!framesDisabled && (
+            <button
+              onClick={handleOpenStore}
+              className={
+                isMinecraft
+                  ? `btn-minecraft-wood px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${
+                      tab === "store" ? "brightness-110" : "opacity-90"
+                    }`
+                  : `nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
+                      tab === "store" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"
+                    }`
               }
-              setGlobalChatOpen(true);
-            }}
-            disabled={!aiEnabled}
-            className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 sm:ml-auto ${
-              !aiEnabled
-                ? "bg-neutral-200 text-neutral-500 border-neutral-400 cursor-not-allowed opacity-60"
-                : "bg-gradient-to-r from-violet-200 to-pink-200 hover:from-violet-300 hover:to-pink-300"
-            }`}
-            data-testid="student-tab-chat"
-            title={!aiEnabled ? "IA desativada temporariamente" : "Tirar Dúvidas com IA"}
-          >
-            {!aiEnabled ? (
-              <>
-                <Lock className="w-4 h-4 text-neutral-500" />
-                <span>IA Bloqueada</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-violet-700" />
-                <span>Tirar Dúvida</span>
-              </>
-            )}
-          </button>
+              data-testid="student-tab-store"
+            >
+              <span>🗺️</span> Loja de Molduras 🖼️
+            </button>
+          )}
+          {!aiHidden && (
+            <button
+              onClick={() => setTab("stats")}
+              className={
+                isMinecraft
+                  ? `btn-minecraft-stone px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${
+                      tab === "stats" ? "brightness-110" : "opacity-90"
+                    }`
+                  : `nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
+                      tab === "stats" ? "bg-violet-300 font-bold" : "bg-white"
+                    }`
+              }
+              data-testid="student-tab-stats"
+            >
+              <span>📊</span> Estatísticas & Líder IA
+            </button>
+          )}
+          {!aiHidden && (
+            <button
+              onClick={() => {
+                if (!aiEnabled) {
+                  toast.error("A Inteligência Artificial foi desativada temporariamente pelo administrador.");
+                  return;
+                }
+                setGlobalChatOpen(true);
+              }}
+              disabled={!aiEnabled}
+              className={
+                isMinecraft
+                  ? "px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 sm:ml-auto bg-[#a471bd] hover:bg-[#b583ce] border-2 border-black text-black font-minecraft font-bold rounded shadow-[0_3px_0_#6c4082,0_4px_0_#000] cursor-pointer"
+                  : `nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 sm:ml-auto ${
+                      !aiEnabled
+                        ? "bg-neutral-200 text-neutral-500 border-neutral-400 cursor-not-allowed opacity-60"
+                        : "bg-gradient-to-r from-violet-200 to-pink-200 hover:from-violet-300 hover:to-pink-300"
+                    }`
+              }
+              data-testid="student-tab-chat"
+              title={!aiEnabled ? "IA desativada temporariamente" : "Tirar Dúvidas com IA"}
+            >
+              <span>✨</span> Tirar Dúvida
+            </button>
+          )}
         </div>
 
-        {tab === "store" ? (
+        {tab === "store" && !framesDisabled ? (
           <StoreEffects />
         ) : tab === "stats" ? (
           <StudentAIStatsView />
         ) : (<>
         <div className="mb-4 sm:mb-8">
-          <h1 className="font-heading font-black text-2xl sm:text-5xl tracking-tight">Olá! Vamos estudar?</h1>
-          <p className="text-neutral-600 mt-1 text-xs sm:text-sm">Marque suas tarefas conforme as conclui.</p>
+          <h1 className={`${isMinecraft ? "font-minecraft text-black font-black drop-shadow-[2px_2px_0_#fff]" : "font-heading font-black"} text-2xl sm:text-5xl tracking-tight`}>
+            Olá! Vamos estudar?
+          </h1>
+          <p className={`${isMinecraft ? "font-minecraft text-[#2d1d0f] font-bold" : "text-neutral-600"} mt-1 text-xs sm:text-sm`}>
+            Marque suas tarefas conforme as conclui.
+          </p>
         </div>
 
         {/* Botões & Links Criados pelo Professor para os Alunos */}
@@ -705,6 +798,33 @@ export default function StudentDashboard() {
 }
 
 function StatCard({ label, value, bg, testId }) {
+  const { user } = useAuth();
+  const isMinecraft = user?.equipped_effect === "minecraft";
+
+  if (isMinecraft) {
+    let mcBg = "bg-[#828282] text-white border-4 border-[#1a0f0a]";
+    let iconSquare = "🪨";
+    if (label === "Pendentes") {
+      mcBg = "bg-[#c29b68] text-black border-4 border-[#1a0f0a]";
+      iconSquare = "🪵";
+    } else if (label === "Concluídas") {
+      mcBg = "bg-[#3f2b18] text-white border-4 border-[#1a0f0a]";
+      iconSquare = "📦";
+    }
+
+    return (
+      <div className={`p-3.5 sm:p-4 rounded-xl font-minecraft shadow-[inset_2px_2px_0_rgba(255,255,255,0.3),inset_-2px_-2px_0_rgba(0,0,0,0.5),4px_4px_0_#000] flex items-center justify-between ${mcBg}`} data-testid={testId}>
+        <div>
+          <div className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">{label}</div>
+          <div className="font-black text-2xl sm:text-4xl mt-0.5">{value}</div>
+        </div>
+        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-black/30 border-2 border-black/50 rounded flex items-center justify-center text-xl sm:text-2xl shadow-inner">
+          {iconSquare}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`nb-card p-4 ${bg}`} data-testid={testId}>
       <div className="text-xs font-bold uppercase tracking-wider">{label}</div>
@@ -737,16 +857,33 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, index }) {
     <div
       className={
         isMinecraft
-          ? `border-[8px] border-[#160a22] rounded-2xl bg-[#fbf5eb] shadow-[0_6px_0_#090310,0_12px_28px_rgba(0,0,0,0.65)] p-4 sm:p-6 nb-fade-in flex flex-col justify-between font-minecraft text-[#181109] ${task.completed ? "opacity-75" : ""}`
+          ? `border-4 border-[#1a0f0a] rounded-xl bg-[#e5c593] shadow-[inset_2px_2px_0_rgba(255,255,255,0.4),inset_-2px_-2px_0_rgba(0,0,0,0.5),4px_4px_0_#000] p-4 sm:p-5 nb-fade-in flex flex-col justify-between font-minecraft text-[#181109] relative overflow-hidden ${task.completed ? "opacity-80 brightness-95" : ""}`
           : `nb-card nb-card-hover p-4 sm:p-6 nb-fade-in flex flex-col justify-between ${task.completed ? "opacity-75" : ""}`
       }
       style={{ animationDelay: `${index * 60}ms` }}
       data-testid={`student-task-card-${task.id}`}
     >
+      {/* Decorative Minecraft Corner Icons matching Screenshot 3 */}
+      {isMinecraft && (
+        <>
+          <div className="absolute top-2.5 right-2.5 flex items-center gap-0.5 z-10">
+            <span className="text-xs">❤️</span>
+            <span className="text-xs">❤️</span>
+            <span className="text-xs">🖤</span>
+          </div>
+          <div className="absolute bottom-2 left-2 text-xs opacity-75 z-10 pointer-events-none">
+            ⛏️
+          </div>
+          <div className="absolute bottom-2 right-2 text-xs opacity-75 z-10 pointer-events-none">
+            ⚔️
+          </div>
+        </>
+      )}
+
       <div>
-        <div className="flex items-start justify-between gap-2 mb-2 sm:mb-3 flex-wrap">
+        <div className="flex items-center gap-2 mb-2 sm:mb-3 flex-wrap">
           {isMinecraft ? (
-            <span className="px-3 py-1 bg-[#f4a6b8] border-2 border-black font-minecraft text-xs font-bold text-black rounded uppercase shadow-xs">
+            <span className="px-3 py-1 bg-[#a8e6cf] border-2 border-black font-minecraft text-xs font-bold text-black rounded-full uppercase shadow-xs">
               {task.subject}
             </span>
           ) : (
@@ -754,8 +891,10 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, index }) {
           )}
 
           {isMinecraft ? (
-            <span className="px-3 py-1 bg-[#facc15] border-2 border-black font-minecraft text-xs font-bold text-black rounded uppercase shadow-xs flex items-center gap-1" data-testid={`student-task-priority-${task.id}`}>
-              <span>⏳</span> {priority.label}
+            <span className={`px-3 py-1 border-2 border-black font-minecraft text-xs font-bold text-black rounded-full uppercase shadow-xs flex items-center gap-1 ${
+              priority.label === "Alta" || priority.label === "Urgente" ? "bg-[#ff7675]" : "bg-[#82ccdd]"
+            }`} data-testid={`student-task-priority-${task.id}`}>
+              {priority.icon || "📌"} {priority.label}
             </span>
           ) : (
             <span className={`nb-badge ${priority.bg}`} data-testid={`student-task-priority-${task.id}`}>
@@ -766,8 +905,8 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, index }) {
 
         <div className="flex items-center gap-2 text-xs mb-2 sm:mb-3 flex-wrap">
           {isMinecraft ? (
-            <span className="px-3 py-1 bg-[#f3e8c8] border-2 border-black font-minecraft text-xs font-bold text-black rounded shadow-xs">
-              <CalendarIcon className="w-3 h-3 inline mr-1 -mt-0.5" /> {dueLabel}
+            <span className="px-2.5 py-0.5 bg-white border-2 border-black font-minecraft text-xs font-bold text-black rounded-full shadow-xs">
+              📅 {dueLabel}
             </span>
           ) : (
             <span className={`nb-badge ${dueBg}`}>
@@ -777,7 +916,7 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, index }) {
 
           {task.points > 0 && (
             isMinecraft ? (
-              <span className="px-3 py-1 bg-[#fef08a] border-2 border-black font-minecraft text-xs font-bold text-black rounded shadow-xs" data-testid={`task-points-${task.id}`}>
+              <span className="px-2.5 py-0.5 bg-[#fbc531] border-2 border-black font-minecraft text-xs font-bold text-black rounded-full shadow-xs" data-testid={`task-points-${task.id}`}>
                 +{task.points} PTS
               </span>
             ) : (
@@ -788,10 +927,10 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, index }) {
           )}
         </div>
 
-        <h3 className={`${isMinecraft ? "font-minecraft text-black font-bold text-lg sm:text-xl" : "font-heading font-bold text-lg sm:text-xl"} mb-1 leading-tight ${task.completed ? "line-through" : ""}`}>
+        <h3 className={`${isMinecraft ? "font-minecraft text-black font-black text-lg sm:text-xl" : "font-heading font-bold text-lg sm:text-xl"} mb-1 leading-tight ${task.completed ? "line-through opacity-75" : ""}`}>
           {task.title}
         </h3>
-        <p className={`text-xs sm:text-sm ${isMinecraft ? "text-[#3b2a1a] font-minecraft" : "text-neutral-700"} mb-3 whitespace-pre-wrap`}>
+        <p className={`text-xs sm:text-sm ${isMinecraft ? "text-[#2d1d0f] font-minecraft font-bold" : "text-neutral-700"} mb-3 whitespace-pre-wrap`}>
           {task.description}
         </p>
 
@@ -800,17 +939,25 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, index }) {
             <div className={`text-[10px] font-bold ${isMinecraft ? "text-[#543d2b] font-minecraft" : "text-neutral-600"} uppercase tracking-wide`}>
               Anexos
             </div>
-            {task.attachments.map((a) => <AttachmentLink key={a.id} file={a} />)}
+            {task.attachments.map((a) => (
+              <div key={a.id} className={isMinecraft ? "p-2 bg-black/10 border-2 border-black rounded flex items-center gap-2" : ""}>
+                <AttachmentLink file={a} />
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 space-y-2 relative z-20">
         <button
           onClick={onToggle}
           className={
             isMinecraft
-              ? `btn-minecraft-prismarine w-full px-3 py-2.5 flex items-center justify-center gap-2 text-xs sm:text-sm cursor-pointer rounded ${task.completed ? "brightness-95" : ""}`
+              ? `w-full px-3 py-2.5 flex items-center justify-center gap-2 text-xs sm:text-sm font-bold cursor-pointer rounded border-2 border-black font-minecraft transition-transform active:translate-y-0.5 ${
+                  task.completed
+                    ? "bg-[#747d8c] text-white shadow-[inset_0_2px_0_#a4b0be,0_3px_0_#2f3542,0_4px_0_#000]"
+                    : "bg-[#2ed573] text-black shadow-[inset_0_2px_0_#7bed9f,0_3px_0_#26af5f,0_4px_0_#000]"
+                }`
               : `nb-btn w-full px-3 py-2 sm:py-2.5 flex items-center justify-center gap-2 text-xs sm:text-sm font-bold ${task.completed ? "bg-white" : "bg-emerald-300"}`
           }
           data-testid={`toggle-complete-${task.id}`}
@@ -819,42 +966,33 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, index }) {
           {task.completed ? "Desmarcar" : "Marcar como concluída"}
         </button>
 
-        {/* Seção de gabarito da IA */}
         {hasAiSource && <StudentAnswerSection task={task} aiEnabled={aiEnabled} isMinecraft={isMinecraft} />}
 
-        <button
-          onClick={() => {
-            if (!aiEnabled) {
-              toast.error("A Inteligência Artificial foi desativada temporariamente pelo administrador.");
-              return;
+        {!useAIStatus().hidden && !useAIStatus().aiHidden && (
+          <button
+            onClick={() => {
+              if (!aiEnabled) {
+                toast.error("A Inteligência Artificial foi desativada temporariamente pelo administrador.");
+                return;
+              }
+              onAskDoubt(task);
+            }}
+            disabled={!aiEnabled}
+            className={
+              isMinecraft
+                ? "w-full px-2.5 py-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded cursor-pointer bg-[#747d8c] hover:bg-[#a4b0be] border-2 border-black text-white font-minecraft shadow-[inset_0_2px_0_#a4b0be,0_3px_0_#2f3542,0_4px_0_#000]"
+                : `nb-btn w-full px-2.5 py-1.5 sm:py-2 flex items-center justify-center gap-1.5 text-xs font-bold ${
+                    !aiEnabled
+                      ? "bg-neutral-200 text-neutral-500 border-neutral-400 cursor-not-allowed opacity-60"
+                      : "bg-violet-100 hover:bg-violet-200 text-violet-950"
+                  }`
             }
-            onAskDoubt(task);
-          }}
-          disabled={!aiEnabled}
-          className={
-            isMinecraft
-              ? "w-full px-2.5 py-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded cursor-pointer bg-[#a471bd] hover:bg-[#b583ce] border-2 border-black text-black font-minecraft shadow-[0_4px_0_#6c4082,0_5px_0_#000]"
-              : `nb-btn w-full px-2.5 py-1.5 sm:py-2 flex items-center justify-center gap-1.5 text-xs font-bold ${
-                  !aiEnabled
-                    ? "bg-neutral-200 text-neutral-500 border-neutral-400 cursor-not-allowed opacity-60"
-                    : "bg-violet-100 hover:bg-violet-200 text-violet-950"
-                }`
-          }
-          data-testid={`ask-doubt-${task.id}`}
-          title={!aiEnabled ? "IA desativada pelo administrador" : "Tirar dúvida desta tarefa"}
-        >
-          {!aiEnabled ? (
-            <>
-              <Lock className="w-3.5 h-3.5 text-neutral-500" />
-              <span>Tirar Dúvida (IA Bloqueada)</span>
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-3.5 h-3.5 text-violet-900" />
-              <span>Tirar dúvida desta tarefa (IA)</span>
-            </>
-          )}
-        </button>
+            data-testid={`ask-doubt-${task.id}`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+            <span>Tirar dúvida desta tarefa (IA)</span>
+          </button>
+        )}
       </div>
     </div>
   );
@@ -872,6 +1010,7 @@ const cleanAnswerText = (text) => {
 };
 
 function StudentAnswerSection({ task, aiEnabled = true, isMinecraft = false }) {
+  const { hidden: aiHidden, aiHidden: aiHiddenAlt } = useAIStatus();
   const [open, setOpen] = useState(false);
   const [selectedLength, setSelectedLength] = useState(task.generated_answer?.length || "medium");
   const [answer, setAnswer] = useState(
@@ -879,6 +1018,10 @@ function StudentAnswerSection({ task, aiEnabled = true, isMinecraft = false }) {
   );
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  if (aiHidden || aiHiddenAlt) {
+    return null;
+  }
 
   const lengthLabels = {
     short: "Curto",

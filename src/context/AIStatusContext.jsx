@@ -3,26 +3,45 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { setGlobalFramesDisabled } from "@/lib/effects";
 
 const AIStatusContext = createContext({
   enabled: true,
   aiEnabled: true,
+  hidden: false,
+  aiHidden: false,
+  framesDisabled: false,
   model: "gemini-3.8-flash",
   loading: true,
   refresh: async () => {},
   toggleAI: async () => false,
+  toggleHideAI: async () => false,
+  toggleFramesDisabled: async () => false,
   changeModel: async () => false,
   setEnabled: () => {},
+  setHidden: () => {},
 });
 
 export function AIStatusProvider({ children }) {
   const { user } = useAuth();
   const [enabled, setEnabledState] = useState(true);
+  const [hidden, setHiddenState] = useState(false);
+  const [framesDisabled, setFramesDisabledState] = useState(false);
   const [model, setModelState] = useState("gemini-3.8-flash");
   const [loading, setLoading] = useState(true);
 
+  const applyFramesDisabled = useCallback((val) => {
+    const disabledBool = Boolean(val);
+    setFramesDisabledState(disabledBool);
+    setGlobalFramesDisabled(disabledBool);
+  }, []);
+
   const setEnabled = useCallback((val) => {
     setEnabledState(Boolean(val));
+  }, []);
+
+  const setHidden = useCallback((val) => {
+    setHiddenState(Boolean(val));
   }, []);
 
   const refresh = useCallback(async () => {
@@ -31,6 +50,12 @@ export function AIStatusProvider({ children }) {
       if (data) {
         if (typeof data.enabled === "boolean") {
           setEnabledState(data.enabled);
+        }
+        if (typeof data.hidden === "boolean") {
+          setHiddenState(data.hidden);
+        }
+        if (typeof data.frames_disabled === "boolean") {
+          applyFramesDisabled(data.frames_disabled);
         }
         if (data.model) {
           setModelState(data.model);
@@ -41,7 +66,7 @@ export function AIStatusProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyFramesDisabled]);
 
   // 1. Initial fetch from Backend API
   useEffect(() => {
@@ -62,6 +87,12 @@ export function AIStatusProvider({ children }) {
             if (data) {
               if (typeof data.ai_enabled === "boolean") {
                 setEnabledState(data.ai_enabled);
+              }
+              if (typeof data.ai_hidden === "boolean") {
+                setHiddenState(data.ai_hidden);
+              }
+              if (typeof data.frames_disabled === "boolean") {
+                applyFramesDisabled(data.frames_disabled);
               }
               if (data.ai_model) {
                 setModelState(data.ai_model);
@@ -87,7 +118,7 @@ export function AIStatusProvider({ children }) {
     return () => {
       if (unsubscribeSystem) unsubscribeSystem();
     };
-  }, []);
+  }, [applyFramesDisabled]);
 
   // 3. Global Toggle Function with Firestore & Backend Persistence
   const toggleAI = useCallback(
@@ -97,6 +128,8 @@ export function AIStatusProvider({ children }) {
         const { data } = await api.put("/ai/status", { enabled: newStatus });
         if (data) {
           if (typeof data.enabled === "boolean") setEnabledState(data.enabled);
+          if (typeof data.hidden === "boolean") setHiddenState(data.hidden);
+          if (typeof data.frames_disabled === "boolean") applyFramesDisabled(data.frames_disabled);
           if (data.model) setModelState(data.model);
         }
         return true;
@@ -105,7 +138,49 @@ export function AIStatusProvider({ children }) {
         throw err;
       }
     },
-    [refresh]
+    [refresh, applyFramesDisabled]
+  );
+
+  // 3b. Toggle Hide AI Function
+  const toggleHideAI = useCallback(
+    async (newHidden) => {
+      setHiddenState(newHidden);
+      try {
+        const { data } = await api.put("/ai/status", { hidden: newHidden });
+        if (data) {
+          if (typeof data.enabled === "boolean") setEnabledState(data.enabled);
+          if (typeof data.hidden === "boolean") setHiddenState(data.hidden);
+          if (typeof data.frames_disabled === "boolean") applyFramesDisabled(data.frames_disabled);
+          if (data.model) setModelState(data.model);
+        }
+        return true;
+      } catch (err) {
+        await refresh();
+        throw err;
+      }
+    },
+    [refresh, applyFramesDisabled]
+  );
+
+  // 3c. Toggle Disable Frames Function
+  const toggleFramesDisabled = useCallback(
+    async (newDisabled) => {
+      applyFramesDisabled(newDisabled);
+      try {
+        const { data } = await api.put("/ai/status", { frames_disabled: newDisabled });
+        if (data) {
+          if (typeof data.enabled === "boolean") setEnabledState(data.enabled);
+          if (typeof data.hidden === "boolean") setHiddenState(data.hidden);
+          if (typeof data.frames_disabled === "boolean") applyFramesDisabled(data.frames_disabled);
+          if (data.model) setModelState(data.model);
+        }
+        return true;
+      } catch (err) {
+        await refresh();
+        throw err;
+      }
+    },
+    [refresh, applyFramesDisabled]
   );
 
   // 4. Gemini Model Selector Function
@@ -131,12 +206,18 @@ export function AIStatusProvider({ children }) {
       value={{
         enabled,
         aiEnabled: enabled,
+        hidden,
+        aiHidden: hidden,
+        framesDisabled,
         model,
         loading,
         refresh,
         toggleAI,
+        toggleHideAI,
+        toggleFramesDisabled,
         changeModel,
         setEnabled,
+        setHidden,
       }}
     >
       {children}

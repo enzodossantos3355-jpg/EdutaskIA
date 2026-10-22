@@ -1,4 +1,5 @@
 import React from "react";
+import { isFramesDisabled } from "@/lib/effects";
 
 /**
  * Renderiza o preenchimento central visual da caixa do perfil na tela de seleção
@@ -53,7 +54,7 @@ function MinecraftGrassBlock({ x = 0, y = 0, size = 26, stroke = true, className
 }
 
 export default function MolduraArtCenter({ effectId }) {
-  if (!effectId) return null;
+  if (!effectId || isFramesDisabled() || effectId === "minecraft") return null;
 
   if (effectId === "spongebob") {
     return (
@@ -1000,7 +1001,144 @@ export default function MolduraArtCenter({ effectId }) {
   }
 
   if (effectId === "minecraft") {
-    return null;
+    return (
+      <div
+        className="absolute inset-0 z-0 overflow-hidden rounded-[12px] pointer-events-none transition-all duration-300"
+        data-testid="art-minecraft"
+      >
+        {/* Full Card Pixel Art Background matching Screenshot 4 */}
+        <svg
+          className="absolute inset-0 w-full h-full object-cover"
+          viewBox="0 0 200 280"
+          preserveAspectRatio="none"
+          style={{ shapeRendering: "crispEdges" }}
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            {/* Dirt block pattern */}
+            <pattern id="dirtTex" width="16" height="16" patternUnits="userSpaceOnUse">
+              <rect width="16" height="16" fill="#866043" />
+              <rect x="2" y="5" width="2" height="2" fill="#573d26" />
+              <rect x="7" y="6" width="3" height="2" fill="#573d26" />
+              <rect x="12" y="4" width="2" height="2" fill="#9c6d48" />
+              <rect x="1" y="9" width="3" height="2" fill="#573d26" />
+              <rect x="6" y="11" width="2" height="2" fill="#9c6d48" />
+              <rect x="10" y="8" width="3" height="3" fill="#573d26" />
+              <rect x="14" y="10" width="2" height="2" fill="#3d2817" />
+              <rect x="4" y="14" width="3" height="2" fill="#573d26" />
+              <rect x="9" y="13" width="2" height="2" fill="#9c6d48" />
+            </pattern>
+            {/* Stone pattern */}
+            <pattern id="stoneTex" width="16" height="16" patternUnits="userSpaceOnUse">
+              <rect width="16" height="16" fill="#737373" />
+              <rect x="2" y="3" width="2" height="2" fill="#525252" />
+              <rect x="9" y="7" width="2" height="2" fill="#525252" />
+              <rect x="4" y="11" width="3" height="2" fill="#a3a3a3" />
+              <rect x="12" y="13" width="2" height="2" fill="#525252" />
+            </pattern>
+          </defs>
+
+          {/* 1. Upper Dirt Block Section (0px to 195px) */}
+          <rect x="0" y="0" width="200" height="195" fill="url(#dirtTex)" />
+
+          {/* Top Grass Rim & Dripping Grass Roots */}
+          <rect x="0" y="0" width="200" height="16" fill="#5c8e32" />
+          <rect x="0" y="0" width="200" height="4" fill="#7cbd3a" />
+          {/* Grass roots dripping down */}
+          <rect x="10" y="16" width="12" height="8" fill="#5c8e32" />
+          <rect x="35" y="16" width="16" height="12" fill="#5c8e32" />
+          <rect x="65" y="16" width="10" height="6" fill="#5c8e32" />
+          <rect x="90" y="16" width="18" height="10" fill="#5c8e32" />
+          <rect x="125" y="16" width="14" height="8" fill="#5c8e32" />
+          <rect x="155" y="16" width="20" height="12" fill="#5c8e32" />
+          <rect x="185" y="16" width="10" height="6" fill="#5c8e32" />
+
+          {/* Sprouting 3D Grass Blades & Yellow Dandelions on Top Edge */}
+          <g transform="translate(18, -6)">
+            <rect x="0" y="2" width="3" height="6" fill="#5c8e32" />
+            <rect x="3" y="0" width="3" height="8" fill="#7cbd3a" />
+            <rect x="6" y="3" width="3" height="5" fill="#5c8e32" />
+            <rect x="12" y="-2" width="4" height="4" fill="#facc15" />
+            <rect x="13" y="2" width="2" height="6" fill="#4a7c29" />
+          </g>
+          <g transform="translate(95, -6)">
+            <rect x="0" y="2" width="3" height="6" fill="#5c8e32" />
+            <rect x="3" y="0" width="3" height="8" fill="#7cbd3a" />
+            <rect x="6" y="3" width="3" height="5" fill="#5c8e32" />
+            <rect x="12" y="-2" width="4" height="4" fill="#facc15" />
+            <rect x="13" y="2" width="2" height="6" fill="#4a7c29" />
+          </g>
+          <g transform="translate(160, -6)">
+            <rect x="0" y="2" width="3" height="6" fill="#5c8e32" />
+            <rect x="3" y="0" width="3" height="8" fill="#7cbd3a" />
+            <rect x="6" y="3" width="3" height="5" fill="#5c8e32" />
+            <rect x="12" y="-2" width="4" height="4" fill="#facc15" />
+            <rect x="13" y="2" width="2" height="6" fill="#4a7c29" />
+          </g>
+
+          {/* 2. Lower Stone Section (195px to 280px) */}
+          <rect x="0" y="195" width="200" height="85" fill="url(#stoneTex)" />
+          <rect x="0" y="195" width="200" height="3" fill="#3f3f3f" />
+
+          {/* Left Side: Diamond Ore Specks */}
+          <g fill="#2cc5f6">
+            <rect x="12" y="210" width="9" height="5" />
+            <rect x="25" y="220" width="12" height="6" />
+            <rect x="8" y="235" width="14" height="5" />
+            <rect x="30" y="245" width="9" height="6" />
+            <rect x="18" y="260" width="15" height="5" />
+            <rect x="42" y="215" width="7" height="5" />
+            <rect x="45" y="238" width="10" height="5" />
+          </g>
+          <g fill="#8bf0ff">
+            <rect x="14" y="211" width="3" height="2" />
+            <rect x="27" y="221" width="4" height="2" />
+            <rect x="10" y="236" width="4" height="2" />
+            <rect x="32" y="246" width="3" height="2" />
+          </g>
+
+          {/* Right Side: Gold Ore Specks */}
+          <g fill="#facc15">
+            <rect x="145" y="210" width="10" height="5" />
+            <rect x="165" y="222" width="14" height="6" />
+            <rect x="135" y="235" width="11" height="5" />
+            <rect x="172" y="245" width="10" height="6" />
+            <rect x="150" y="258" width="15" height="5" />
+            <rect x="180" y="215" width="8" height="5" />
+          </g>
+          <g fill="#fef08a">
+            <rect x="147" y="211" width="3" height="2" />
+            <rect x="167" y="223" width="4" height="2" />
+            <rect x="137" y="236" width="3" height="2" />
+          </g>
+
+          {/* Oak Wood Sign Plaque (Behind name in center) */}
+          <g transform="translate(12, 140)">
+            <rect x="0" y="0" width="176" height="38" fill="#54381d" stroke="#28190c" strokeWidth="2" rx="2" />
+            <line x1="4" y1="10" x2="172" y2="10" stroke="#3b2612" strokeWidth="1" />
+            <line x1="4" y1="22" x2="172" y2="22" stroke="#3b2612" strokeWidth="1" />
+            <line x1="4" y1="30" x2="172" y2="30" stroke="#3b2612" strokeWidth="1" />
+            <rect x="4" y="4" width="3" height="3" fill="#28190c" />
+            <rect x="169" y="4" width="3" height="3" fill="#28190c" />
+            <rect x="4" y="31" width="3" height="3" fill="#28190c" />
+            <rect x="169" y="31" width="3" height="3" fill="#28190c" />
+          </g>
+
+          {/* Center Bottom: Diamond Block Badge Plaque Frame */}
+          <g transform="translate(68, 202)">
+            <rect x="0" y="0" width="64" height="64" fill="#2cc5f6" stroke="#0f5c71" strokeWidth="3" rx="4" />
+            <rect x="3" y="3" width="58" height="58" fill="none" stroke="#7fe3d9" strokeWidth="2" />
+            <rect x="6" y="6" width="52" height="52" fill="#25b2e0" />
+            <line x1="6" y1="32" x2="58" y2="32" stroke="#128aa8" strokeWidth="2" />
+            <line x1="32" y1="6" x2="32" y2="58" stroke="#128aa8" strokeWidth="2" />
+          </g>
+
+          {/* Overall 3D Dark Bevel Border around card */}
+          <rect x="0" y="0" width="200" height="280" fill="none" stroke="#1a0f0a" strokeWidth="4" />
+          <rect x="2" y="2" width="196" height="276" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
+        </svg>
+      </div>
+    );
   }
 
   return null;

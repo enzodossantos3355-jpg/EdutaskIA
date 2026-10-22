@@ -607,6 +607,8 @@ class Database {
   };
   app_info: any = { ...DEFAULT_APP_INFO };
   ai_enabled: boolean = true;
+  ai_hidden: boolean = false;
+  frames_disabled: boolean = false;
   ai_model: string = 'gemini-3.8-flash';
   webhook_logs: any[] = [];
   task_student_answers: Map<string, GeneratedTaskAnswer> = new Map();
@@ -756,6 +758,8 @@ class Database {
         if (settings.effect_overrides) this.effect_overrides = settings.effect_overrides;
         if (settings.ai_model) this.ai_model = settings.ai_model;
         if (settings.ai_enabled !== undefined) this.ai_enabled = settings.ai_enabled;
+        if (settings.ai_hidden !== undefined) this.ai_hidden = settings.ai_hidden;
+        if (settings.frames_disabled !== undefined) this.frames_disabled = settings.frames_disabled;
       } else {
         await firebaseService.saveSettings('system', {
           monthly_prize: this.monthly_prize,
@@ -764,6 +768,8 @@ class Database {
           app_info: this.app_info,
           effect_overrides: this.effect_overrides,
           ai_enabled: this.ai_enabled,
+          ai_hidden: this.ai_hidden,
+          frames_disabled: this.frames_disabled,
           ai_model: this.ai_model,
         });
       }
@@ -818,6 +824,8 @@ class Database {
         whatsapp_config: this.whatsapp_config,
         app_info: this.app_info,
         ai_enabled: this.ai_enabled,
+        ai_hidden: this.ai_hidden,
+        frames_disabled: this.frames_disabled,
         ai_model: this.ai_model,
         task_student_answers: Array.from(this.task_student_answers.entries()),
       };
@@ -847,6 +855,8 @@ class Database {
         if (data.whatsapp_config) this.whatsapp_config = { ...this.whatsapp_config, ...data.whatsapp_config };
         if (data.app_info) this.app_info = data.app_info;
         if (data.ai_enabled !== undefined) this.ai_enabled = data.ai_enabled;
+        if (data.ai_hidden !== undefined) this.ai_hidden = data.ai_hidden;
+        if (data.frames_disabled !== undefined) this.frames_disabled = data.frames_disabled;
         if (data.ai_model) this.ai_model = data.ai_model;
         if (data.task_student_answers) this.task_student_answers = new Map(data.task_student_answers);
         // Ensure admin does not have a trivial '123' password
@@ -3310,6 +3320,10 @@ function saveSystemSettingsToFirestore() {
     whatsapp_config: db.whatsapp_config,
     app_info: db.app_info,
     effect_overrides: db.effect_overrides,
+    ai_enabled: db.ai_enabled,
+    ai_hidden: db.ai_hidden,
+    frames_disabled: db.frames_disabled,
+    ai_model: db.ai_model,
   }).catch((err) => console.warn('[Firebase] Erro ao salvar configurações:', err));
 }
 
@@ -4547,6 +4561,8 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
 api.get(['/ai/status', '/ai-status'], requireAuth, (req, res) => {
   res.json({
     enabled: db.ai_enabled,
+    hidden: db.ai_hidden || false,
+    frames_disabled: db.frames_disabled || false,
     model: db.ai_model || 'gemini-3.8-flash',
   });
 });
@@ -4554,6 +4570,12 @@ api.get(['/ai/status', '/ai-status'], requireAuth, (req, res) => {
 api.put(['/ai/status', '/ai-status'], requireAdmin, (req, res) => {
   if (req.body?.enabled !== undefined) {
     db.ai_enabled = Boolean(req.body.enabled);
+  }
+  if (req.body?.hidden !== undefined) {
+    db.ai_hidden = Boolean(req.body.hidden);
+  }
+  if (req.body?.frames_disabled !== undefined) {
+    db.frames_disabled = Boolean(req.body.frames_disabled);
   }
   if (req.body?.model && typeof req.body.model === 'string') {
     db.ai_model = req.body.model.trim();
@@ -4563,6 +4585,8 @@ api.put(['/ai/status', '/ai-status'], requireAdmin, (req, res) => {
   res.json({
     ok: true,
     enabled: db.ai_enabled,
+    hidden: db.ai_hidden || false,
+    frames_disabled: db.frames_disabled || false,
     model: db.ai_model || 'gemini-3.8-flash',
   });
 });
