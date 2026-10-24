@@ -191,8 +191,8 @@ export default function LoginPage() {
                         {/* Central Moldura Artwork (Bob Esponja, Mentalista) */}
                         <MolduraArtCenter effectId={p.equipped_effect} />
 
-                        <div className="relative z-10">
-                          <div className="mx-auto mb-3 inline-block">
+                        <div className="relative z-10 flex flex-col items-center justify-between h-full py-1">
+                          <div className="w-[82px] h-[82px] flex items-center justify-center mx-auto mb-2.5 flex-shrink-0">
                             <Avatar
                               userId={p.id}
                               name={p.name}
@@ -203,42 +203,26 @@ export default function LoginPage() {
                               effect={!meta.dim ? effectClass(p.equipped_effect) : null}
                             />
                           </div>
-                          {(() => {
-                            const isDark = isDarkTheme(p.equipped_effect);
-                            const isMinecraft = p.equipped_effect === "minecraft";
-                            return (
-                              <div
-                                className={`font-heading font-bold text-base leading-tight truncate px-1 py-1 rounded ${
-                                  isMinecraft
-                                    ? "font-minecraft text-black font-black tracking-tight text-[15px] drop-shadow-[0_1px_0_#fff]"
-                                    : isDark
-                                    ? "text-white"
-                                    : "text-black"
-                                }`}
-                              >
-                                {p.name}
-                              </div>
-                            );
-                          })()}
-                          {meta.label ? (
-                            <span className={`nb-badge mt-2 inline-flex items-center gap-1 ${meta.bg}`} data-testid={`profile-status-${p.id}`}>
-                              {StatusIcon && <StatusIcon className="w-3 h-3" strokeWidth={2.5} />}
-                              {meta.label}
-                            </span>
-                          ) : p.equipped_effect === "minecraft" ? (
-                            <div className="flex flex-col items-center gap-1 mt-3">
-                              <span className="font-minecraft text-xs font-black text-white bg-[#2cc5f6] border-2 border-[#0f5c71] px-2 py-0.5 rounded flex items-center gap-1 shadow-xs">
-                                <span>🧔</span> {p.role === "admin" ? "ADMIN" : "ALUNO"}
+                          <div
+                            className={`w-full text-center truncate font-heading font-bold text-base leading-tight px-1 py-0.5 rounded ${
+                              isDarkTheme(p.equipped_effect) ? "text-white" : "text-black"
+                            }`}
+                          >
+                            {p.name}
+                          </div>
+                          <div className="flex flex-col items-center gap-1 mt-2">
+                            {meta.label ? (
+                              <span className={`nb-badge inline-flex items-center gap-1 ${meta.bg}`} data-testid={`profile-status-${p.id}`}>
+                                {StatusIcon && <StatusIcon className="w-3 h-3" strokeWidth={2.5} />}
+                                {meta.label}
                               </span>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center gap-1 mt-2">
+                            ) : (
                               <span className={`nb-badge inline-flex items-center gap-1 ${p.role === "admin" ? "bg-red-200 text-red-950 border-black" : badgeCls}`}>
                                 {p.role === "admin" ? <ShieldCheck className="w-3 h-3" /> : <User className="w-3 h-3" />}
                                 {p.role === "admin" ? "Admin" : "Aluno"}
                               </span>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                         {StatusIcon && (
                           <div className={`absolute -top-2 -right-2 w-9 h-9 nb-card flex items-center justify-center z-20 ${meta.bg}`}>
@@ -275,10 +259,12 @@ export default function LoginPage() {
                     effect={effectClass(selected.equipped_effect)}
                   />
                 </div>
-                <h2 className="font-heading font-black text-2xl text-neutral-900 mb-1">
-                  Olá, {selected.name}!
-                </h2>
-                <div className="flex items-center justify-center gap-2 flex-wrap">
+                <div className="flex justify-center mb-2">
+                  <h2 className="font-heading font-black text-2xl text-neutral-900">
+                    Olá, {selected.name}!
+                  </h2>
+                </div>
+                <div className="flex items-center justify-center gap-2 flex-wrap mt-2">
                   <span className={`nb-badge inline-flex items-center gap-1 ${selected.role === "admin" ? "bg-red-200 text-red-950 border-black" : "bg-sky-200 text-sky-950 border-black"}`}>
                     {selected.role === "admin" ? <ShieldCheck className="w-3 h-3" /> : <User className="w-3 h-3" />}
                     {selected.role === "admin" ? "Admin" : "Aluno"}
@@ -288,7 +274,7 @@ export default function LoginPage() {
 
               <form onSubmit={onSubmit} className="space-y-5" data-testid="login-form">
                 <div>
-                  <label className="block text-sm font-bold text-neutral-900 mb-2">
+                  <label className="block text-sm font-bold mb-2 text-neutral-900">
                     Senha de Acesso
                   </label>
                   <input

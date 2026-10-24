@@ -6,55 +6,8 @@ import { isFramesDisabled } from "@/lib/effects";
  * especificamente para as molduras Bob Esponja e Mentalista.
  * Os outros efeitos não são modificados.
  */
-/**
- * Componente do Bloco de Grama Autêntico do Minecraft (16x16 pixels)
- * Preenche completamente o bloco com a textura frontal/lateral original do Minecraft:
- * topo com grama verde vibrante e raízes escorrendo, e base completa de terra com seixos.
- */
-function MinecraftGrassBlock({ x = 0, y = 0, size = 26, stroke = true, className = "" }) {
-  return (
-    <svg
-      x={x}
-      y={y}
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      style={{ shapeRendering: "crispEdges" }}
-      className={className}
-    >
-      {/* Base de terra preenchendo 100% da área quadrada do bloco */}
-      <rect x="0" y="0" width="16" height="16" fill="#866043" />
-      {/* Textura e seixos de terra (tons escuros e claros) */}
-      <path fill="#5a3c26" d="M9,7h1v1h-1zM3,8h1v1h-1zM13,8h1v1h-1zM7,9h1v1h-1zM3,10h1v1h-1zM12,10h1v1h-1zM6,11h1v1h-1zM10,12h1v1h-1zM15,12h1v1h-1zM3,13h1v1h-1zM7,14h1v1h-1zM13,14h1v1h-1zM1,15h1v1h-1zM6,15h1v1h-1zM10,15h1v1h-1zM15,15h1v1h-1z" />
-      <path fill="#6c4d33" d="M7,3h1v1h-1zM2,4h1v1h-1zM12,4h1v1h-1zM0,5h1v1h-1zM7,5h1v1h-1zM9,5h1v1h-1zM15,5h1v1h-1zM1,6h1v1h-1zM5,6h1v1h-1zM8,6h1v1h-1zM14,6h1v1h-1zM2,7h1v1h-1zM4,7h1v1h-1zM10,7h1v1h-1zM13,7h1v1h-1zM0,8h1v1h-1zM4,8h1v1h-1zM7,8h1v1h-1zM9,8h1v1h-1zM15,8h1v1h-1zM1,9h1v1h-1zM5,9h1v1h-1zM8,9h1v1h-1zM11,9h1v1h-1zM13,9h1v1h-1zM2,10h1v1h-1zM6,10h1v1h-1zM10,10h1v1h-1zM13,10h1v1h-1zM1,11h1v1h-1zM4,11h1v1h-1zM7,11h1v1h-1zM9,11h1v1h-1zM12,11h1v1h-1zM0,12h1v1h-1zM3,12h1v1h-1zM5,12h1v1h-1zM8,12h1v1h-1zM11,12h1v1h-1zM14,12h1v1h-1zM1,13h1v1h-1zM6,13h1v1h-1zM10,13h1v1h-1zM13,13h1v1h-1zM15,13h1v1h-1zM2,14h1v1h-1zM4,14h1v1h-1zM8,14h1v1h-1zM11,14h1v1h-1zM0,15h1v1h-1zM5,15h1v1h-1zM9,15h1v1h-1zM12,15h1v1h-1zM14,15h1v1h-1z" />
-      <path fill="#986f4e" d="M7,4h1v1h-1zM3,5h1v1h-1zM13,5h1v1h-1zM7,6h1v1h-1zM12,6h1v1h-1zM1,7h1v1h-1zM7,7h1v1h-1zM14,7h1v1h-1zM5,8h1v1h-1zM10,8h1v1h-1zM3,9h1v1h-1zM14,9h1v1h-1zM0,10h1v1h-1zM5,10h1v1h-1zM8,10h1v1h-1zM15,10h1v1h-1zM11,11h1v1h-1zM1,12h1v1h-1zM7,12h1v1h-1zM4,13h1v1h-1zM9,13h1v1h-1zM12,13h1v1h-1zM0,14h1v1h-1zM5,14h1v1h-1zM14,14h1v1h-1zM3,15h1v1h-1zM8,15h1v1h-1z" />
-      <path fill="#ab7f5a" d="M6,7h1v1h-1zM11,8h1v1h-1zM2,9h1v1h-1zM9,10h1v1h-1zM14,11h1v1h-1zM2,12h1v1h-1zM8,13h1v1h-1z" />
-      {/* Camadas de grama verde com raízes penduradas */}
-      <path fill="#38591b" d="M15,2h1v1h-1zM2,3h1v1h-1zM12,3h1v1h-1zM9,4h1v1h-1zM1,5h1v1h-1zM5,5h1v1h-1zM11,5h1v1h-1zM4,6h1v1h-1zM10,6h1v1h-1z" />
-      <path fill="#4c7828" d="M2,1h1v1h-1zM7,1h1v1h-1zM10,1h1v1h-1zM15,1h1v1h-1zM0,2h1v1h-1zM6,2h1v1h-1zM11,2h1v1h-1zM1,3h1v1h-1zM6,3h1v1h-1zM9,3h1v1h-1zM15,3h1v1h-1zM1,4h1v1h-1zM5,4h1v1h-1zM11,4h1v1h-1zM14,4h1v1h-1zM4,5h1v1h-1zM10,5h1v1h-1z" />
-      <path fill="#5c8e32" d="M2,0h1v1h-1zM7,0h1v1h-1zM10,0h1v1h-1zM15,0h1v1h-1zM0,1h1v1h-1zM3,1h1v1h-1zM6,1h1v1h-1zM8,1h1v1h-1zM11,1h1v1h-1zM14,1h1v1h-1zM1,2h2v1h-2zM5,2h1v1h-1zM7,2h2v1h-2zM10,2h1v1h-1zM12,2h1v1h-1zM14,2h1v1h-1zM0,3h1v1h-1zM4,3h1v1h-1zM8,3h1v1h-1zM11,3h1v1h-1zM14,3h1v1h-1zM4,4h1v1h-1zM10,4h1v1h-1z" />
-      <path fill="#73a83d" d="M0,0h1v1h-1zM3,0h1v1h-1zM6,0h1v1h-1zM8,0h1v1h-1zM11,0h1v1h-1zM14,0h1v1h-1zM1,1h1v1h-1zM5,1h1v1h-1zM9,1h1v1h-1zM12,1h1v1h-1zM3,2h2v1h-2zM9,2h1v1h-1zM13,2h1v1h-1zM5,3h1v1h-1zM10,3h1v1h-1z" />
-      <path fill="#87c348" d="M1,0h1v1h-1zM5,0h1v1h-1zM9,0h1v1h-1zM12,0h1v1h-1zM4,1h1v1h-1zM13,1h1v1h-1z" />
-      <path fill="#9bd654" d="M4,0h1v1h-1zM13,0h1v1h-1z" />
-      {/* Contorno sutil do bloco cúbico */}
-      {stroke && (
-        <rect
-          x="0"
-          y="0"
-          width="16"
-          height="16"
-          fill="none"
-          stroke="#1f140a"
-          strokeWidth="0.8"
-          opacity="0.85"
-        />
-      )}
-    </svg>
-  );
-}
-
 export default function MolduraArtCenter({ effectId }) {
-  if (!effectId || isFramesDisabled() || effectId === "minecraft") return null;
+  if (!effectId || isFramesDisabled()) return null;
 
   if (effectId === "spongebob") {
     return (
@@ -1000,142 +953,90 @@ export default function MolduraArtCenter({ effectId }) {
     );
   }
 
-  if (effectId === "minecraft") {
+  if (effectId === "valorant") {
     return (
       <div
-        className="absolute inset-0 z-0 overflow-hidden rounded-[12px] pointer-events-none transition-all duration-300"
-        data-testid="art-minecraft"
+        className="absolute inset-0 z-0 overflow-hidden rounded-[14px] pointer-events-none transition-all duration-300"
+        data-testid="art-valorant"
       >
-        {/* Full Card Pixel Art Background matching Screenshot 4 */}
+        {/* Full Tactical Valorant Card Artwork */}
         <svg
           className="absolute inset-0 w-full h-full object-cover"
           viewBox="0 0 200 280"
           preserveAspectRatio="none"
-          style={{ shapeRendering: "crispEdges" }}
           xmlns="http://www.w3.org/2000/svg"
         >
           <defs>
-            {/* Dirt block pattern */}
-            <pattern id="dirtTex" width="16" height="16" patternUnits="userSpaceOnUse">
-              <rect width="16" height="16" fill="#866043" />
-              <rect x="2" y="5" width="2" height="2" fill="#573d26" />
-              <rect x="7" y="6" width="3" height="2" fill="#573d26" />
-              <rect x="12" y="4" width="2" height="2" fill="#9c6d48" />
-              <rect x="1" y="9" width="3" height="2" fill="#573d26" />
-              <rect x="6" y="11" width="2" height="2" fill="#9c6d48" />
-              <rect x="10" y="8" width="3" height="3" fill="#573d26" />
-              <rect x="14" y="10" width="2" height="2" fill="#3d2817" />
-              <rect x="4" y="14" width="3" height="2" fill="#573d26" />
-              <rect x="9" y="13" width="2" height="2" fill="#9c6d48" />
+            {/* Tactical dot grid pattern */}
+            <pattern id="valDotGrid" width="10" height="10" patternUnits="userSpaceOnUse">
+              <circle cx="2" cy="2" r="0.8" fill="#ff4655" opacity="0.25" />
             </pattern>
-            {/* Stone pattern */}
-            <pattern id="stoneTex" width="16" height="16" patternUnits="userSpaceOnUse">
-              <rect width="16" height="16" fill="#737373" />
-              <rect x="2" y="3" width="2" height="2" fill="#525252" />
-              <rect x="9" y="7" width="2" height="2" fill="#525252" />
-              <rect x="4" y="11" width="3" height="2" fill="#a3a3a3" />
-              <rect x="12" y="13" width="2" height="2" fill="#525252" />
-            </pattern>
+            {/* Valorant Crimson Gradient */}
+            <linearGradient id="valCrimson" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#ff4655" stopOpacity="0.8" />
+              <stop offset="100%" stopColor="#b31928" stopOpacity="0.4" />
+            </linearGradient>
+            {/* Radiant Cyan Glow */}
+            <linearGradient id="valRadiant" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#00f0ff" stopOpacity="0.8" />
+              <stop offset="100%" stopColor="#ff4655" stopOpacity="0.6" />
+            </linearGradient>
           </defs>
 
-          {/* 1. Upper Dirt Block Section (0px to 195px) */}
-          <rect x="0" y="0" width="200" height="195" fill="url(#dirtTex)" />
+          {/* Deep Carbon Base Background */}
+          <rect width="200" height="280" fill="#0f1923" />
+          <rect width="200" height="280" fill="url(#valDotGrid)" />
 
-          {/* Top Grass Rim & Dripping Grass Roots */}
-          <rect x="0" y="0" width="200" height="16" fill="#5c8e32" />
-          <rect x="0" y="0" width="200" height="4" fill="#7cbd3a" />
-          {/* Grass roots dripping down */}
-          <rect x="10" y="16" width="12" height="8" fill="#5c8e32" />
-          <rect x="35" y="16" width="16" height="12" fill="#5c8e32" />
-          <rect x="65" y="16" width="10" height="6" fill="#5c8e32" />
-          <rect x="90" y="16" width="18" height="10" fill="#5c8e32" />
-          <rect x="125" y="16" width="14" height="8" fill="#5c8e32" />
-          <rect x="155" y="16" width="20" height="12" fill="#5c8e32" />
-          <rect x="185" y="16" width="10" height="6" fill="#5c8e32" />
-
-          {/* Sprouting 3D Grass Blades & Yellow Dandelions on Top Edge */}
-          <g transform="translate(18, -6)">
-            <rect x="0" y="2" width="3" height="6" fill="#5c8e32" />
-            <rect x="3" y="0" width="3" height="8" fill="#7cbd3a" />
-            <rect x="6" y="3" width="3" height="5" fill="#5c8e32" />
-            <rect x="12" y="-2" width="4" height="4" fill="#facc15" />
-            <rect x="13" y="2" width="2" height="6" fill="#4a7c29" />
-          </g>
-          <g transform="translate(95, -6)">
-            <rect x="0" y="2" width="3" height="6" fill="#5c8e32" />
-            <rect x="3" y="0" width="3" height="8" fill="#7cbd3a" />
-            <rect x="6" y="3" width="3" height="5" fill="#5c8e32" />
-            <rect x="12" y="-2" width="4" height="4" fill="#facc15" />
-            <rect x="13" y="2" width="2" height="6" fill="#4a7c29" />
-          </g>
-          <g transform="translate(160, -6)">
-            <rect x="0" y="2" width="3" height="6" fill="#5c8e32" />
-            <rect x="3" y="0" width="3" height="8" fill="#7cbd3a" />
-            <rect x="6" y="3" width="3" height="5" fill="#5c8e32" />
-            <rect x="12" y="-2" width="4" height="4" fill="#facc15" />
-            <rect x="13" y="2" width="2" height="6" fill="#4a7c29" />
+          {/* Valorant Geometric "V" Emblem in Center/Background */}
+          <g transform="translate(100, 110) scale(0.65)" opacity="0.18">
+            <polygon points="0,65 -55,-35 -30,-35 0,25 30,-35 55,-35" fill="#ff4655" />
+            <polygon points="0,45 -35,-20 -20,-20 0,15 20,-20 35,-20" fill="#ece8e1" />
           </g>
 
-          {/* 2. Lower Stone Section (195px to 280px) */}
-          <rect x="0" y="195" width="200" height="85" fill="url(#stoneTex)" />
-          <rect x="0" y="195" width="200" height="3" fill="#3f3f3f" />
-
-          {/* Left Side: Diamond Ore Specks */}
-          <g fill="#2cc5f6">
-            <rect x="12" y="210" width="9" height="5" />
-            <rect x="25" y="220" width="12" height="6" />
-            <rect x="8" y="235" width="14" height="5" />
-            <rect x="30" y="245" width="9" height="6" />
-            <rect x="18" y="260" width="15" height="5" />
-            <rect x="42" y="215" width="7" height="5" />
-            <rect x="45" y="238" width="10" height="5" />
-          </g>
-          <g fill="#8bf0ff">
-            <rect x="14" y="211" width="3" height="2" />
-            <rect x="27" y="221" width="4" height="2" />
-            <rect x="10" y="236" width="4" height="2" />
-            <rect x="32" y="246" width="3" height="2" />
+          {/* Tactical Target Reticle behind Avatar (Center around x:100, y:52) */}
+          <g transform="translate(100, 52)" stroke="#ff4655" strokeWidth="1" fill="none" opacity="0.5">
+            <circle cx="0" cy="0" r="42" strokeDasharray="6 4" opacity="0.7" />
+            <circle cx="0" cy="0" r="46" stroke="#00f0ff" strokeWidth="0.8" strokeDasharray="3 8" opacity="0.8" />
+            {/* Crosshair ticks */}
+            <line x1="-50" y1="0" x2="-44" y2="0" strokeWidth="2" />
+            <line x1="44" y1="0" x2="50" y2="0" strokeWidth="2" />
+            <line x1="0" y1="-50" x2="0" y2="-44" strokeWidth="2" />
+            <line x1="0" y1="44" x2="0" y2="50" strokeWidth="2" />
+            {/* 45 degree tactical ticks */}
+            <line x1="-33" y1="-33" x2="-29" y2="-29" stroke="#00f0ff" strokeWidth="1.5" />
+            <line x1="33" y1="-33" x2="29" y2="-29" stroke="#00f0ff" strokeWidth="1.5" />
+            <line x1="-33" y1="33" x2="-29" y2="29" stroke="#00f0ff" strokeWidth="1.5" />
+            <line x1="33" y1="33" x2="29" y2="29" stroke="#00f0ff" strokeWidth="1.5" />
           </g>
 
-          {/* Right Side: Gold Ore Specks */}
-          <g fill="#facc15">
-            <rect x="145" y="210" width="10" height="5" />
-            <rect x="165" y="222" width="14" height="6" />
-            <rect x="135" y="235" width="11" height="5" />
-            <rect x="172" y="245" width="10" height="6" />
-            <rect x="150" y="258" width="15" height="5" />
-            <rect x="180" y="215" width="8" height="5" />
-          </g>
-          <g fill="#fef08a">
-            <rect x="147" y="211" width="3" height="2" />
-            <rect x="167" y="223" width="4" height="2" />
-            <rect x="137" y="236" width="3" height="2" />
+          {/* Top Tactical Text HUD */}
+          <text x="12" y="16" fill="#ece8e1" fontSize="7" fontFamily="monospace" fontWeight="900" letterSpacing="1.5" opacity="0.75">
+            // VALORANT PROTOCOL
+          </text>
+          <text x="12" y="24" fill="#ff4655" fontSize="6" fontFamily="monospace" fontWeight="900" letterSpacing="1" opacity="0.8">
+            RADIANITE // 01
+          </text>
+
+          {/* Tactical Corner Crosshairs "+" */}
+          <g stroke="#ff4655" strokeWidth="1.5" opacity="0.7">
+            {/* Top-left */}
+            <line x1="8" y1="32" x2="16" y2="32" />
+            <line x1="12" y1="28" x2="12" y2="36" />
+            {/* Bottom-right */}
+            <line x1="184" y1="248" x2="192" y2="248" />
+            <line x1="188" y1="244" x2="188" y2="252" />
           </g>
 
-          {/* Oak Wood Sign Plaque (Behind name in center) */}
-          <g transform="translate(12, 140)">
-            <rect x="0" y="0" width="176" height="38" fill="#54381d" stroke="#28190c" strokeWidth="2" rx="2" />
-            <line x1="4" y1="10" x2="172" y2="10" stroke="#3b2612" strokeWidth="1" />
-            <line x1="4" y1="22" x2="172" y2="22" stroke="#3b2612" strokeWidth="1" />
-            <line x1="4" y1="30" x2="172" y2="30" stroke="#3b2612" strokeWidth="1" />
-            <rect x="4" y="4" width="3" height="3" fill="#28190c" />
-            <rect x="169" y="4" width="3" height="3" fill="#28190c" />
-            <rect x="4" y="31" width="3" height="3" fill="#28190c" />
-            <rect x="169" y="31" width="3" height="3" fill="#28190c" />
+          {/* Bottom Tactical Status Stripe */}
+          <g transform="translate(10, 240)">
+            <rect x="0" y="0" width="180" height="2" fill="url(#valRadiant)" />
+            <text x="4" y="14" fill="#ece8e1" fontSize="7" fontFamily="monospace" fontWeight="900" letterSpacing="1" opacity="0.75">
+              SYSTEM // READY
+            </text>
+            <text x="125" y="14" fill="#00f0ff" fontSize="7" fontFamily="monospace" fontWeight="900" letterSpacing="1" opacity="0.85">
+              RADIANT
+            </text>
           </g>
-
-          {/* Center Bottom: Diamond Block Badge Plaque Frame */}
-          <g transform="translate(68, 202)">
-            <rect x="0" y="0" width="64" height="64" fill="#2cc5f6" stroke="#0f5c71" strokeWidth="3" rx="4" />
-            <rect x="3" y="3" width="58" height="58" fill="none" stroke="#7fe3d9" strokeWidth="2" />
-            <rect x="6" y="6" width="52" height="52" fill="#25b2e0" />
-            <line x1="6" y1="32" x2="58" y2="32" stroke="#128aa8" strokeWidth="2" />
-            <line x1="32" y1="6" x2="32" y2="58" stroke="#128aa8" strokeWidth="2" />
-          </g>
-
-          {/* Overall 3D Dark Bevel Border around card */}
-          <rect x="0" y="0" width="200" height="280" fill="none" stroke="#1a0f0a" strokeWidth="4" />
-          <rect x="2" y="2" width="196" height="276" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
         </svg>
       </div>
     );

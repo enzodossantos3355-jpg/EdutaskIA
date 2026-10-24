@@ -21,6 +21,7 @@ export default function AvatarUploader({
   effect = null,
   compact = false,
   showLabelButtons = true,
+  square = false,
 }) {
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -156,6 +157,7 @@ export default function AvatarUploader({
           bg={bg}
           tierBorderColor={tierBorderColor}
           effect={effect}
+          square={square || effect === "fx-minecraft" || effect === "minecraft"}
         />
 
         {/* Action icons directly on avatar badge */}

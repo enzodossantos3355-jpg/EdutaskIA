@@ -119,20 +119,19 @@ export const DEFAULT_EFFECTS = {
     avatarTextColor: "#fecdd3",
     dashboardBannerClass: "bg-rose-200 border-2 border-black text-black shadow-[4px_4px_0_0_#000]",
   },
-  minecraft: {
-    id: "minecraft",
-    name: "Moldura Minecraft",
-    emoji: "🟩",
-    description: "Autêntico bloco de grama do Minecraft preenchendo completamente o perfil com textura 16x16 pixel-art clássica de grama e terra.",
+  valorant: {
+    id: "valorant",
+    name: "Moldura Valorant",
+    emoji: "🎯",
+    description: "Estilo tático e futurista do Valorant com visual Radiant, cortes geométricos angulares, vermelho escarlate (#ff4655), preto carbono (#0f1923), detalhes cibernéticos e mira tática!",
     cost: 320,
-    rarity: "epic",
-    avatarEffect: "fx-minecraft",
-    cardClass: "card-moldura-minecraft text-white",
-    badgeClass: "badge-minecraft",
-    avatarBg: "bg-emerald-950",
-    avatarBgHex: "#064e3b",
-    avatarTextColor: "#86efac",
-    dashboardBannerClass: "moldura-minecraft-banner",
+    rarity: "legendary",
+    avatarEffect: "fx-valorant",
+    cardClass: "card-moldura-valorant border-2 text-white",
+    badgeClass: "bg-red-600 text-white border-black font-bold",
+    avatarBg: "bg-[#0f1923]",
+    avatarBgHex: "#0f1923",
+    avatarTextColor: "#ff4655",
   },
   neon_pulse: {
     id: "neon_pulse",
@@ -351,7 +350,7 @@ export function isFramesDisabled() {
 
 export function getEffect(effectId) {
   if (globalFramesDisabled) return DEFAULT_EFFECTS.none;
-  if (!effectId || effectId === "minecraft") return DEFAULT_EFFECTS.none;
+  if (!effectId) return DEFAULT_EFFECTS.none;
   return DEFAULT_EFFECTS[effectId] || DEFAULT_EFFECTS.none;
 }
 
@@ -385,11 +384,11 @@ export const DARK_THEME_IDS = new Set([
   "phoenix",
   "emerald_forest",
   "neon_pulse",
-  "minecraft",
+  "valorant",
 ]);
 
 export function isDarkTheme(effectId) {
-  if (globalFramesDisabled || !effectId || effectId === "minecraft") return false;
+  if (globalFramesDisabled || !effectId) return false;
   return DARK_THEME_IDS.has(effectId);
 }
 
@@ -397,7 +396,7 @@ export const getTheme = getEffect;
 
 export function getThemeByEffectOrId(effectOrId) {
   if (globalFramesDisabled) return DEFAULT_EFFECTS.none;
-  if (!effectOrId || effectOrId === "none" || effectOrId === "minecraft") return DEFAULT_EFFECTS.none;
+  if (!effectOrId || effectOrId === "none") return DEFAULT_EFFECTS.none;
   if (DEFAULT_EFFECTS[effectOrId]) return DEFAULT_EFFECTS[effectOrId];
   const found = Object.values(DEFAULT_EFFECTS).find(
     (e) => e.avatarEffect === effectOrId || e.id === effectOrId

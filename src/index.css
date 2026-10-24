@@ -678,181 +678,49 @@ h4,
   background-color: #450a0a !important;
 }
 
-/* Minecraft — Bloco de Grama Clássico Pixel Art (Topo Grama Verde + Terra) */
-.font-minecraft {
-  font-family: 'Silkscreen', 'Press Start 2P', monospace;
-}
-
-@keyframes fx-minecraft-pulse {
+/* ==========================================================================
+   Valorant — Moldura Tática Radiant Protocol (#ff4655 + #0f1923 + #00f0ff)
+   ========================================================================== */
+@keyframes fx-valorant-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 3px #5c8e32, 0 0 16px 4px rgba(92, 142, 50, 0.85);
-    transform: scale(1);
+    box-shadow: 0 0 0 3px #ff4655, 0 0 20px 4px rgba(255, 70, 85, 0.8), 0 0 35px rgba(0, 240, 255, 0.4);
   }
   50% {
-    box-shadow: 0 0 0 4.5px #7cbd3a, 0 0 24px 8px rgba(124, 189, 58, 1);
-    transform: scale(1.025);
+    box-shadow: 0 0 0 4.5px #00f0ff, 0 0 28px 8px rgba(0, 240, 255, 0.85), 0 0 45px rgba(255, 70, 85, 0.6);
   }
 }
 
-.fx-minecraft {
+.fx-valorant {
   padding: 3.5px;
-  background: conic-gradient(from 0deg, #5c8e32, #7cbd3a, #866043, #573d26, #5c8e32);
+  background: conic-gradient(from 45deg, #ff4655, #0f1923, #00f0ff, #ff4655, #ffd700, #ff4655);
   border-radius: 50%;
-  animation: fx-minecraft-pulse 2s ease-in-out infinite, fx-spin 6s linear infinite;
+  animation: fx-valorant-pulse 2.2s ease-in-out infinite, fx-spin 8s linear infinite;
 }
-.fx-minecraft > * { border-radius: 50%; }
+.fx-valorant > * {
+  border-radius: 50%;
+}
 
-/* Card Minecraft no Grid de Perfis — Bloco de Grama 16x16 Pixel Art Autêntico */
-.card-moldura-minecraft {
-  background-color: #866043 !important;
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges"><rect width="16" height="16" fill="%23866043"/><rect x="2" y="5" width="2" height="2" fill="%23573d26"/><rect x="7" y="6" width="3" height="2" fill="%23573d26"/><rect x="12" y="4" width="2" height="2" fill="%239c6d48"/><rect x="1" y="9" width="3" height="2" fill="%23573d26"/><rect x="6" y="11" width="2" height="2" fill="%239c6d48"/><rect x="10" y="8" width="3" height="3" fill="%23573d26"/><rect x="14" y="10" width="2" height="2" fill="%233d2817"/><rect x="4" y="14" width="3" height="2" fill="%23573d26"/><rect x="9" y="13" width="2" height="2" fill="%239c6d48"/><rect x="1" y="3" width="1" height="1" fill="%23708090"/><rect x="8" y="10" width="1" height="1" fill="%23708090"/><rect x="0" y="0" width="16" height="3" fill="%235c8e32"/><rect x="1" y="3" width="1" height="1" fill="%234a7c29"/><rect x="3" y="3" width="1" height="2" fill="%235c8e32"/><rect x="5" y="3" width="1" height="1" fill="%234a7c29"/><rect x="7" y="3" width="1" height="2" fill="%235c8e32"/><rect x="10" y="3" width="1" height="1" fill="%234a7c29"/><rect x="12" y="3" width="1" height="2" fill="%235c8e32"/><rect x="14" y="3" width="1" height="1" fill="%234a7c29"/><rect x="0" y="0" width="16" height="1" fill="%237cbd3a"/></svg>') !important;
-  background-size: 100% 100% !important;
-  background-repeat: no-repeat !important;
-  image-rendering: pixelated !important;
-  border: 4px solid #1f140a !important;
-  border-radius: 12px !important;
+/* Preenchimento do Bloco na Tela de Seleção — Visual Tático Carbon Black + Crimson Red */
+.card-moldura-valorant {
+  background: #0f1923 !important;
+  border-color: #ff4655 !important;
   color: #ffffff !important;
-  box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.25), inset -2px -2px 0 rgba(0, 0, 0, 0.6), 4px 4px 0 0 #000000 !important;
-  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
+  box-shadow: 0 0 20px rgba(255, 70, 85, 0.45), 4px 4px 0px 0px rgba(0, 0, 0, 1) !important;
 }
 
-.card-moldura-minecraft .font-heading,
-.card-moldura-minecraft span,
-.card-moldura-minecraft p {
-  color: #ffffff !important;
-  text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000 !important;
-  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
+.card-moldura-valorant:hover {
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.6), 4px 4px 0px 0px rgba(0, 0, 0, 1) !important;
 }
 
-.card-moldura-minecraft [data-testid^="avatar-"]:not(:has(img)) {
-  background-color: #2a1a0a !important;
-  border: 3px solid #7cbd3a !important;
-  box-shadow: inset 0 0 8px rgba(0,0,0,0.8) !important;
-}
-
-.badge-minecraft {
-  background: #5c8e32 !important;
-  color: #ffffff !important;
-  border: 2px solid #1f140a !important;
-  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
-  text-shadow: 1px 1px 0 #000 !important;
-  box-shadow: inset 0 2px 0 #7cbd3a, 2px 2px 0 #000000 !important;
-  padding: 0.2rem 0.6rem !important;
-  border-radius: 4px !important;
-}
-
-/* Banner de Perfil do Aluno com Bloco de Grama */
-.moldura-minecraft-banner {
-  background-color: #866043 !important;
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges"><rect width="16" height="16" fill="%23866043"/><rect x="2" y="5" width="2" height="2" fill="%23573d26"/><rect x="7" y="6" width="3" height="2" fill="%23573d26"/><rect x="12" y="4" width="2" height="2" fill="%239c6d48"/><rect x="1" y="9" width="3" height="2" fill="%23573d26"/><rect x="6" y="11" width="2" height="2" fill="%239c6d48"/><rect x="10" y="8" width="3" height="3" fill="%23573d26"/><rect x="14" y="10" width="2" height="2" fill="%233d2817"/><rect x="4" y="14" width="3" height="2" fill="%23573d26"/><rect x="9" y="13" width="2" height="2" fill="%239c6d48"/><rect x="1" y="3" width="1" height="1" fill="%23708090"/><rect x="8" y="10" width="1" height="1" fill="%23708090"/><rect x="0" y="0" width="16" height="3" fill="%235c8e32"/><rect x="1" y="3" width="1" height="1" fill="%234a7c29"/><rect x="3" y="3" width="1" height="2" fill="%235c8e32"/><rect x="5" y="3" width="1" height="1" fill="%234a7c29"/><rect x="7" y="3" width="1" height="2" fill="%235c8e32"/><rect x="10" y="3" width="1" height="1" fill="%234a7c29"/><rect x="12" y="3" width="1" height="2" fill="%235c8e32"/><rect x="14" y="3" width="1" height="1" fill="%234a7c29"/><rect x="0" y="0" width="16" height="1" fill="%237cbd3a"/></svg>') !important;
-  background-size: 100% 100% !important;
-  background-repeat: no-repeat !important;
-  image-rendering: pixelated !important;
-  border: 4px solid #1f140a !important;
-  border-radius: 12px !important;
-  color: #ffffff !important;
-  box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.25), inset -2px -2px 0 rgba(0, 0, 0, 0.6), 5px 5px 0 0 #000000 !important;
-  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
-}
-
-.moldura-minecraft-banner p,
-.moldura-minecraft-banner span,
-.moldura-minecraft-banner h1,
-.moldura-minecraft-banner h2,
-.moldura-minecraft-banner h3 {
-  color: #ffffff !important;
-  text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000 !important;
-}
-
-/* Botões Estilo Minecraft (Prismarine, Diamante, Pedra, Madeira, Esmeralda) */
-.btn-minecraft-diamond {
-  background: #2cc5f6 !important;
-  color: #000000 !important;
-  border: 2px solid #000000 !important;
-  box-shadow: inset 0 2px 0 #8be7ff, 0 3px 0 #128aa8, 0 5px 0 #000000 !important;
-  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
-  border-radius: 4px !important;
-  transition: transform 0.1s ease-out !important;
-}
-.btn-minecraft-diamond:hover {
-  background: #4cd2fd !important;
-}
-.btn-minecraft-diamond:active {
-  transform: translateY(2px) !important;
-  box-shadow: inset 0 2px 0 #8be7ff, 0 1px 0 #128aa8, 0 3px 0 #000000 !important;
-}
-
-.btn-minecraft-prismarine {
-  background: #58baa3 !important;
-  color: #000000 !important;
-  border: 2px solid #000000 !important;
-  box-shadow: inset 0 2px 0 #8be0cb, 0 3px 0 #2b7362, 0 5px 0 #000000 !important;
-  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
-  border-radius: 4px !important;
-  transition: transform 0.1s ease-out !important;
-}
-.btn-minecraft-prismarine:hover {
-  background: #68cbb4 !important;
-}
-.btn-minecraft-prismarine:active {
-  transform: translateY(2px) !important;
-  box-shadow: inset 0 2px 0 #8be0cb, 0 1px 0 #2b7362, 0 3px 0 #000000 !important;
-}
-
-.btn-minecraft-wood {
-  background: #54381d !important;
-  color: #ebd1a9 !important;
-  border: 2px solid #000000 !important;
-  box-shadow: inset 0 2px 0 #7a542e, 0 3px 0 #28190c, 0 5px 0 #000000 !important;
-  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
-  border-radius: 4px !important;
-  transition: transform 0.1s ease-out !important;
-}
-.btn-minecraft-wood:hover {
-  background: #664525 !important;
-}
-.btn-minecraft-wood:active {
-  transform: translateY(2px) !important;
-  box-shadow: inset 0 2px 0 #7a542e, 0 1px 0 #28190c, 0 3px 0 #000000 !important;
-}
-
-.btn-minecraft-stone {
-  background: #3b2f21 !important;
-  color: #ebd1a9 !important;
-  border: 2px solid #000000 !important;
-  box-shadow: inset 0 2px 0 #574632, 0 3px 0 #1e1710, 0 5px 0 #000000 !important;
-  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
-  border-radius: 4px !important;
-  transition: transform 0.1s ease-out !important;
-}
-.btn-minecraft-stone:hover {
-  background: #4a3c2c !important;
-}
-.btn-minecraft-stone:active {
-  transform: translateY(2px) !important;
-  box-shadow: inset 0 2px 0 #574632, 0 1px 0 #1e1710, 0 3px 0 #000000 !important;
-}
-
-.btn-minecraft-emerald {
-  background: #22c55e !important;
-  color: #000000 !important;
-  border: 2px solid #000000 !important;
-  box-shadow: inset 0 2px 0 #86efac, 0 3px 0 #15803d, 0 5px 0 #000000 !important;
-  font-family: 'Silkscreen', 'Press Start 2P', monospace !important;
-  border-radius: 4px !important;
-  transition: transform 0.1s ease-out !important;
-}
-.btn-minecraft-emerald:hover {
-  background: #34d399 !important;
-}
-.btn-minecraft-emerald:active {
-  transform: translateY(2px) !important;
-  box-shadow: inset 0 2px 0 #86efac, 0 1px 0 #15803d, 0 3px 0 #000000 !important;
+/* Garante que nenhum tema aumente o tamanho original dos blocos no grid de seleção */
+[data-testid="profiles-grid"] > button {
+  min-height: 184px;
 }
 
 /* Painel de perfil e cabeçalho mantêm as letras em preto */
-[data-testid="my-profile-banner"]:not(.moldura-minecraft-banner) p,
-[data-testid="my-profile-banner"]:not(.moldura-minecraft-banner) span {
+[data-testid="my-profile-banner"] p,
+[data-testid="my-profile-banner"] span {
   color: #000000 !important;
 }
 
@@ -872,7 +740,7 @@ h4,
 [data-testid="profiles-grid"] .card-moldura-phoenix .font-heading,
 [data-testid="profiles-grid"] .card-moldura-emerald .font-heading,
 [data-testid="profiles-grid"] .card-moldura-neon .font-heading,
-[data-testid="profiles-grid"] .card-moldura-minecraft .font-heading {
+[data-testid="profiles-grid"] .card-moldura-valorant .font-heading {
   color: #ffffff !important;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }

@@ -18,6 +18,7 @@ export default function Avatar({
   // eslint-disable-next-line no-unused-vars
   tierBorderColor = null,
   effect = null,
+  square = false,
 }) {
   const [src, setSrc] = useState(null);
   const [errored, setErrored] = useState(false);
@@ -41,15 +42,17 @@ export default function Avatar({
   const avatarBg = showImage ? "bg-white" : theme?.avatarBg || bg;
   const avatarBgHex = !showImage ? theme?.avatarBgHex : undefined;
   const initialColor = theme?.avatarTextColor || "#0a0a0a";
+  const isSquare = square;
 
   const inner = (
     <div
-      className={`flex items-center justify-center overflow-hidden rounded-full border-2 border-black ${avatarBg} ${className}`}
+      className={`flex items-center justify-center overflow-hidden border-2 border-black ${isSquare ? "rounded-none" : "rounded-full"} ${avatarBg} ${className}`}
       style={{
         width: size,
         height: size,
-        boxShadow: "3px 3px 0 0 #0a0a0a",
+        boxShadow: isSquare ? "none" : "3px 3px 0 0 #0a0a0a",
         backgroundColor: avatarBgHex || undefined,
+        borderRadius: isSquare ? 0 : undefined,
       }}
       data-testid={`avatar-${userId}`}
     >
@@ -58,7 +61,8 @@ export default function Avatar({
           src={src}
           alt={name}
           onError={() => setErrored(true)}
-          className="w-full h-full object-cover rounded-full"
+          className={`w-full h-full object-cover ${isSquare ? "rounded-none" : "rounded-full"}`}
+          style={{ borderRadius: isSquare ? 0 : undefined }}
           draggable={false}
         />
       ) : (
@@ -79,8 +83,8 @@ export default function Avatar({
   if (!effect || effect === "none") return inner;
   return (
     <div
-      className={`fx-avatar-wrapper ${effect}`}
-      style={{ width: size + 10, height: size + 10 }}
+      className={`fx-avatar-wrapper ${effect} ${isSquare ? "rounded-none" : ""}`}
+      style={{ width: size + 10, height: size + 10, borderRadius: isSquare ? 0 : undefined }}
       data-testid={`avatar-effect-${userId}`}
     >
       {inner}

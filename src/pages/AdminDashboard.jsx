@@ -20,6 +20,7 @@ import WhatsAppConfigPanel from "@/components/WhatsAppConfigPanel";
 import WhatsAppDispatchDialog from "@/components/WhatsAppDispatchDialog";
 import ZipDataTransferPanel from "@/components/ZipDataTransferPanel";
 import StudentButtonsPanel from "@/components/StudentButtonsPanel";
+import AnnualRankingPanel from "@/components/AnnualRankingPanel";
 import { useAIStatus } from "@/context/AIStatusContext";
 import { effectClass, pullScreenToStore } from "@/lib/effects";
 import { getPriority, formatDateBR } from "@/lib/priority";
@@ -167,6 +168,14 @@ export default function AdminDashboard() {
             <Link2 className="w-4 h-4 inline mr-1.5 sm:mr-2 text-indigo-950" /> Botões dos Alunos 🔗
           </button>
           <button
+            onClick={() => setTab("ranking_annual")}
+            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "ranking_annual" ? "bg-amber-400 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"}`}
+            data-testid="tab-ranking-annual"
+            title="Ranking Anual dos Alunos e Controle do Ano Letivo"
+          >
+            <Trophy className="w-4 h-4 inline mr-1.5 sm:mr-2 text-amber-950" /> Ranking Anual 🏆
+          </button>
+          <button
             onClick={() => setTab("zip_transfer")}
             className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "zip_transfer" ? "bg-sky-300 font-bold" : "bg-white"}`}
             data-testid="tab-zip-transfer"
@@ -182,6 +191,7 @@ export default function AdminDashboard() {
         {tab === "stats" && <StatsPanel />}
         {tab === "firmware" && <FirmwarePanel />}
         {tab === "ai" && <AIAdminPanel />}
+        {tab === "ranking_annual" && <AnnualRankingPanel />}
         {tab === "store" && !framesDisabled && <StoreEffects />}
         {tab === "whatsapp" && <WhatsAppConfigPanel />}
         {tab === "buttons" && <StudentButtonsPanel />}

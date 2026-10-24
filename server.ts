@@ -271,7 +271,7 @@ const DEFAULT_EFFECTS = [
   { id: 'one_piece', name: 'Moldura One Piece', emoji: '🏴‍☠️', description: 'Moldura épica do Rei dos Piratas com cartaz Wanted, bússola náutica, ondas do Grand Line e moedas de ouro de tesouro!', cost: 280, css: 'fx-one-piece', rarity: 'epic' },
   { id: 'chemistry_lab', name: 'Moldura Laboratório Químico', emoji: '🧪', description: 'Moldura científica de química com frascos erlenmeyer borbulhantes, neon esmeralda bioluminescente, fitas moleculares e reações atômicas!', cost: 240, css: 'fx-chemistry-lab', rarity: 'rare' },
   { id: 'japan', name: 'Moldura Japão Tradicional', emoji: '⛩️', description: 'Moldura zen do Japão imperial com o majestoso Monte Fuji, portal Torii carmesim, galhos e pétalas de sakura e lanternas orientais!', cost: 300, css: 'fx-japan', rarity: 'epic' },
-  { id: 'minecraft', name: 'Moldura Minecraft', emoji: '🟩', description: 'Autêntico bloco de grama do Minecraft preenchendo completamente o perfil com textura 16x16 pixel-art clássica de grama e terra.', cost: 320, css: 'fx-minecraft', rarity: 'epic' },
+  { id: 'valorant', name: 'Moldura Valorant', emoji: '🎯', description: 'Estilo tático e futurista do Valorant com visual Radiant, cortes geométricos angulares, vermelho escarlate (#ff4655), preto carbono (#0f1923), detalhes cibernéticos e mira tática!', cost: 320, css: 'fx-valorant', rarity: 'legendary' },
   { id: 'neon_pulse', name: 'Moldura Neon Pulse', emoji: '💠', description: 'Halo azul pulsante futurista que envolve todo o bloco do perfil.', cost: 50, css: 'fx-neon-pulse', rarity: 'common' },
   { id: 'sunset', name: 'Moldura Pôr do Sol', emoji: '🌅', description: 'Borda giratória em degradê laranja e rosa quente com brilho solar envolvente.', cost: 80, css: 'fx-sunset', rarity: 'common' },
   { id: 'golden', name: 'Moldura Ouro Imperial', emoji: '🥇', description: 'Borda dourada reluzente com rotação e brilho nobre.', cost: 150, css: 'fx-golden', rarity: 'rare' },
@@ -609,6 +609,20 @@ class Database {
   ai_enabled: boolean = true;
   ai_hidden: boolean = false;
   frames_disabled: boolean = false;
+  annual_cycle: {
+    active_year: number;
+    is_closed: boolean;
+    closed_at: string | null;
+  } = {
+    active_year: 2026,
+    is_closed: false,
+    closed_at: null,
+  };
+  annual_history: Array<{
+    year: number;
+    closed_at: string;
+    rankings: any[];
+  }> = [];
   ai_model: string = 'gemini-3.8-flash';
   webhook_logs: any[] = [];
   task_student_answers: Map<string, GeneratedTaskAnswer> = new Map();
@@ -760,6 +774,8 @@ class Database {
         if (settings.ai_enabled !== undefined) this.ai_enabled = settings.ai_enabled;
         if (settings.ai_hidden !== undefined) this.ai_hidden = settings.ai_hidden;
         if (settings.frames_disabled !== undefined) this.frames_disabled = settings.frames_disabled;
+        if (settings.annual_cycle) this.annual_cycle = settings.annual_cycle;
+        if (settings.annual_history) this.annual_history = settings.annual_history;
       } else {
         await firebaseService.saveSettings('system', {
           monthly_prize: this.monthly_prize,
@@ -770,6 +786,8 @@ class Database {
           ai_enabled: this.ai_enabled,
           ai_hidden: this.ai_hidden,
           frames_disabled: this.frames_disabled,
+          annual_cycle: this.annual_cycle,
+          annual_history: this.annual_history,
           ai_model: this.ai_model,
         });
       }
@@ -826,6 +844,8 @@ class Database {
         ai_enabled: this.ai_enabled,
         ai_hidden: this.ai_hidden,
         frames_disabled: this.frames_disabled,
+        annual_cycle: this.annual_cycle,
+        annual_history: this.annual_history,
         ai_model: this.ai_model,
         task_student_answers: Array.from(this.task_student_answers.entries()),
       };
@@ -857,10 +877,15 @@ class Database {
         if (data.ai_enabled !== undefined) this.ai_enabled = data.ai_enabled;
         if (data.ai_hidden !== undefined) this.ai_hidden = data.ai_hidden;
         if (data.frames_disabled !== undefined) this.frames_disabled = data.frames_disabled;
+        if (data.annual_cycle) this.annual_cycle = data.annual_cycle;
+        if (data.annual_history) this.annual_history = data.annual_history;
         if (data.ai_model) this.ai_model = data.ai_model;
         if (data.task_student_answers) this.task_student_answers = new Map(data.task_student_answers);
         // Ensure admin does not have a trivial '123' password
         for (const u of this.users.values()) {
+          if (u.equipped_effect === 'minecraft') {
+            u.equipped_effect = 'valorant';
+          }
           if (u.role === 'admin' && (u.password_plain === '123' || !u.password_hash)) {
             const adminPass = process.env.ADMIN_PASSWORD || 'enzo123cg';
             u.password_plain = adminPass;
@@ -2812,6 +2837,149 @@ api.post('/student-buttons/:btn_id/click', requireAuth, (req, res) => {
     db.saveToDisk();
   }
   res.json({ ok: true, clicks: btn?.click_count || 0 });
+});
+
+// ---------------------------------------------------------------------------
+// General App Status & Annual Ranking (Ranking Anual)
+// ---------------------------------------------------------------------------
+api.get('/app-status', (req, res) => {
+  res.json({
+    annual_cycle: db.annual_cycle || { active_year: 2026, is_closed: false, closed_at: null },
+    frames_disabled: db.frames_disabled || false,
+    ai_enabled: db.ai_enabled || false,
+  });
+});
+
+api.get('/ranking/annual', requireAuth, (req, res) => {
+  const annual_cycle = db.annual_cycle || { active_year: 2026, is_closed: false, closed_at: null };
+  const annual_history = db.annual_history || [];
+
+  const students = Array.from(db.users.values()).filter((u) => u.role === 'aluno');
+  const allTasks = Array.from(db.tasks.values());
+
+  const rankings = students.map((s) => {
+    const completions = db.completions.filter((c) => c.user_id === s.id);
+    const completedTaskIds = new Set(completions.map((c) => c.task_id));
+    const completed_tasks = completedTaskIds.size;
+
+    const assignedTasks = allTasks.filter((t) => !t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
+    const pending_tasks = assignedTasks.filter((t) => !completedTaskIds.has(t.id)).length;
+
+    const on_time_tasks = completions.filter((c) => c.on_time).length;
+    const late_tasks = completions.filter((c) => !c.on_time).length;
+
+    return {
+      user_id: s.id,
+      name: s.name,
+      points: s.points || 0,
+      equipped_effect: s.equipped_effect || 'none',
+      has_avatar: Boolean(s.avatar_data),
+      completed_tasks,
+      pending_tasks,
+      on_time_tasks,
+      late_tasks,
+      status: s.status,
+    };
+  });
+
+  rankings.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    return b.completed_tasks - a.completed_tasks;
+  });
+
+  const rankedWithPosition = rankings.map((r, idx) => ({
+    ...r,
+    rank: idx + 1,
+  }));
+
+  res.json({
+    annual_cycle,
+    rankings: rankedWithPosition,
+    annual_history,
+  });
+});
+
+api.post('/ranking/annual/close', requireAdmin, async (req, res) => {
+  if (!db.annual_cycle) {
+    db.annual_cycle = { active_year: 2026, is_closed: false, closed_at: null };
+  }
+  db.annual_cycle.is_closed = true;
+  db.annual_cycle.closed_at = getSystemClock().iso;
+  db.saveToDisk();
+
+  await firebaseService.saveSettings('system', {
+    monthly_prize: db.monthly_prize,
+    task_cleanup_config: db.task_cleanup_config,
+    whatsapp_config: db.whatsapp_config,
+    app_info: db.app_info,
+    effect_overrides: db.effect_overrides,
+    ai_enabled: db.ai_enabled,
+    ai_hidden: db.ai_hidden,
+    frames_disabled: db.frames_disabled,
+    annual_cycle: db.annual_cycle,
+    annual_history: db.annual_history,
+    ai_model: db.ai_model,
+  }).catch(console.warn);
+
+  res.json({ ok: true, annual_cycle: db.annual_cycle });
+});
+
+api.post('/ranking/annual/start-next-year', requireAdmin, async (req, res) => {
+  if (!db.annual_cycle) {
+    db.annual_cycle = { active_year: 2026, is_closed: false, closed_at: null };
+  }
+
+  const students = Array.from(db.users.values()).filter((u) => u.role === 'aluno');
+  const allTasks = Array.from(db.tasks.values());
+
+  const currentRankings = students.map((s) => {
+    const completions = db.completions.filter((c) => c.user_id === s.id);
+    const completedTaskIds = new Set(completions.map((c) => c.task_id));
+    const completed_tasks = completedTaskIds.size;
+    const assignedTasks = allTasks.filter((t) => !t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
+    const pending_tasks = assignedTasks.filter((t) => !completedTaskIds.has(t.id)).length;
+    const on_time_tasks = completions.filter((c) => c.on_time).length;
+    const late_tasks = completions.filter((c) => !c.on_time).length;
+
+    return {
+      user_id: s.id,
+      name: s.name,
+      points: s.points || 0,
+      completed_tasks,
+      pending_tasks,
+      on_time_tasks,
+      late_tasks,
+    };
+  }).sort((a, b) => b.points - a.points).map((r, idx) => ({ ...r, rank: idx + 1 }));
+
+  if (!Array.isArray(db.annual_history)) db.annual_history = [];
+  db.annual_history.unshift({
+    year: db.annual_cycle.active_year,
+    closed_at: db.annual_cycle.closed_at || getSystemClock().iso,
+    rankings: currentRankings,
+  });
+
+  db.annual_cycle.active_year += 1;
+  db.annual_cycle.is_closed = false;
+  db.annual_cycle.closed_at = null;
+
+  db.saveToDisk();
+
+  await firebaseService.saveSettings('system', {
+    monthly_prize: db.monthly_prize,
+    task_cleanup_config: db.task_cleanup_config,
+    whatsapp_config: db.whatsapp_config,
+    app_info: db.app_info,
+    effect_overrides: db.effect_overrides,
+    ai_enabled: db.ai_enabled,
+    ai_hidden: db.ai_hidden,
+    frames_disabled: db.frames_disabled,
+    annual_cycle: db.annual_cycle,
+    annual_history: db.annual_history,
+    ai_model: db.ai_model,
+  }).catch(console.warn);
+
+  res.json({ ok: true, annual_cycle: db.annual_cycle, annual_history: db.annual_history });
 });
 
 // ---------------------------------------------------------------------------

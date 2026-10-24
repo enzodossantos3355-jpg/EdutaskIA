@@ -250,42 +250,54 @@ export function playJapanSound() {
 }
 
 /**
- * Som temático Minecraft — Ding de coletar orbe de experiência / Level Up
+ * Som temático Valorant — Efeito tático de Headshot / Eliminação Radiant
  */
-export function playMinecraftSound() {
+export function playValorantSound() {
   if (!isSoundEnabled()) return;
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
 
-    // Fast iconic XP pickup double-ding (pitch shift up)
-    const tones = [
-      { freq: 1046.50, time: 0.00, dur: 0.12 }, // C6
-      { freq: 1396.91, time: 0.08, dur: 0.25 }, // F6
-      { freq: 1760.00, time: 0.15, dur: 0.38 }, // A6 level up bell ring
-    ];
-
+    const start = ctx.currentTime;
     const master = ctx.createGain();
-    master.gain.setValueAtTime(0.24, ctx.currentTime);
+    master.gain.setValueAtTime(0.25, start);
     master.connect(ctx.destination);
 
-    tones.forEach(({ freq, time, dur }) => {
-      const start = ctx.currentTime + time;
+    // 1. Tactical punch / snap
+    const punchOsc = ctx.createOscillator();
+    const punchGain = ctx.createGain();
+    punchOsc.type = "triangle";
+    punchOsc.frequency.setValueAtTime(280, start);
+    punchOsc.frequency.exponentialRampToValueAtTime(60, start + 0.08);
+    punchGain.gain.setValueAtTime(0.35, start);
+    punchGain.gain.exponentialRampToValueAtTime(0.001, start + 0.09);
+    punchOsc.connect(punchGain);
+    punchGain.connect(master);
+    punchOsc.start(start);
+    punchOsc.stop(start + 0.1);
+
+    // 2. Iconic crisp Radiant chime / headshot dink (E6 & D7 metallic ring)
+    const tones = [
+      { freq: 1760.00, dur: 0.28 }, // A6
+      { freq: 2349.32, dur: 0.35 }, // D7
+      { freq: 3520.00, dur: 0.20 }, // A7 harmonic
+    ];
+
+    tones.forEach(({ freq, dur }) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-
       osc.type = "sine";
       osc.frequency.setValueAtTime(freq, start);
 
       gain.gain.setValueAtTime(0.001, start);
-      gain.gain.linearRampToValueAtTime(1.0, start + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+      gain.gain.linearRampToValueAtTime(0.4, start + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
 
       osc.connect(gain);
       gain.connect(master);
 
       osc.start(start);
-      osc.stop(start + dur + 0.03);
+      osc.stop(start + dur + 0.02);
     });
   } catch (e) {}
 }
@@ -298,7 +310,7 @@ export function playEquipThemeSound(effectId = null) {
   if (effectId === "one_piece") return playOnePieceSound();
   if (effectId === "chemistry_lab") return playChemistryLabSound();
   if (effectId === "japan" || effectId === "sakura") return playJapanSound();
-  if (effectId === "minecraft") return playMinecraftSound();
+  if (effectId === "valorant") return playValorantSound();
 
   try {
     const ctx = getAudioContext();
