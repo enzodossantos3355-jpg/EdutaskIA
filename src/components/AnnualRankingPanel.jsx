@@ -81,9 +81,9 @@ export default function AnnualRankingPanel() {
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
           <div>
             <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <span className="nb-badge bg-black text-amber-300 border-black font-black text-xs px-3 py-1 uppercase tracking-wider">
+              <span className="nb-badge bg-black text-white border-black font-black text-xs px-3 py-1 uppercase tracking-wider">
                 <Trophy className="w-3.5 h-3.5 text-amber-300 inline mr-1" />
-                Ano Letivo {cycle.active_year}
+                <span className="text-white">Ano Letivo {cycle.active_year}</span>
               </span>
               <span className={`nb-badge font-black text-xs px-3 py-1 ${cycle.is_closed ? "bg-red-500 text-white" : "bg-emerald-400 text-black"} border-black`}>
                 {cycle.is_closed ? "🔒 Encerrado / App Desativado para Alunos" : "🟢 Ano Ativo / Alunos Liberados"}
@@ -92,8 +92,8 @@ export default function AnnualRankingPanel() {
             <h2 className="font-heading font-black text-3xl text-black leading-tight drop-shadow-[1px_1px_0_#fff]">
               Ranking Anual dos Alunos
             </h2>
-            <p className="text-neutral-900 font-medium text-sm mt-1 max-w-2xl">
-              Acompanhe todas as tarefas feitas, pendentes e a pontuação acumulada de cada aluno no ano letivo.
+            <p className="text-neutral-900 font-semibold text-sm mt-1 max-w-2xl">
+              O Ranking Anual avalia o cumprimento de <strong>tarefas feitas</strong> e <strong>tarefas pendentes</strong> no registro permanente de cada aluno (permanecem salvas mesmo após tarefas serem apagadas). Os pontos são exclusivos para compra na Loja de Molduras.
             </p>
           </div>
 
@@ -208,8 +208,8 @@ export default function AnnualRankingPanel() {
             <Trophy className="w-5 h-5 text-amber-500" />
             Classificação Geral do Ranking ({rankings.length} alunos)
           </h3>
-          <span className="text-xs font-bold bg-amber-100 text-amber-950 border border-black px-2.5 py-1 rounded">
-            Pontos de Tarefas & Entregas
+          <span className="text-xs font-black bg-emerald-100 text-emerald-950 border-2 border-black px-3 py-1 rounded-md shadow-[2px_2px_0_0_#000]">
+            Avaliação: Tarefas Feitas & Menos Pendências
           </span>
         </div>
 
@@ -224,11 +224,11 @@ export default function AnnualRankingPanel() {
                 <tr className="bg-amber-100 border-2 border-black font-heading font-black text-black uppercase text-xs">
                   <th className="p-3 text-center w-16">Posição</th>
                   <th className="p-3">Aluno</th>
-                  <th className="p-3 text-center">Pontos</th>
-                  <th className="p-3 text-center">Tarefas Feitas</th>
-                  <th className="p-3 text-center">Tarefas Pendentes</th>
+                  <th className="p-3 text-center bg-emerald-200/80 border-x border-black/30">Tarefas Feitas</th>
+                  <th className="p-3 text-center bg-amber-200/80 border-r border-black/30">Tarefas Pendentes</th>
                   <th className="p-3 text-center">No Prazo</th>
                   <th className="p-3 text-center">Atrasadas</th>
+                  <th className="p-3 text-center">Saldo da Loja</th>
                 </tr>
               </thead>
               <tbody className="divide-y-2 divide-black font-bold">
@@ -291,24 +291,17 @@ export default function AnnualRankingPanel() {
                         </div>
                       </td>
 
-                      {/* Total Points */}
-                      <td className="p-3 text-center">
-                        <span className="nb-badge bg-amber-300 text-black border-black font-black text-sm px-3 py-1">
-                          ⭐ {r.points} pts
+                      {/* Completed Tasks (Critério Principal) */}
+                      <td className="p-3 text-center bg-emerald-50/60 border-x border-black/10">
+                        <span className="inline-flex items-center gap-1 text-emerald-950 bg-emerald-200 border border-black px-2.5 py-1 rounded font-black text-sm shadow-[1px_1px_0_0_#000]">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-900" /> {r.completed_tasks} feitas
                         </span>
                       </td>
 
-                      {/* Completed Tasks */}
-                      <td className="p-3 text-center">
-                        <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-100 border border-black px-2.5 py-1 rounded font-bold">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> {r.completed_tasks}
-                        </span>
-                      </td>
-
-                      {/* Pending Tasks */}
-                      <td className="p-3 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded font-bold border border-black ${r.pending_tasks > 0 ? "bg-red-100 text-red-800" : "bg-neutral-100 text-neutral-600"}`}>
-                          <Clock className="w-3.5 h-3.5" /> {r.pending_tasks}
+                      {/* Pending Tasks (Critério de Desempate) */}
+                      <td className="p-3 text-center bg-amber-50/40 border-r border-black/10">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded font-bold border border-black text-xs ${r.pending_tasks > 0 ? "bg-red-100 text-red-900" : "bg-neutral-100 text-neutral-700"}`}>
+                          <Clock className="w-3.5 h-3.5" /> {r.pending_tasks} pendentes
                         </span>
                       </td>
 
@@ -320,6 +313,13 @@ export default function AnnualRankingPanel() {
                       {/* Late */}
                       <td className="p-3 text-center text-xs font-bold text-amber-800">
                         {r.late_tasks}
+                      </td>
+
+                      {/* Total Points (Saldo da Loja) */}
+                      <td className="p-3 text-center">
+                        <span className="nb-badge bg-amber-200 text-amber-950 border-black font-bold text-xs px-2.5 py-0.5">
+                          🪙 {r.points} pts
+                        </span>
                       </td>
                     </tr>
                   );

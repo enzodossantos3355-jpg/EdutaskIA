@@ -26,7 +26,7 @@ export const DEFAULT_EFFECTS = {
     cost: 200,
     rarity: "rare",
     avatarEffect: "fx-stranger-things",
-    cardClass: "card-moldura-stranger-things border-2 text-black",
+    cardClass: "card-moldura-stranger-things border-2 text-white",
     badgeClass: "bg-red-950 text-red-200 border-red-500 font-black",
     avatarBg: "bg-neutral-900",
     avatarBgHex: "#111827",
@@ -40,7 +40,7 @@ export const DEFAULT_EFFECTS = {
     cost: 180,
     rarity: "rare",
     avatarEffect: "fx-riverdale",
-    cardClass: "card-moldura-riverdale border-2 text-black",
+    cardClass: "card-moldura-riverdale border-2 text-white",
     badgeClass: "bg-amber-400 text-blue-950 border-blue-900 font-black",
     avatarBg: "bg-blue-900",
     avatarBgHex: "#1e3a8a",
@@ -48,16 +48,16 @@ export const DEFAULT_EFFECTS = {
   },
   spongebob: {
     id: "spongebob",
-    name: "Moldura Bob Esponja",
+    name: "Moldura Fenda do Biquíni — Bob Esponja 🍍",
     emoji: "🍍",
-    description: "Moldura alegre da Fenda do Biquíni com arte tropical submarina central, bolhas marinhas e aura dourada!",
+    description: "Super moldura da Fenda do Biquíni com a Casa de Abacaxi, águas-vivas reluzentes, floral Tiki submarino e bolhas tropicais!",
     cost: 120,
     rarity: "rare",
     avatarEffect: "fx-spongebob",
-    cardClass: "card-moldura-spongebob text-black border-2",
-    badgeClass: "bg-amber-400 text-yellow-950 border-yellow-800 font-black",
-    avatarBg: "bg-yellow-200",
-    avatarBgHex: "#fef08a",
+    cardClass: "card-moldura-spongebob border-2 text-black",
+    badgeClass: "bg-amber-400 text-yellow-950 border-yellow-900 font-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]",
+    avatarBg: "bg-yellow-300",
+    avatarBgHex: "#fde047",
     avatarTextColor: "#854d0e",
   },
   mentalist: {
@@ -68,7 +68,7 @@ export const DEFAULT_EFFECTS = {
     cost: 160,
     rarity: "rare",
     avatarEffect: "fx-mentalist",
-    cardClass: "card-moldura-mentalist border-2 text-black",
+    cardClass: "card-moldura-mentalist border-2 text-white",
     badgeClass: "bg-red-700 text-amber-100 border-red-950 font-black",
     avatarBg: "bg-amber-100",
     avatarBgHex: "#fef3c7",
@@ -82,7 +82,7 @@ export const DEFAULT_EFFECTS = {
     cost: 280,
     rarity: "epic",
     avatarEffect: "fx-one-piece",
-    cardClass: "card-moldura-one-piece border-2 text-black",
+    cardClass: "card-moldura-one-piece border-2 text-white",
     badgeClass: "bg-amber-400 text-amber-950 border-amber-950 font-black",
     avatarBg: "bg-amber-950",
     avatarBgHex: "#451a03",
@@ -97,7 +97,7 @@ export const DEFAULT_EFFECTS = {
     cost: 240,
     rarity: "rare",
     avatarEffect: "fx-chemistry-lab",
-    cardClass: "card-moldura-chemistry border-2 text-black",
+    cardClass: "card-moldura-chemistry border-2 text-white",
     badgeClass: "bg-emerald-400 text-emerald-950 border-emerald-950 font-black",
     avatarBg: "bg-emerald-950",
     avatarBgHex: "#022c22",
@@ -112,7 +112,7 @@ export const DEFAULT_EFFECTS = {
     cost: 300,
     rarity: "epic",
     avatarEffect: "fx-japan",
-    cardClass: "card-moldura-japan border-2 text-black",
+    cardClass: "card-moldura-japan border-2 text-white",
     badgeClass: "bg-red-600 text-rose-50 border-red-950 font-black",
     avatarBg: "bg-red-950",
     avatarBgHex: "#450a0a",
@@ -140,9 +140,9 @@ export const DEFAULT_EFFECTS = {
     description: "Halo azul pulsante futurista que envolve todo o bloco do perfil.",
     cost: 50,
     rarity: "common",
-    avatarEffect: "fx-neon-pulse",
+    avatarEffect: "fx-emerald",
     cardClass: "card-moldura-neon border-2",
-    badgeClass: "bg-cyan-950 text-cyan-300 border-cyan-400 font-bold",
+    badgeClass: "bg-cyan-400 text-cyan-950 border-cyan-200 font-black",
     avatarBg: "bg-cyan-950",
     avatarBgHex: "#082f49",
     avatarTextColor: "#22d3ee",
@@ -154,9 +154,9 @@ export const DEFAULT_EFFECTS = {
     description: "Borda giratória em degradê laranja e rosa quente com brilho solar envolvente.",
     cost: 80,
     rarity: "common",
-    avatarEffect: "fx-sunset",
+    avatarEffect: "fx-sakura",
     cardClass: "card-moldura-sunset text-neutral-900 border-2",
-    badgeClass: "bg-orange-200 text-orange-950 border-orange-600 font-bold",
+    badgeClass: "bg-orange-300 text-orange-950 border-orange-600 font-black",
     avatarBg: "bg-orange-100",
     avatarBgHex: "#ffedd5",
     avatarTextColor: "#c2410c",
@@ -198,7 +198,7 @@ export const DEFAULT_EFFECTS = {
     rarity: "rare",
     avatarEffect: "fx-ice",
     cardClass: "card-moldura-ice border-2",
-    badgeClass: "bg-sky-200 text-sky-950 border-sky-500 font-bold",
+    badgeClass: "bg-sky-300 text-sky-950 border-sky-600 font-black",
     avatarBg: "bg-sky-100",
     avatarBgHex: "#e0f2fe",
     avatarTextColor: "#0284c7",
@@ -226,7 +226,7 @@ export const DEFAULT_EFFECTS = {
     rarity: "epic",
     avatarEffect: "fx-galaxy",
     cardClass: "card-moldura-galaxy border-2",
-    badgeClass: "bg-purple-900 text-purple-200 border-purple-400 font-bold",
+    badgeClass: "bg-purple-400 text-purple-950 border-purple-200 font-black",
     avatarBg: "bg-purple-950",
     avatarBgHex: "#2e1065",
     avatarTextColor: "#c084fc",
@@ -240,7 +240,7 @@ export const DEFAULT_EFFECTS = {
     rarity: "epic",
     avatarEffect: "fx-shadow",
     cardClass: "card-moldura-shadow border-2",
-    badgeClass: "bg-neutral-800 text-neutral-300 border-neutral-600 font-bold",
+    badgeClass: "bg-neutral-800 text-neutral-100 border-neutral-500 font-black",
     avatarBg: "bg-neutral-900",
     avatarBgHex: "#171717",
     avatarTextColor: "#f5f5f5",
@@ -254,7 +254,7 @@ export const DEFAULT_EFFECTS = {
     rarity: "epic",
     avatarEffect: "fx-sunset",
     cardClass: "card-moldura-sakura border-2",
-    badgeClass: "bg-pink-200 text-pink-950 border-pink-400 font-bold",
+    badgeClass: "bg-pink-300 text-pink-950 border-pink-500 font-black",
     avatarBg: "bg-pink-100",
     avatarBgHex: "#fdf2f8",
     avatarTextColor: "#db2777",
@@ -268,7 +268,7 @@ export const DEFAULT_EFFECTS = {
     rarity: "epic",
     avatarEffect: "fx-neon-pulse",
     cardClass: "card-moldura-emerald border-2",
-    badgeClass: "bg-emerald-200 text-emerald-950 border-emerald-700 font-bold",
+    badgeClass: "bg-emerald-400 text-emerald-950 border-emerald-700 font-black",
     avatarBg: "bg-emerald-950",
     avatarBgHex: "#022c22",
     avatarTextColor: "#34d399",
@@ -295,7 +295,7 @@ export const DEFAULT_EFFECTS = {
     cost: 350,
     rarity: "epic",
     avatarEffect: "fx-cyberpunk",
-    cardClass: "card-moldura-cyberpunk border-2 text-black",
+    cardClass: "card-moldura-cyberpunk border-2 text-white",
     badgeClass: "bg-yellow-400 text-black border-black font-black",
     avatarBg: "bg-slate-900",
     avatarBgHex: "#0f172a",
@@ -309,7 +309,7 @@ export const DEFAULT_EFFECTS = {
     cost: 380,
     rarity: "epic",
     avatarEffect: "fx-hogwarts",
-    cardClass: "card-moldura-hogwarts border-2 text-black",
+    cardClass: "card-moldura-hogwarts border-2 text-white",
     badgeClass: "bg-amber-400 text-amber-950 border-amber-950 font-black",
     avatarBg: "bg-indigo-950",
     avatarBgHex: "#1e1b4b",
@@ -323,7 +323,7 @@ export const DEFAULT_EFFECTS = {
     cost: 260,
     rarity: "rare",
     avatarEffect: "fx-pixel-art",
-    cardClass: "card-moldura-pixel border-2 text-black",
+    cardClass: "card-moldura-pixel border-2 text-white",
     badgeClass: "bg-green-400 text-black border-black font-black",
     avatarBg: "bg-zinc-900",
     avatarBgHex: "#18181b",
@@ -339,6 +339,7 @@ export const RARITY_META = {
 };
 
 let globalFramesDisabled = false;
+let globalFrameRotationDisabled = true;
 
 export function setGlobalFramesDisabled(val) {
   globalFramesDisabled = Boolean(val);
@@ -346,6 +347,21 @@ export function setGlobalFramesDisabled(val) {
 
 export function isFramesDisabled() {
   return globalFramesDisabled;
+}
+
+export function setGlobalFrameRotationDisabled(val) {
+  globalFrameRotationDisabled = Boolean(val);
+  if (typeof document !== "undefined") {
+    if (globalFrameRotationDisabled) {
+      document.body.classList.add("fx-no-spin");
+    } else {
+      document.body.classList.remove("fx-no-spin");
+    }
+  }
+}
+
+export function isFrameRotationDisabled() {
+  return globalFrameRotationDisabled;
 }
 
 export function getEffect(effectId) {

@@ -312,7 +312,7 @@ export default function StudentDashboard() {
   };
 
   if (annualCycle?.is_closed) {
-    return <AppDeactivatedScreen onCheckStatus={load} />;
+    return <AppDeactivatedScreen onCheckStatus={load} annualCycle={annualCycle} />;
   }
 
   return (

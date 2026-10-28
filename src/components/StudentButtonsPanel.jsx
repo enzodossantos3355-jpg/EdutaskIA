@@ -36,7 +36,7 @@ export function getButtonColorStyle(colorId) {
   return found || BUTTON_COLORS[0];
 }
 
-export default function StudentButtonsPanel() {
+export default function StudentButtonsPanel({ annualCycle }) {
   const [buttons, setButtons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -51,6 +51,7 @@ export default function StudentButtonsPanel() {
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [btnToDelete, setBtnToDelete] = useState(null);
 
   const loadButtons = useCallback(async () => {
     setLoading(true);
@@ -145,13 +146,18 @@ export default function StudentButtonsPanel() {
     }
   };
 
-  const handleDelete = async (btn) => {
-    if (!window.confirm(`Tem certeza que deseja excluir o botão "${btn.name}"?`)) return;
-    setDeletingId(btn.id);
+  const handleDelete = (btn) => {
+    setBtnToDelete(btn);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!btnToDelete) return;
+    setDeletingId(btnToDelete.id);
     try {
-      await api.delete(`/student-buttons/${btn.id}`);
-      toast.success(`Botão "${btn.name}" excluído.`);
-      setButtons((prev) => prev.filter((b) => b.id !== btn.id));
+      await api.delete(`/student-buttons/${btnToDelete.id}`);
+      toast.success(`Botão "${btnToDelete.name}" excluído com sucesso!`);
+      setButtons((prev) => prev.filter((b) => b.id !== btnToDelete.id));
+      setBtnToDelete(null);
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao excluir botão.");
     } finally {
@@ -535,6 +541,44 @@ export default function StudentButtonsPanel() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Botão */}
+      {btnToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 nb-fade-in" data-testid="delete-button-modal">
+          <div className="bg-white border-2 border-black p-6 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] max-w-sm w-full space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 border-2 border-black flex items-center justify-center text-red-600 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex-shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-heading font-black text-base leading-tight">Excluir Botão</h3>
+                <p className="text-xs text-neutral-500 font-bold">{btnToDelete.name}</p>
+              </div>
+            </div>
+            <p className="text-xs text-neutral-600 leading-relaxed">
+              Tem certeza que deseja remover este botão? Os alunos deixarão de visualizá-lo em seu painel.
+            </p>
+            <div className="flex items-center gap-2 justify-end pt-2 border-t border-black/10">
+              <button
+                type="button"
+                onClick={() => setBtnToDelete(null)}
+                className="nb-btn bg-white hover:bg-neutral-100 px-3.5 py-2 text-xs font-bold"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deletingId === btnToDelete.id}
+                className="nb-btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-xs font-heading font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1.5"
+                data-testid="confirm-delete-button-btn"
+              >
+                {deletingId === btnToDelete.id ? "Excluindo..." : "Excluir Botão"}
+              </button>
+            </div>
           </div>
         </div>
       )}

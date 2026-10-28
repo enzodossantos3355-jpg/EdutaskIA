@@ -3,7 +3,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { setGlobalFramesDisabled } from "@/lib/effects";
+import { setGlobalFramesDisabled, setGlobalFrameRotationDisabled } from "@/lib/effects";
 
 const AIStatusContext = createContext({
   enabled: true,
@@ -11,12 +11,14 @@ const AIStatusContext = createContext({
   hidden: false,
   aiHidden: false,
   framesDisabled: false,
+  frameRotationDisabled: true,
   model: "gemini-3.8-flash",
   loading: true,
   refresh: async () => {},
   toggleAI: async () => false,
   toggleHideAI: async () => false,
   toggleFramesDisabled: async () => false,
+  toggleFrameRotationDisabled: async () => false,
   changeModel: async () => false,
   setEnabled: () => {},
   setHidden: () => {},
@@ -24,24 +26,21 @@ const AIStatusContext = createContext({
 
 export function AIStatusProvider({ children }) {
   const { user } = useAuth();
-  const [enabled, setEnabledState] = useState(true);
-  const [hidden, setHiddenState] = useState(false);
+  const [enabledState, setEnabledState] = useState(true);
+  const [hiddenState, setHiddenState] = useState(false);
   const [framesDisabled, setFramesDisabledState] = useState(false);
-  const [model, setModelState] = useState("gemini-3.8-flash");
+  const [frameRotationDisabled, setFrameRotationDisabledState] = useState(true);
+  const [modelState, setModelState] = useState("gemini-3.8-flash");
   const [loading, setLoading] = useState(true);
 
   const applyFramesDisabled = useCallback((val) => {
-    const disabledBool = Boolean(val);
-    setFramesDisabledState(disabledBool);
-    setGlobalFramesDisabled(disabledBool);
+    setFramesDisabledState(val);
+    setGlobalFramesDisabled(val);
   }, []);
 
-  const setEnabled = useCallback((val) => {
-    setEnabledState(Boolean(val));
-  }, []);
-
-  const setHidden = useCallback((val) => {
-    setHiddenState(Boolean(val));
+  const applyFrameRotationDisabled = useCallback((val) => {
+    setFrameRotationDisabledState(val);
+    setGlobalFrameRotationDisabled(val);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -57,23 +56,24 @@ export function AIStatusProvider({ children }) {
         if (typeof data.frames_disabled === "boolean") {
           applyFramesDisabled(data.frames_disabled);
         }
+        if (typeof data.frame_rotation_disabled === "boolean") {
+          applyFrameRotationDisabled(data.frame_rotation_disabled);
+        }
         if (data.model) {
           setModelState(data.model);
         }
       }
     } catch {
-      // Default to true or keep current state on network error
+      // Default state
     } finally {
       setLoading(false);
     }
-  }, [applyFramesDisabled]);
+  }, [applyFramesDisabled, applyFrameRotationDisabled]);
 
-  // 1. Initial fetch from Backend API
   useEffect(() => {
     refresh();
   }, [refresh, user]);
 
-  // 2. Real-Time Firestore Synchronization for Instant Multi-Device / Multi-Tab Updates
   useEffect(() => {
     let unsubscribeSystem = null;
 
@@ -94,33 +94,26 @@ export function AIStatusProvider({ children }) {
               if (typeof data.frames_disabled === "boolean") {
                 applyFramesDisabled(data.frames_disabled);
               }
+              if (typeof data.frame_rotation_disabled === "boolean") {
+                applyFrameRotationDisabled(data.frame_rotation_disabled);
+              }
               if (data.ai_model) {
                 setModelState(data.ai_model);
               }
             }
           }
         },
-        (err) => {
-          if (unsubscribeSystem) {
-            try {
-              unsubscribeSystem();
-            } catch {
-              // ignore
-            }
-            unsubscribeSystem = null;
-          }
-        }
+        () => {}
       );
     } catch (e) {
-      console.warn("[AIStatusContext] Firestore snapshot initialization skipped:", e);
+      console.warn("[AIStatusContext] Firestore snapshot skipped:", e);
     }
 
     return () => {
       if (unsubscribeSystem) unsubscribeSystem();
     };
-  }, [applyFramesDisabled]);
+  }, [applyFramesDisabled, applyFrameRotationDisabled]);
 
-  // 3. Global Toggle Function with Firestore & Backend Persistence
   const toggleAI = useCallback(
     async (newStatus) => {
       setEnabledState(newStatus);
@@ -130,6 +123,7 @@ export function AIStatusProvider({ children }) {
           if (typeof data.enabled === "boolean") setEnabledState(data.enabled);
           if (typeof data.hidden === "boolean") setHiddenState(data.hidden);
           if (typeof data.frames_disabled === "boolean") applyFramesDisabled(data.frames_disabled);
+          if (typeof data.frame_rotation_disabled === "boolean") applyFrameRotationDisabled(data.frame_rotation_disabled);
           if (data.model) setModelState(data.model);
         }
         return true;
@@ -138,10 +132,9 @@ export function AIStatusProvider({ children }) {
         throw err;
       }
     },
-    [refresh, applyFramesDisabled]
+    [refresh, applyFramesDisabled, applyFrameRotationDisabled]
   );
 
-  // 3b. Toggle Hide AI Function
   const toggleHideAI = useCallback(
     async (newHidden) => {
       setHiddenState(newHidden);
@@ -151,6 +144,7 @@ export function AIStatusProvider({ children }) {
           if (typeof data.enabled === "boolean") setEnabledState(data.enabled);
           if (typeof data.hidden === "boolean") setHiddenState(data.hidden);
           if (typeof data.frames_disabled === "boolean") applyFramesDisabled(data.frames_disabled);
+          if (typeof data.frame_rotation_disabled === "boolean") applyFrameRotationDisabled(data.frame_rotation_disabled);
           if (data.model) setModelState(data.model);
         }
         return true;
@@ -159,10 +153,9 @@ export function AIStatusProvider({ children }) {
         throw err;
       }
     },
-    [refresh, applyFramesDisabled]
+    [refresh, applyFramesDisabled, applyFrameRotationDisabled]
   );
 
-  // 3c. Toggle Disable Frames Function
   const toggleFramesDisabled = useCallback(
     async (newDisabled) => {
       applyFramesDisabled(newDisabled);
@@ -172,6 +165,7 @@ export function AIStatusProvider({ children }) {
           if (typeof data.enabled === "boolean") setEnabledState(data.enabled);
           if (typeof data.hidden === "boolean") setHiddenState(data.hidden);
           if (typeof data.frames_disabled === "boolean") applyFramesDisabled(data.frames_disabled);
+          if (typeof data.frame_rotation_disabled === "boolean") applyFrameRotationDisabled(data.frame_rotation_disabled);
           if (data.model) setModelState(data.model);
         }
         return true;
@@ -180,10 +174,28 @@ export function AIStatusProvider({ children }) {
         throw err;
       }
     },
-    [refresh, applyFramesDisabled]
+    [refresh, applyFramesDisabled, applyFrameRotationDisabled]
   );
 
-  // 4. Gemini Model Selector Function
+  const toggleFrameRotationDisabled = useCallback(
+    async (newDisabled) => {
+      applyFrameRotationDisabled(newDisabled);
+      try {
+        const { data } = await api.put("/ai/status", { frame_rotation_disabled: newDisabled });
+        if (data) {
+          if (typeof data.frame_rotation_disabled === "boolean") {
+            applyFrameRotationDisabled(data.frame_rotation_disabled);
+          }
+        }
+        return true;
+      } catch (err) {
+        await refresh();
+        throw err;
+      }
+    },
+    [refresh, applyFrameRotationDisabled]
+  );
+
   const changeModel = useCallback(
     async (newModel) => {
       setModelState(newModel);
@@ -204,20 +216,22 @@ export function AIStatusProvider({ children }) {
   return (
     <AIStatusContext.Provider
       value={{
-        enabled,
-        aiEnabled: enabled,
-        hidden,
-        aiHidden: hidden,
+        enabled: enabledState,
+        aiEnabled: enabledState,
+        hidden: hiddenState,
+        aiHidden: hiddenState,
         framesDisabled,
-        model,
+        frameRotationDisabled,
+        model: modelState,
         loading,
         refresh,
         toggleAI,
         toggleHideAI,
         toggleFramesDisabled,
+        toggleFrameRotationDisabled,
         changeModel,
-        setEnabled,
-        setHidden,
+        setEnabled: setEnabledState,
+        setHidden: setHiddenState,
       }}
     >
       {children}

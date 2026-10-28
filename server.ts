@@ -313,6 +313,13 @@ interface UserMonthlyStats {
   late_month: number;
 }
 
+interface UserAnnualStats {
+  completed: number;
+  pending: number;
+  on_time: number;
+  late: number;
+}
+
 interface User {
   id: string;
   email: string;
@@ -332,6 +339,7 @@ interface User {
   created_at: string;
   monthly_stats?: UserMonthlyStats;
   monthly_history?: Record<string, UserMonthlyStats>;
+  annual_stats?: UserAnnualStats;
 }
 
 interface Subject {
@@ -520,7 +528,7 @@ class Database {
   point_adjustments: PointAdjustment[] = [];
   files: Map<string, FileRecord> = new Map();
   ai_chats: Map<string, ChatSession> = new Map();
-  effect_overrides: Record<string, { cost: number }> = {};
+  effect_overrides: Record<string, { cost?: number; rarity?: string }> = {};
   monthly_prize: any = null;
   active_month_key: string = '';
   monthly_history: any[] = [];
@@ -609,6 +617,7 @@ class Database {
   ai_enabled: boolean = true;
   ai_hidden: boolean = false;
   frames_disabled: boolean = false;
+  frame_rotation_disabled: boolean = true;
   annual_cycle: {
     active_year: number;
     is_closed: boolean;
@@ -987,7 +996,8 @@ class Database {
       const override = this.effect_overrides[eff.id];
       return {
         ...eff,
-        cost: override ? override.cost : eff.cost,
+        cost: override && typeof override.cost === 'number' ? override.cost : eff.cost,
+        rarity: override && override.rarity ? override.rarity : eff.rarity,
       };
     });
   }
@@ -1066,6 +1076,21 @@ function updateStudentStreak(userId: string) {
   }
   user.longest_streak = Math.max(user.longest_streak || 0, user.streak_count);
   user.last_active_date = today;
+}
+
+export function ensureUserAnnualStats(user: User): UserAnnualStats {
+  if (!user.annual_stats) {
+    const userCompletions = db.completions.filter((c) => c.user_id === user.id);
+    const onTime = userCompletions.filter((c) => c.on_time).length;
+    const late = userCompletions.filter((c) => !c.on_time).length;
+    user.annual_stats = {
+      completed: userCompletions.length,
+      pending: 0,
+      on_time: onTime,
+      late: late,
+    };
+  }
+  return user.annual_stats;
 }
 
 // ---------------------------------------------------------------------------
@@ -1537,6 +1562,9 @@ api.get('/subjects', requireAuth, (req, res) => {
 });
 
 api.post('/subjects', requireAdmin, async (req, res) => {
+  if (db.annual_cycle?.is_closed) {
+    return res.status(403).json({ detail: "O Ano Letivo / Ranking Anual está encerrado. Não é possível cadastrar matérias até que o novo ano seja iniciado na aba Ranking Anual." });
+  }
   const { name } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ detail: 'Nome obrigatório' });
   const id = `subj-${Date.now()}`;
@@ -1879,6 +1907,9 @@ api.get('/tasks', requireAuth, (req, res) => {
 });
 
 api.post('/tasks', requireAdmin, async (req, res) => {
+  if (db.annual_cycle?.is_closed) {
+    return res.status(403).json({ detail: "O Ano Letivo / Ranking Anual está encerrado. Não é possível criar novas tarefas até que o novo ano seja iniciado na aba Ranking Anual." });
+  }
   const { title, description, subject, due_date, points, assigned_to, attachments, admin_photos, answer, answer_source } = req.body || {};
   if (!title || !description || !subject || !due_date) {
     return res.status(400).json({ detail: 'Campos obrigatórios ausentes' });
@@ -2230,9 +2261,25 @@ Questão 3: [Apenas a resposta direta necessária]`;
 
 api.delete('/tasks/:task_id', requireAdmin, async (req, res) => {
   const { task_id } = req.params;
+  const task = db.tasks.get(task_id);
   const completionsToDelete = db.completions.filter((c) => c.task_id === task_id);
   for (const c of completionsToDelete) {
     await firebaseService.deleteCompletion(c.user_id, task_id).catch(console.warn);
+  }
+
+  if (task) {
+    const allStudents = Array.from(db.users.values()).filter((u) => u.role === 'aluno');
+    for (const student of allStudents) {
+      const isAssigned = !task.assigned_to || task.assigned_to.length === 0 || task.assigned_to.includes(student.id);
+      if (isAssigned) {
+        const didComplete = completionsToDelete.some((c) => c.user_id === student.id);
+        if (!didComplete) {
+          const stats = ensureUserAnnualStats(student);
+          stats.pending = (stats.pending || 0) + 1;
+          firebaseService.saveUser(student).catch(console.warn);
+        }
+      }
+    }
   }
 
   db.tasks.delete(task_id);
@@ -2295,6 +2342,19 @@ function executeTaskCleanup(manual = false): { count: number; deleted_titles: st
     completionsToDelete.forEach((c) => {
       firebaseService.deleteCompletion(c.user_id, t.id).catch(console.warn);
     });
+
+    const allStudents = Array.from(db.users.values()).filter((u) => u.role === 'aluno');
+    for (const student of allStudents) {
+      const isAssigned = !t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(student.id);
+      if (isAssigned) {
+        const didComplete = completionsToDelete.some((c) => c.user_id === student.id);
+        if (!didComplete) {
+          const stats = ensureUserAnnualStats(student);
+          stats.pending = (stats.pending || 0) + 1;
+          firebaseService.saveUser(student).catch(console.warn);
+        }
+      }
+    }
 
     db.tasks.delete(t.id);
     db.completions = db.completions.filter((c) => c.task_id !== t.id);
@@ -2458,6 +2518,15 @@ api.post('/tasks/:task_id/complete', requireAuth, async (req, res) => {
       stats.late_month = (stats.late_month || 0) + 1;
     }
 
+    // Registra permanentemente na contagem anual do aluno (permanece no registro mesmo após ser apagada)
+    const annualStats = ensureUserAnnualStats(user);
+    annualStats.completed = (annualStats.completed || 0) + 1;
+    if (onTime) {
+      annualStats.on_time = (annualStats.on_time || 0) + 1;
+    } else {
+      annualStats.late = (annualStats.late || 0) + 1;
+    }
+
     await firebaseService.saveUser(user);
   }
 
@@ -2490,6 +2559,15 @@ api.post('/tasks/:task_id/uncomplete', requireAuth, async (req, res) => {
           user.monthly_stats.on_time_month = Math.max(0, (user.monthly_stats.on_time_month || 0) - 1);
         } else {
           user.monthly_stats.late_month = Math.max(0, (user.monthly_stats.late_month || 0) - 1);
+        }
+      }
+
+      if (user.annual_stats) {
+        user.annual_stats.completed = Math.max(0, (user.annual_stats.completed || 0) - 1);
+        if (comp.on_time) {
+          user.annual_stats.on_time = Math.max(0, (user.annual_stats.on_time || 0) - 1);
+        } else {
+          user.annual_stats.late = Math.max(0, (user.annual_stats.late || 0) - 1);
         }
       }
 
@@ -2528,6 +2606,9 @@ api.get('/announcements', requireAuth, (req, res) => {
 });
 
 api.post('/announcements', requireAdmin, async (req, res) => {
+  if (db.annual_cycle?.is_closed) {
+    return res.status(403).json({ detail: "O Ano Letivo / Ranking Anual está encerrado. Não é possível publicar avisos até que o novo ano seja iniciado na aba Ranking Anual." });
+  }
   const { title, message, assigned_to, is_special } = req.body || {};
   if (!title || !message) return res.status(400).json({ detail: 'Título e mensagem obrigatórios' });
 
@@ -2761,6 +2842,9 @@ api.get('/student-buttons', requireAuth, (req, res) => {
 });
 
 api.post('/student-buttons', requireAdmin, (req, res) => {
+  if (db.annual_cycle?.is_closed) {
+    return res.status(403).json({ detail: "O Ano Letivo / Ranking Anual está encerrado. Não é possível criar botões de alunos até que o novo ano seja iniciado na aba Ranking Anual." });
+  }
   const { name, url, description, color, icon, active, order } = req.body || {};
   if (!name || !name.trim()) {
     return res.status(400).json({ detail: 'O nome do botão é obrigatório.' });
@@ -2843,10 +2927,49 @@ api.post('/student-buttons/:btn_id/click', requireAuth, (req, res) => {
 // General App Status & Annual Ranking (Ranking Anual)
 // ---------------------------------------------------------------------------
 api.get('/app-status', (req, res) => {
+  const annual_cycle = db.annual_cycle || { active_year: 2026, is_closed: false, closed_at: null };
+  let top3: any[] = [];
+  if (annual_cycle.is_closed) {
+    const students = Array.from(db.users.values()).filter((u) => u.role === "aluno");
+    const allTasks = Array.from(db.tasks.values());
+    const rankings = students.map((s) => {
+      const stats = ensureUserAnnualStats(s);
+      const completions = db.completions.filter((c) => c.user_id === s.id);
+      const completedTaskIds = new Set(completions.map((c) => c.task_id));
+      const assignedTasks = allTasks.filter((t) => !t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
+      const activePending = assignedTasks.filter((t) => !completedTaskIds.has(t.id)).length;
+      const completed_tasks = Math.max(stats.completed || 0, completedTaskIds.size);
+      const pending_tasks = (stats.pending || 0) + activePending;
+      const on_time_tasks = Math.max(stats.on_time || 0, completions.filter((c) => c.on_time).length);
+      const late_tasks = Math.max(stats.late || 0, completions.filter((c) => !c.on_time).length);
+
+      return {
+        user_id: s.id,
+        name: s.name,
+        points: s.points || 0,
+        equipped_effect: s.equipped_effect || "none",
+        has_avatar: Boolean(s.avatar_data),
+        completed_tasks,
+        pending_tasks,
+        on_time_tasks,
+        late_tasks,
+      };
+    }).sort((a, b) => {
+      if (b.completed_tasks !== a.completed_tasks) return b.completed_tasks - a.completed_tasks;
+      if (a.pending_tasks !== b.pending_tasks) return a.pending_tasks - b.pending_tasks;
+      if (b.on_time_tasks !== a.on_time_tasks) return b.on_time_tasks - a.on_time_tasks;
+      return a.name.localeCompare(b.name);
+    }).map((r, idx) => ({ ...r, rank: idx + 1 }));
+
+    top3 = rankings.slice(0, 3);
+  }
+
   res.json({
-    annual_cycle: db.annual_cycle || { active_year: 2026, is_closed: false, closed_at: null },
+    annual_cycle,
     frames_disabled: db.frames_disabled || false,
+    frame_rotation_disabled: db.frame_rotation_disabled !== undefined ? db.frame_rotation_disabled : true,
     ai_enabled: db.ai_enabled || false,
+    top3,
   });
 });
 
@@ -2858,20 +2981,26 @@ api.get('/ranking/annual', requireAuth, (req, res) => {
   const allTasks = Array.from(db.tasks.values());
 
   const rankings = students.map((s) => {
+    const stats = ensureUserAnnualStats(s);
     const completions = db.completions.filter((c) => c.user_id === s.id);
     const completedTaskIds = new Set(completions.map((c) => c.task_id));
-    const completed_tasks = completedTaskIds.size;
 
+    // Tarefas ativas atualmente cadastradas que foram atribuídas e ainda não foram concluídas
     const assignedTasks = allTasks.filter((t) => !t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
-    const pending_tasks = assignedTasks.filter((t) => !completedTaskIds.has(t.id)).length;
+    const activePending = assignedTasks.filter((t) => !completedTaskIds.has(t.id)).length;
 
-    const on_time_tasks = completions.filter((c) => c.on_time).length;
-    const late_tasks = completions.filter((c) => !c.on_time).length;
+    // Tarefas feitas: permanecem registradas no aluno mesmo após a tarefa ser apagada ou limpa
+    const completed_tasks = Math.max(stats.completed || 0, completedTaskIds.size);
+    // Tarefas pendentes: acumuladas permanentemente de tarefas deletadas + pendências ativas atuais
+    const pending_tasks = (stats.pending || 0) + activePending;
+
+    const on_time_tasks = Math.max(stats.on_time || 0, completions.filter((c) => c.on_time).length);
+    const late_tasks = Math.max(stats.late || 0, completions.filter((c) => !c.on_time).length);
 
     return {
       user_id: s.id,
       name: s.name,
-      points: s.points || 0,
+      points: s.points || 0, // Saldo exclusivo da Loja de Molduras
       equipped_effect: s.equipped_effect || 'none',
       has_avatar: Boolean(s.avatar_data),
       completed_tasks,
@@ -2882,9 +3011,13 @@ api.get('/ranking/annual', requireAuth, (req, res) => {
     };
   });
 
+  // O Ranking Anual avalia TAREFAS FEITAS (mais tarefas em 1º), TAREFAS PENDENTES (menos pendências desempata),
+  // e ENTREGAS NO PRAZO. Pontos NÃO determinam a classificação (são estritamente para a loja de molduras).
   rankings.sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    return b.completed_tasks - a.completed_tasks;
+    if (b.completed_tasks !== a.completed_tasks) return b.completed_tasks - a.completed_tasks;
+    if (a.pending_tasks !== b.pending_tasks) return a.pending_tasks - b.pending_tasks;
+    if (b.on_time_tasks !== a.on_time_tasks) return b.on_time_tasks - a.on_time_tasks;
+    return a.name.localeCompare(b.name);
   });
 
   const rankedWithPosition = rankings.map((r, idx) => ({
@@ -2916,6 +3049,7 @@ api.post('/ranking/annual/close', requireAdmin, async (req, res) => {
     ai_enabled: db.ai_enabled,
     ai_hidden: db.ai_hidden,
     frames_disabled: db.frames_disabled,
+    frame_rotation_disabled: db.frame_rotation_disabled,
     annual_cycle: db.annual_cycle,
     annual_history: db.annual_history,
     ai_model: db.ai_model,
@@ -2933,13 +3067,16 @@ api.post('/ranking/annual/start-next-year', requireAdmin, async (req, res) => {
   const allTasks = Array.from(db.tasks.values());
 
   const currentRankings = students.map((s) => {
+    const stats = ensureUserAnnualStats(s);
     const completions = db.completions.filter((c) => c.user_id === s.id);
     const completedTaskIds = new Set(completions.map((c) => c.task_id));
-    const completed_tasks = completedTaskIds.size;
     const assignedTasks = allTasks.filter((t) => !t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(s.id));
-    const pending_tasks = assignedTasks.filter((t) => !completedTaskIds.has(t.id)).length;
-    const on_time_tasks = completions.filter((c) => c.on_time).length;
-    const late_tasks = completions.filter((c) => !c.on_time).length;
+    const activePending = assignedTasks.filter((t) => !completedTaskIds.has(t.id)).length;
+
+    const completed_tasks = Math.max(stats.completed || 0, completedTaskIds.size);
+    const pending_tasks = (stats.pending || 0) + activePending;
+    const on_time_tasks = Math.max(stats.on_time || 0, completions.filter((c) => c.on_time).length);
+    const late_tasks = Math.max(stats.late || 0, completions.filter((c) => !c.on_time).length);
 
     return {
       user_id: s.id,
@@ -2950,7 +3087,12 @@ api.post('/ranking/annual/start-next-year', requireAdmin, async (req, res) => {
       on_time_tasks,
       late_tasks,
     };
-  }).sort((a, b) => b.points - a.points).map((r, idx) => ({ ...r, rank: idx + 1 }));
+  }).sort((a, b) => {
+    if (b.completed_tasks !== a.completed_tasks) return b.completed_tasks - a.completed_tasks;
+    if (a.pending_tasks !== b.pending_tasks) return a.pending_tasks - b.pending_tasks;
+    if (b.on_time_tasks !== a.on_time_tasks) return b.on_time_tasks - a.on_time_tasks;
+    return a.name.localeCompare(b.name);
+  }).map((r, idx) => ({ ...r, rank: idx + 1 }));
 
   if (!Array.isArray(db.annual_history)) db.annual_history = [];
   db.annual_history.unshift({
@@ -2963,6 +3105,23 @@ api.post('/ranking/annual/start-next-year', requireAdmin, async (req, res) => {
   db.annual_cycle.is_closed = false;
   db.annual_cycle.closed_at = null;
 
+  // Reseta estatísticas anuais para o novo ano letivo
+  for (const s of students) {
+    s.annual_stats = {
+      completed: 0,
+      pending: 0,
+      on_time: 0,
+      late: 0,
+    };
+    await firebaseService.saveUser(s).catch(console.warn);
+  }
+
+  // Limpa todo o ranking limpando as conclusões do ano anterior para começar o novo ano completamente do zero
+  for (const c of db.completions) {
+    firebaseService.deleteCompletion(c.user_id, c.task_id).catch(console.warn);
+  }
+  db.completions = [];
+
   db.saveToDisk();
 
   await firebaseService.saveSettings('system', {
@@ -2974,6 +3133,7 @@ api.post('/ranking/annual/start-next-year', requireAdmin, async (req, res) => {
     ai_enabled: db.ai_enabled,
     ai_hidden: db.ai_hidden,
     frames_disabled: db.frames_disabled,
+    frame_rotation_disabled: db.frame_rotation_disabled,
     annual_cycle: db.annual_cycle,
     annual_history: db.annual_history,
     ai_model: db.ai_model,
@@ -3491,6 +3651,7 @@ function saveSystemSettingsToFirestore() {
     ai_enabled: db.ai_enabled,
     ai_hidden: db.ai_hidden,
     frames_disabled: db.frames_disabled,
+    frame_rotation_disabled: db.frame_rotation_disabled,
     ai_model: db.ai_model,
   }).catch((err) => console.warn('[Firebase] Erro ao salvar configurações:', err));
 }
@@ -4071,24 +4232,43 @@ api.get('/effects', requireAuth, (req, res) => {
 
 api.put(['/effects/:effect_id', '/admin/effects/:effect_id'], requireAdmin, (req, res) => {
   const { effect_id } = req.params;
-  const { cost } = req.body || {};
-  const c = parseInt(cost);
-  if (isNaN(c) || c < 0) return res.status(400).json({ detail: 'Custo inválido. Deve ser um número maior ou igual a 0.' });
+  const { cost, rarity } = req.body || {};
+  
+  const currentOverride = db.effect_overrides[effect_id] || { cost: 100, rarity: 'rare' };
+  
+  if (cost !== undefined) {
+    const c = parseInt(cost);
+    if (!isNaN(c) && c >= 0) {
+      currentOverride.cost = c;
+    }
+  }
+  
+  if (rarity && typeof rarity === 'string') {
+    const validRarities = ['common', 'rare', 'epic', 'legendary'];
+    if (validRarities.includes(rarity.trim())) {
+      currentOverride.rarity = rarity.trim();
+    }
+  }
 
-  db.effect_overrides[effect_id] = { cost: c };
+  db.effect_overrides[effect_id] = currentOverride;
   db.saveToDisk();
   saveSystemSettingsToFirestore();
-  res.json({ ok: true, effect_id, new_cost: c, catalog: db.getEffectsCatalog() });
+  res.json({ ok: true, effect_id, override: currentOverride, catalog: db.getEffectsCatalog() });
 });
 
 api.put(['/effects', '/admin/effects'], requireAdmin, (req, res) => {
   const { overrides } = req.body || {};
   if (overrides && typeof overrides === 'object') {
     for (const [id, val] of Object.entries(overrides)) {
-      const c = parseInt((val as any)?.cost !== undefined ? (val as any).cost : val as any);
-      if (!isNaN(c) && c >= 0) {
-        db.effect_overrides[id] = { cost: c };
+      const current = db.effect_overrides[id] || { cost: 100, rarity: 'rare' };
+      if ((val as any)?.cost !== undefined) {
+        const c = parseInt((val as any).cost);
+        if (!isNaN(c) && c >= 0) current.cost = c;
       }
+      if ((val as any)?.rarity) {
+        current.rarity = (val as any).rarity;
+      }
+      db.effect_overrides[id] = current;
     }
     db.saveToDisk();
     saveSystemSettingsToFirestore();
@@ -4096,18 +4276,18 @@ api.put(['/effects', '/admin/effects'], requireAdmin, (req, res) => {
   res.json({ ok: true, catalog: db.getEffectsCatalog() });
 });
 
-api.post('/me/effects/buy', requireAuth, async (req, res) => {
+api.post(['/effects/buy/:effect_id', '/me/effects/buy', '/effects/buy'], requireAuth, async (req, res) => {
   const user = (req as any).user as User;
-  const { effect_id } = req.body || {};
+  const targetId = req.params.effect_id || req.body?.effect_id;
   const catalog = db.getEffectsCatalog();
-  const effect = catalog.find((e) => e.id === effect_id);
+  const effect = catalog.find((e) => e.id === targetId);
 
   if (!effect) return res.status(404).json({ detail: 'Efeito não encontrado' });
-  if (user.role === 'admin') return res.json({ ok: true, already_owned: true });
+  if (user.role === 'admin') return res.json({ ok: true, already_owned: true, message: 'Administrador possui todas as molduras desbloqueadas!' });
 
   const owned = user.owned_effects || ['none'];
   if (owned.includes(effect.id) || effect.id === 'none') {
-    return res.json({ ok: true, already_owned: true });
+    return res.json({ ok: true, already_owned: true, message: 'Moldura já desbloqueada' });
   }
 
   const cost = effect.cost;
@@ -4116,6 +4296,7 @@ api.post('/me/effects/buy', requireAuth, async (req, res) => {
   }
 
   user.points -= cost;
+  if (!user.owned_effects) user.owned_effects = ['none'];
   user.owned_effects.push(effect.id);
   db.saveToDisk();
   await firebaseService.saveUser(user).catch(console.warn);
@@ -4124,13 +4305,13 @@ api.post('/me/effects/buy', requireAuth, async (req, res) => {
     ok: true,
     points: user.points,
     owned_effects: user.owned_effects,
+    message: 'Moldura adquirida com sucesso!',
   });
 });
 
-api.post('/me/effects/equip', requireAuth, async (req, res) => {
+api.post(['/effects/equip/:effect_id', '/me/effects/equip', '/effects/equip'], requireAuth, async (req, res) => {
   const user = (req as any).user as User;
-  const { effect_id } = req.body || {};
-  const effId = effect_id || 'none';
+  const effId = req.params.effect_id || req.body?.effect_id || 'none';
 
   if (user.role !== 'admin' && effId !== 'none') {
     const owned = user.owned_effects || ['none'];
@@ -4142,7 +4323,7 @@ api.post('/me/effects/equip', requireAuth, async (req, res) => {
   user.equipped_effect = effId;
   db.saveToDisk();
   await firebaseService.saveUser(user).catch(console.warn);
-  res.json({ ok: true, equipped: effId });
+  res.json({ ok: true, equipped: effId, message: 'Moldura equipada com sucesso!' });
 });
 
 // ---------------------------------------------------------------------------
@@ -4206,11 +4387,17 @@ api.get('/admin/zip/export', requireAdmin, (req, res) => {
         monthly_prize: db.monthly_prize,
         active_month_key: db.active_month_key,
         monthly_history: db.monthly_history,
+        annual_cycle: db.annual_cycle,
+        annual_history: db.annual_history,
         task_cleanup_config: db.task_cleanup_config,
         student_buttons: Array.from(db.student_buttons.values()),
         whatsapp_config: db.whatsapp_config,
         app_info: db.app_info,
         ai_enabled: db.ai_enabled,
+        ai_hidden: db.ai_hidden,
+        frames_disabled: db.frames_disabled,
+    frame_rotation_disabled: db.frame_rotation_disabled,
+        ai_model: db.ai_model,
         task_student_answers: Array.from(db.task_student_answers.entries()),
       },
     };
@@ -4301,21 +4488,40 @@ api.get('/admin/zip/export', requireAdmin, (req, res) => {
 
     // 4. Attachments / Uploads directory
     let uploadFilesCount = 0;
-    if (shouldIncludeUploads && fs.existsSync(UPLOAD_DIR)) {
-      try {
-        const files = fs.readdirSync(UPLOAD_DIR);
-        files.forEach((file) => {
-          const filePath = path.join(UPLOAD_DIR, file);
-          const stat = fs.statSync(filePath);
-          if (stat.isFile()) {
-            const data = fs.readFileSync(filePath);
-            zip.addFile(`uploads/${file}`, data);
+    const addedUploadFiles = new Set<string>();
+    if (shouldIncludeUploads) {
+      if (fs.existsSync(UPLOAD_DIR)) {
+        try {
+          const files = fs.readdirSync(UPLOAD_DIR);
+          files.forEach((file) => {
+            const filePath = path.join(UPLOAD_DIR, file);
+            const stat = fs.statSync(filePath);
+            if (stat.isFile()) {
+              const data = fs.readFileSync(filePath);
+              zip.addFile(`uploads/${file}`, data);
+              addedUploadFiles.add(file);
+              uploadFilesCount++;
+            }
+          });
+        } catch (err) {
+          console.warn('[ZIP Export] Erro ao ler arquivos de uploads:', err);
+        }
+      }
+
+      // Inclui fotos de resposta da IA, anexos e fotos de tarefas salvas em db.files
+      db.files.forEach((f) => {
+        const ext = path.extname(f.original_filename || '') || '.jpg';
+        const fileKeyWithExt = `${f.id}${ext}`;
+        const fileKeyRaw = f.id;
+        const origName = f.original_filename;
+        if (!addedUploadFiles.has(fileKeyWithExt) && !addedUploadFiles.has(fileKeyRaw) && (!origName || !addedUploadFiles.has(origName))) {
+          if (f.data && f.data.length > 0) {
+            zip.addFile(`uploads/${fileKeyWithExt}`, f.data);
+            addedUploadFiles.add(fileKeyWithExt);
             uploadFilesCount++;
           }
-        });
-      } catch (err) {
-        console.warn('[ZIP Export] Erro ao ler arquivos de uploads:', err);
-      }
+        }
+      });
     }
     manifest.counts.uploads = uploadFilesCount;
     zip.addFile('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'));
@@ -4452,7 +4658,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
     let backupData: any = null;
     let extractedFilesCount = 0;
 
-    // 1. Extrair uploads para a pasta UPLOAD_DIR do servidor
+    // 1. Extrair uploads para a pasta UPLOAD_DIR do servidor e registrar em db.files
     if (import_uploads !== 'false') {
       if (!fs.existsSync(UPLOAD_DIR)) {
         fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -4462,8 +4668,34 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
           const fileName = path.basename(entry.entryName);
           if (fileName) {
             const destPath = path.join(UPLOAD_DIR, fileName);
-            fs.writeFileSync(destPath, entry.getData());
+            const fileData = entry.getData();
+            fs.writeFileSync(destPath, fileData);
             extractedFilesCount++;
+
+            // Registra em db.files para que fotos de gabarito da IA e anexos fiquem imediatamente acessíveis
+            const ext = path.extname(fileName).toLowerCase();
+            const idWithoutExt = fileName.replace(/\.[^/.]+$/, '');
+            let mimeType = 'image/jpeg';
+            if (ext === '.png') mimeType = 'image/png';
+            else if (ext === '.webp') mimeType = 'image/webp';
+            else if (ext === '.gif') mimeType = 'image/gif';
+            else if (ext === '.pdf') mimeType = 'application/pdf';
+
+            const record: FileRecord = {
+              id: idWithoutExt,
+              original_filename: fileName,
+              content_type: mimeType,
+              size: fileData.length,
+              data: fileData,
+              uploaded_by: 'system',
+              created_at: new Date().toISOString(),
+            };
+            if (!db.files.has(idWithoutExt)) {
+              db.files.set(idWithoutExt, record);
+            }
+            if (!db.files.has(fileName)) {
+              db.files.set(fileName, record);
+            }
           }
         }
       });
@@ -4505,13 +4737,13 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         });
       }
 
-      // Import Users
+      // Import Users (Restaura molduras compradas, pontos de loja, ranking anual e mensal)
       if (import_users !== 'false' && actualData.users) {
         const usersList: any[] = Array.isArray(actualData.users)
           ? actualData.users.map((u: any) => (Array.isArray(u) ? u[1] : u))
           : [];
 
-        // Save current logged in admin user to ensure admin never gets locked out
+        // Salva admin atual para evitar perda de acesso
         const currentAdmin = (req as any).user as User;
 
         if (mode === 'overwrite' && usersList.length > 0) {
@@ -4523,12 +4755,48 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
 
         usersList.forEach((u) => {
           if (u && u.id && u.name) {
-            // Guarantee admin accounts never have password 123
             let plainPass = u.password_plain;
             let passHash = u.password_hash;
             if (u.role === 'admin' && (plainPass === '123' || !passHash)) {
               plainPass = process.env.ADMIN_PASSWORD || 'enzo123cg';
               passHash = bcrypt.hashSync(plainPass, 10);
+            }
+
+            const existingUser = db.users.get(u.id);
+
+            // Molduras compradas (owned_effects) e equipada (equipped_effect)
+            const importedOwnedEffects = Array.isArray(u.owned_effects) ? u.owned_effects : ['none'];
+            const mergedOwnedEffects = existingUser && mode === 'merge'
+              ? Array.from(new Set([...(existingUser.owned_effects || ['none']), ...importedOwnedEffects]))
+              : importedOwnedEffects;
+
+            const equippedEffect = u.equipped_effect || existingUser?.equipped_effect || 'none';
+
+            // Pontos da loja
+            const points = typeof u.points === 'number'
+              ? (mode === 'merge' && existingUser ? Math.max(existingUser.points || 0, u.points) : u.points)
+              : (existingUser?.points || 0);
+
+            // Estatísticas do Ranking Anual: tarefas feitas e tarefas pendentes
+            const annualStats: UserAnnualStats = u.annual_stats
+              ? {
+                  completed: typeof u.annual_stats.completed === 'number' ? u.annual_stats.completed : 0,
+                  pending: typeof u.annual_stats.pending === 'number' ? u.annual_stats.pending : 0,
+                  on_time: typeof u.annual_stats.on_time === 'number' ? u.annual_stats.on_time : 0,
+                  late: typeof u.annual_stats.late === 'number' ? u.annual_stats.late : 0,
+                }
+              : existingUser?.annual_stats || {
+                  completed: 0,
+                  pending: 0,
+                  on_time: 0,
+                  late: 0,
+                };
+
+            if (mode === 'merge' && existingUser?.annual_stats && u.annual_stats) {
+              annualStats.completed = Math.max(existingUser.annual_stats.completed || 0, u.annual_stats.completed || 0);
+              annualStats.pending = Math.max(existingUser.annual_stats.pending || 0, u.annual_stats.pending || 0);
+              annualStats.on_time = Math.max(existingUser.annual_stats.on_time || 0, u.annual_stats.on_time || 0);
+              annualStats.late = Math.max(existingUser.annual_stats.late || 0, u.annual_stats.late || 0);
             }
 
             const cleanUser: User = {
@@ -4539,14 +4807,17 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
               password_plain: plainPass,
               role: u.role || 'aluno',
               status: u.status || 'active',
-              points: typeof u.points === 'number' ? u.points : 0,
-              streak_count: typeof u.streak_count === 'number' ? u.streak_count : 0,
-              longest_streak: typeof u.longest_streak === 'number' ? u.longest_streak : 0,
-              owned_effects: Array.isArray(u.owned_effects) ? u.owned_effects : ['none'],
-              equipped_effect: u.equipped_effect || 'none',
-              avatar_data: u.avatar_data,
-              avatar_content_type: u.avatar_content_type,
-              created_at: u.created_at || new Date().toISOString(),
+              points,
+              streak_count: typeof u.streak_count === 'number' ? u.streak_count : (existingUser?.streak_count || 0),
+              longest_streak: typeof u.longest_streak === 'number' ? u.longest_streak : (existingUser?.longest_streak || 0),
+              owned_effects: mergedOwnedEffects,
+              equipped_effect: equippedEffect,
+              avatar_data: u.avatar_data || existingUser?.avatar_data,
+              avatar_content_type: u.avatar_content_type || existingUser?.avatar_content_type,
+              created_at: u.created_at || existingUser?.created_at || new Date().toISOString(),
+              annual_stats: annualStats,
+              monthly_stats: u.monthly_stats || existingUser?.monthly_stats,
+              monthly_history: { ...(existingUser?.monthly_history || {}), ...(u.monthly_history || {}) },
             };
             db.users.set(u.id, cleanUser);
             importedUsersCount++;
@@ -4555,7 +4826,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         });
       }
 
-      // Import Tasks
+      // Import Tasks (Se já tem no merge, IGNORE)
       if (import_tasks !== 'false' && actualData.tasks) {
         const tasksList: any[] = Array.isArray(actualData.tasks)
           ? actualData.tasks.map((t: any) => (Array.isArray(t) ? t[1] : t))
@@ -4565,6 +4836,10 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         }
         tasksList.forEach((t) => {
           if (t && t.id && t.title) {
+            // Se já tem, ignore!
+            if (mode === 'merge' && db.tasks.has(t.id)) {
+              return;
+            }
             db.tasks.set(t.id, {
               id: t.id,
               title: t.title,
@@ -4576,6 +4851,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
               attachments: Array.isArray(t.attachments) ? t.attachments : (Array.isArray(t.files) ? t.files : []),
               admin_photos: Array.isArray(t.admin_photos) ? t.admin_photos : [],
               answer: t.answer || '',
+              answer_source: t.answer_source || '',
               created_by: t.created_by || 'admin-user-001',
               created_at: t.created_at || new Date().toISOString(),
             });
@@ -4584,7 +4860,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         });
       }
 
-      // Import Completions
+      // Import Completions (Se já tem no merge, IGNORE)
       if (import_completions !== 'false' && actualData.completions) {
         if (mode === 'overwrite') {
           db.completions = [];
@@ -4592,6 +4868,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         const existingKeys = new Set(db.completions.map((c) => `${c.task_id}-${c.user_id}`));
         actualData.completions.forEach((c: any) => {
           const key = `${c?.task_id}-${c?.user_id}`;
+          // Se já tem, ignore!
           if (c && c.task_id && c.user_id && (!existingKeys.has(key) || mode === 'overwrite')) {
             db.completions.push({
               task_id: c.task_id,
@@ -4600,6 +4877,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
               on_time: Boolean(c.on_time),
               points_awarded: typeof c.points_awarded === 'number' ? c.points_awarded : 50,
             });
+            existingKeys.add(key);
             importedCompletionsCount++;
           }
         });
@@ -4623,7 +4901,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         db.effect_overrides = { ...db.effect_overrides, ...actualData.effect_overrides };
       }
 
-      // Import Student Buttons (Botões de Alunos)
+      // Import Student Buttons (Botões de Alunos - Se já tem no merge, IGNORE)
       if (import_buttons !== 'false' && actualData.student_buttons) {
         const buttonsList: any[] = Array.isArray(actualData.student_buttons)
           ? actualData.student_buttons.map((b: any) => (Array.isArray(b) ? b[1] : b))
@@ -4633,6 +4911,10 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         }
         buttonsList.forEach((b) => {
           if (b && b.id && b.name && b.url) {
+            // Se já tem, ignore!
+            if (mode === 'merge' && db.student_buttons.has(b.id)) {
+              return;
+            }
             db.student_buttons.set(b.id, {
               id: b.id,
               name: b.name,
@@ -4693,6 +4975,46 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         }
       }
 
+      // Import Annual Cycle & Ranking Anual
+      if (actualData.annual_cycle) {
+        db.annual_cycle = { ...db.annual_cycle, ...actualData.annual_cycle };
+      }
+      if (Array.isArray(actualData.annual_history)) {
+        if (mode === 'overwrite') {
+          db.annual_history = actualData.annual_history;
+        } else {
+          const existingYears = new Set(db.annual_history.map((h: any) => h.year));
+          actualData.annual_history.forEach((h: any) => {
+            if (h && h.year && !existingYears.has(h.year)) {
+              db.annual_history.push(h);
+            }
+          });
+        }
+      }
+
+      // Import AI settings, models and visibility
+      if (actualData.ai_model) {
+        db.ai_model = actualData.ai_model;
+      }
+      if (actualData.ai_hidden !== undefined) {
+        db.ai_hidden = Boolean(actualData.ai_hidden);
+      }
+      if (actualData.frames_disabled !== undefined) {
+        db.frames_disabled = Boolean(actualData.frames_disabled);
+      }
+      if (actualData.ai_enabled !== undefined) {
+        db.ai_enabled = Boolean(actualData.ai_enabled);
+      }
+
+      // Import AI Generated Student Task Answers
+      if (Array.isArray(actualData.task_student_answers)) {
+        actualData.task_student_answers.forEach(([k, v]: [string, any]) => {
+          if (k && v) {
+            db.task_student_answers.set(k, v);
+          }
+        });
+      }
+
       // Import Task Cleanup Config
       if (actualData.task_cleanup_config) {
         db.task_cleanup_config = {
@@ -4731,6 +5053,7 @@ api.get(['/ai/status', '/ai-status'], requireAuth, (req, res) => {
     enabled: db.ai_enabled,
     hidden: db.ai_hidden || false,
     frames_disabled: db.frames_disabled || false,
+    frame_rotation_disabled: db.frame_rotation_disabled !== undefined ? db.frame_rotation_disabled : true,
     model: db.ai_model || 'gemini-3.8-flash',
   });
 });
@@ -4745,6 +5068,9 @@ api.put(['/ai/status', '/ai-status'], requireAdmin, (req, res) => {
   if (req.body?.frames_disabled !== undefined) {
     db.frames_disabled = Boolean(req.body.frames_disabled);
   }
+  if (req.body?.frame_rotation_disabled !== undefined) {
+    db.frame_rotation_disabled = Boolean(req.body.frame_rotation_disabled);
+  }
   if (req.body?.model && typeof req.body.model === 'string') {
     db.ai_model = req.body.model.trim();
   }
@@ -4755,7 +5081,22 @@ api.put(['/ai/status', '/ai-status'], requireAdmin, (req, res) => {
     enabled: db.ai_enabled,
     hidden: db.ai_hidden || false,
     frames_disabled: db.frames_disabled || false,
+    frame_rotation_disabled: db.frame_rotation_disabled !== undefined ? db.frame_rotation_disabled : true,
     model: db.ai_model || 'gemini-3.8-flash',
+  });
+});
+
+
+api.post(['/admin/toggle-frame-rotation', '/effects/toggle-rotation'], requireAdmin, (req, res) => {
+  db.frame_rotation_disabled = !db.frame_rotation_disabled;
+  db.saveToDisk();
+  saveSystemSettingsToFirestore();
+  res.json({
+    ok: true,
+    frame_rotation_disabled: db.frame_rotation_disabled,
+    message: db.frame_rotation_disabled
+      ? "Giramento de molduras desativado (estático)."
+      : "Giramento de molduras ativado (girando)."
   });
 });
 
@@ -4878,6 +5219,80 @@ Responda EXCLUSIVAMENTE em JSON:
     errors: [],
     feedback: 'Excelente raciocínio apresentado! A lógica foi bem desenvolvida e os conceitos centrais foram compreendidos.',
     suggestions: ['Revise a formalização final para manter a precisão matemática/conceitual.'],
+  });
+});
+
+api.post('/ai/student-report', requireAdmin, async (req, res) => {
+  if (!db.ai_enabled) return res.status(503).json({ detail: 'Recursos de IA desativados' });
+  const { student_id } = req.body || {};
+  if (!student_id) return res.status(400).json({ detail: 'ID do aluno é obrigatório' });
+
+  const student = db.users.get(student_id);
+  if (!student || student.role !== 'aluno') {
+    return res.status(404).json({ detail: 'Aluno não encontrado' });
+  }
+
+  const allTasks = Array.from(db.tasks.values());
+  const myComps = db.completions.filter((c) => c.user_id === student.id);
+  const onTimeCount = myComps.filter((c) => c.on_time).length;
+  const lateCount = myComps.length - onTimeCount;
+
+  const assignedTasks = allTasks.filter((t) => !t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(student.id));
+  const compSet = new Set(myComps.map((c) => c.task_id));
+  const activePending = assignedTasks.filter((t) => !compSet.has(t.id)).length;
+
+  let reportText = '';
+  if (genAI) {
+    try {
+      const prompt = `Você é um Tutor Pedagógico e Analista de Aprendizagem de IA.
+Elabore um Relatório de Avaliação Pedagógica Individual do Aluno para o Administrador/Professor.
+
+DADOS DO ALUNO:
+- Nome: ${student.name}
+- Status: ${student.status || 'Ativo'}
+- Tarefas Concluídas no Total: ${myComps.length}
+- Entregas no Prazo: ${onTimeCount}
+- Entregas em Atraso: ${lateCount}
+- Pendências Ativas no Momento: ${activePending}
+- Saldo de Pontos (Loja de Molduras): ${student.points || 0} pts
+- Sequência de Dias Ativos (Streak): ${student.streak_count || 0} dias
+- Moldura Equipada: ${student.equipped_effect || 'Nenhuma'}
+
+INSTRUÇÕES DE FORMATO:
+Forneça um relatório claro, encorajador e construtivo dividido em 3 seções curtas com títulos em negrito (SEM USAR HASHTAGS #):
+1. **Desempenho Geral e Pontualidade**: Análise objetiva das entregas e da constância do aluno.
+2. **Diagnóstico Pedagógico do Mês**: Destaques de engajamento e atenção necessária a pendências.
+3. **Plano de Ação e Recomendações**: Dicas práticas personalizadas para o aluno continuar evoluindo e garantindo destaque.`;
+
+      const response = await callGeminiGenerate({
+        contents: prompt,
+        preferredModel: 'gemini-3.1-flash-lite',
+      });
+      reportText = (response.text || '').trim();
+    } catch (e: any) {
+      console.warn('Gemini student-report fallback:', e.message);
+    }
+  }
+
+  if (!reportText) {
+    reportText = `**Desempenho Geral e Pontualidade**\n` +
+      `O(a) aluno(a) ${student.name} conta com ${myComps.length} tarefa(s) concluída(s), sendo ${onTimeCount} entregue(s) dentro do prazo e ${lateCount} com atraso. Atualmente possui ${activePending} pendência(s) ativa(s).\n\n` +
+      `**Diagnóstico Pedagógico do Mês**\n` +
+      `${onTimeCount > 0 ? `Demonstra bom engajamento com as entregas no prazo e acúmulo de ${student.points || 0} pontos na Loja de Molduras.` : `Requer acompanhamento para acelerar o ritmo de entrega antes dos prazos estipulados.`}\n\n` +
+      `**Plano de Ação e Recomendações**\n` +
+      `Manter a rotina de acessos diários para zerar as pendências e continuar participando do ranking mensal de alunos.`;
+  }
+
+  res.json({
+    student_id: student.id,
+    student_name: student.name,
+    completed_count: myComps.length,
+    on_time_count: onTimeCount,
+    pending_count: activePending,
+    points: student.points || 0,
+    streak_count: student.streak_count || 0,
+    report: reportText,
+    generated_at: new Date().toISOString(),
   });
 });
 

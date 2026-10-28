@@ -64,9 +64,7 @@ h4,
   border: 2px solid #0a0a0a;
   border-radius: 0.875rem;
   box-shadow: 4px 4px 0 0 #0a0a0a;
-  transition:
-    transform 0.15s ease-out,
-    box-shadow 0.15s ease-out;
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
 }
 
 .nb-card-hover:hover {
@@ -79,9 +77,7 @@ h4,
   border-radius: 0.625rem;
   box-shadow: 3px 3px 0 0 #0a0a0a;
   font-weight: 700;
-  transition:
-    transform 0.12s ease-out,
-    box-shadow 0.12s ease-out;
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
 }
 
 .nb-btn:hover:not(:disabled) {
@@ -136,7 +132,65 @@ h4,
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  color: #020617 !important;
 }
+
+/* Explicit high-contrast text utility rules for badges, status pills, recipient tags, and chips */
+.nb-badge,
+.nb-badge *,
+.nb-pill,
+.nb-pill *,
+[class*="card-moldura-"] .nb-badge,
+[class*="card-moldura-"] .nb-badge *,
+[class*="card-moldura-"] .nb-pill,
+[class*="card-moldura-"] .nb-pill * {
+  color: #020617;
+}
+
+/* Ensure text color utility classes inside pills/badges ALWAYS take precedence over parent frame white text rules */
+.text-emerald-950, .text-emerald-950 *, [class*="card-moldura-"] .text-emerald-950, [class*="card-moldura-"] .text-emerald-950 * { color: #022c22 !important; }
+.text-emerald-900, .text-emerald-900 *, [class*="card-moldura-"] .text-emerald-900, [class*="card-moldura-"] .text-emerald-900 * { color: #064e3b !important; }
+.text-sky-950, .text-sky-950 *, [class*="card-moldura-"] .text-sky-950, [class*="card-moldura-"] .text-sky-950 * { color: #082f49 !important; }
+.text-sky-900, .text-sky-900 *, [class*="card-moldura-"] .text-sky-900, [class*="card-moldura-"] .text-sky-900 * { color: #0c4a6e !important; }
+.text-indigo-950, .text-indigo-950 *, [class*="card-moldura-"] .text-indigo-950, [class*="card-moldura-"] .text-indigo-950 * { color: #1e1b4b !important; }
+.text-indigo-900, .text-indigo-900 *, [class*="card-moldura-"] .text-indigo-900, [class*="card-moldura-"] .text-indigo-900 * { color: #312e81 !important; }
+.text-violet-950, .text-violet-950 *, [class*="card-moldura-"] .text-violet-950, [class*="card-moldura-"] .text-violet-950 * { color: #2e1065 !important; }
+.text-violet-900, .text-violet-900 *, [class*="card-moldura-"] .text-violet-900, [class*="card-moldura-"] .text-violet-900 * { color: #4c1d95 !important; }
+.text-amber-950, .text-amber-950 *, [class*="card-moldura-"] .text-amber-950, [class*="card-moldura-"] .text-amber-950 * { color: #451a03 !important; }
+.text-amber-900, .text-amber-900 *, [class*="card-moldura-"] .text-amber-900, [class*="card-moldura-"] .text-amber-900 * { color: #78350f !important; }
+.text-rose-950, .text-rose-950 *, [class*="card-moldura-"] .text-rose-950, [class*="card-moldura-"] .text-rose-950 * { color: #4c0519 !important; }
+.text-rose-900, .text-rose-900 *, [class*="card-moldura-"] .text-rose-900, [class*="card-moldura-"] .text-rose-900 * { color: #881337 !important; }
+.text-cyan-950, .text-cyan-950 *, [class*="card-moldura-"] .text-cyan-950, [class*="card-moldura-"] .text-cyan-950 * { color: #083344 !important; }
+.text-cyan-900, .text-cyan-900 *, [class*="card-moldura-"] .text-cyan-900, [class*="card-moldura-"] .text-cyan-900 * { color: #164e63 !important; }
+.text-red-950, .text-red-950 *, [class*="card-moldura-"] .text-red-950, [class*="card-moldura-"] .text-red-950 * { color: #450a0a !important; }
+.text-red-900, .text-red-900 *, [class*="card-moldura-"] .text-red-900, [class*="card-moldura-"] .text-red-900 * { color: #7f1d1d !important; }
+.text-orange-950, .text-orange-950 *, [class*="card-moldura-"] .text-orange-950, [class*="card-moldura-"] .text-orange-950 * { color: #431407 !important; }
+.text-orange-900, .text-orange-900 *, [class*="card-moldura-"] .text-orange-900, [class*="card-moldura-"] .text-orange-900 * { color: #7c2d12 !important; }
+.text-neutral-950, .text-neutral-950 *, [class*="card-moldura-"] .text-neutral-950, [class*="card-moldura-"] .text-neutral-950 * { color: #0a0a0a !important; }
+.text-neutral-900, .text-neutral-900 *, [class*="card-moldura-"] .text-neutral-900, [class*="card-moldura-"] .text-neutral-900 * { color: #171717 !important; }
+.text-black, .text-black *, [class*="card-moldura-"] .text-black, [class*="card-moldura-"] .text-black * { color: #000000 !important; }
+
+/* Force dark text for light background pills inside any card frame */
+[class*="card-moldura-"] .bg-sky-100, [class*="card-moldura-"] .bg-sky-200, [class*="card-moldura-"] .bg-sky-300,
+[class*="card-moldura-"] .bg-amber-100, [class*="card-moldura-"] .bg-amber-200, [class*="card-moldura-"] .bg-amber-300,
+[class*="card-moldura-"] .bg-emerald-100, [class*="card-moldura-"] .bg-emerald-200, [class*="card-moldura-"] .bg-emerald-300,
+[class*="card-moldura-"] .bg-violet-100, [class*="card-moldura-"] .bg-violet-200, [class*="card-moldura-"] .bg-violet-300,
+[class*="card-moldura-"] .bg-cyan-100, [class*="card-moldura-"] .bg-cyan-200, [class*="card-moldura-"] .bg-cyan-300,
+[class*="card-moldura-"] .bg-red-100, [class*="card-moldura-"] .bg-red-200, [class*="card-moldura-"] .bg-red-300,
+[class*="card-moldura-"] .bg-orange-100, [class*="card-moldura-"] .bg-orange-200, [class*="card-moldura-"] .bg-orange-300,
+[class*="card-moldura-"] .bg-rose-100, [class*="card-moldura-"] .bg-rose-200, [class*="card-moldura-"] .bg-rose-300,
+[class*="card-moldura-"] .bg-neutral-100, [class*="card-moldura-"] .bg-neutral-200, [class*="card-moldura-"] .bg-neutral-300,
+[class*="card-moldura-"] .bg-white, [class*="card-moldura-"] .bg-slate-100, [class*="card-moldura-"] .bg-slate-200 {
+  color: #020617 !important;
+}
+
+/* Riverdale specific profile name exemption */
+.card-moldura-riverdale .student-name,
+.card-moldura-riverdale .profile-name,
+.card-moldura-riverdale .user-name {
+  color: #ffffff !important;
+}
+
 
 @layer base {
   * {
@@ -144,23 +198,32 @@ h4,
   }
 }
 
-/* Animation: list stagger */
 @keyframes nb-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .nb-fade-in {
   animation: nb-fade-in 0.35s ease-out both;
 }
 
-/* Profile Effects (avatar wrappers) */
+
+/* Disable animation spinning when toggled by Admin */
+:root {
+  --fx-spin-angle: 360deg;
+}
+
+body.fx-no-spin,
+.fx-no-spin {
+  --fx-spin-angle: 0deg !important;
+}
+
+body.fx-no-spin .fx-spin,
+.fx-no-spin .fx-spin {
+  animation: none !important;
+}
+
+/* Base Avatar Effect Wrapper */
 .fx-avatar-wrapper {
   position: relative;
   display: inline-flex;
@@ -168,6 +231,7 @@ h4,
   justify-content: center;
   border-radius: 50%;
   isolation: isolate;
+  transition: all 0.25s ease;
 }
 
 .fx-avatar-wrapper > * {
@@ -176,23 +240,27 @@ h4,
   border-radius: 50% !important;
 }
 
-/* Neon Pulse — soft blue pulsing halo */
-@keyframes fx-neon-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.6), 0 0 20px 4px rgba(59,130,246,0.35); }
-  50%      { box-shadow: 0 0 0 8px rgba(59,130,246,0.0), 0 0 30px 10px rgba(59,130,246,0.55); }
+@keyframes fx-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(var(--fx-spin-angle, 360deg)); }
 }
-.fx-neon-pulse { animation: fx-neon-pulse 2s ease-in-out infinite; }
 
-/* Sunset — vibrant glowing sunset orange/pink */
+/* 1. Neon Pulse — Electric cyan halo pulse */
+@keyframes fx-neon-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px #06b6d4, 0 0 20px 4px rgba(6,182,212,0.6); }
+  50% { box-shadow: 0 0 0 5px #22d3ee, 0 0 32px 8px rgba(34,211,238,0.85); }
+}
+.fx-neon-pulse {
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #06b6d4, #38bdf8, #0284c7, #06b6d4);
+  border-radius: 50%;
+  animation: fx-neon-pulse 2s ease-in-out infinite, fx-spin 6s linear infinite;
+}
+
+/* 2. Sunset — Warm golden hour orange & rose */
 @keyframes fx-sunset {
-  0%, 100% {
-    box-shadow: 0 0 0 3px #f97316, 0 0 24px 6px rgba(249,115,22,0.85), 0 0 38px 10px rgba(236,72,153,0.55);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 4px #fb923c, 0 0 34px 10px rgba(249,115,22,0.95), 0 0 52px 15px rgba(244,63,94,0.75);
-    transform: scale(1.02);
-  }
+  0%, 100% { box-shadow: 0 0 0 3px #f97316, 0 0 22px 6px rgba(249,115,22,0.7); }
+  50% { box-shadow: 0 0 0 4.5px #fb923c, 0 0 32px 10px rgba(244,63,94,0.85); }
 }
 .fx-sunset {
   padding: 3.5px;
@@ -200,131 +268,164 @@ h4,
   border-radius: 50%;
   animation: fx-sunset 2.2s ease-in-out infinite, fx-spin 5s linear infinite;
 }
-.fx-sunset > * { background: white; border-radius: 50%; }
 
-@keyframes fx-spin { to { transform: rotate(360deg); } }
-
-/* Golden — spinning gold with glow */
+/* 3. Golden — Shimmering imperial gold */
+@keyframes fx-golden {
+  0%, 100% { box-shadow: 0 0 0 3px #f59e0b, 0 0 22px 5px rgba(245,158,11,0.65); }
+  50% { box-shadow: 0 0 0 4.5px #fbbf24, 0 0 34px 10px rgba(251,191,36,0.9); }
+}
 .fx-golden {
   padding: 4px;
   background: conic-gradient(from 0deg, #fde68a, #f59e0b, #b45309, #fde68a);
-  box-shadow: 0 0 22px rgba(245,158,11,0.55);
-  animation: fx-spin 4s linear infinite;
+  border-radius: 50%;
+  animation: fx-golden 2.4s ease-in-out infinite, fx-spin 4s linear infinite;
 }
-.fx-golden > * { background: white; border-radius: 50%; }
 
-/* Rainbow — animated 7-color border */
+/* 4. Rainbow — Prism 7-color spinning ring */
 .fx-rainbow {
-  padding: 3px;
+  padding: 3.5px;
   background: conic-gradient(from 0deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444);
-  animation: fx-spin 3s linear infinite;
+  border-radius: 50%;
+  box-shadow: 0 0 20px rgba(168,85,247,0.5);
+  animation: fx-spin 3.5s linear infinite;
 }
-.fx-rainbow > * { background: white; border-radius: 50%; }
 
-/* Ice — cyan frost with sparkling shadow */
+/* 5. Ice — Glacial frost blue crystal */
 @keyframes fx-ice {
-  0%, 100% { box-shadow: 0 0 0 2px #67e8f9, 0 0 20px 4px rgba(103,232,249,0.6), inset 0 0 16px rgba(219,234,254,0.7); }
-  50%      { box-shadow: 0 0 0 3px #a5f3fc, 0 0 26px 8px rgba(103,232,249,0.85), inset 0 0 20px rgba(219,234,254,0.9); }
+  0%, 100% { box-shadow: 0 0 0 3px #38bdf8, 0 0 20px 4px rgba(56,189,248,0.6); }
+  50% { box-shadow: 0 0 0 4.5px #7dd3fc, 0 0 30px 8px rgba(125,211,252,0.85); }
 }
 .fx-ice {
-  background: linear-gradient(135deg, #cffafe 0%, #e0f2fe 100%);
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #bae6fd, #0284c7, #e0f2fe, #38bdf8, #bae6fd);
   border-radius: 50%;
-  padding: 2px;
-  animation: fx-ice 2.2s ease-in-out infinite;
+  animation: fx-ice 2.2s ease-in-out infinite, fx-spin 6s linear infinite;
 }
-.fx-ice > * { background: white; border-radius: 50%; }
 
-/* Fire — red/orange dancing flame */
+/* 6. Fire — Molten magma orange/red flame */
 @keyframes fx-fire {
-  0%   { box-shadow: 0 -2px 12px 3px #f97316, 0 -4px 20px 5px rgba(239,68,68,0.7); }
-  50%  { box-shadow: 0 -4px 18px 6px #f59e0b, 0 -8px 26px 8px rgba(220,38,38,0.85); }
-  100% { box-shadow: 0 -2px 12px 3px #ef4444, 0 -4px 22px 6px rgba(249,115,22,0.7); }
+  0%, 100% { box-shadow: 0 0 0 3px #dc2626, 0 0 22px 6px rgba(220,38,38,0.75); }
+  50% { box-shadow: 0 0 0 4.5px #ea580c, 0 0 34px 10px rgba(249,115,22,0.9); }
 }
 .fx-fire {
-  padding: 3px;
-  background: conic-gradient(from 180deg, #dc2626, #f59e0b, #dc2626);
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #dc2626, #f97316, #f59e0b, #dc2626);
   border-radius: 50%;
-  animation: fx-fire 0.9s ease-in-out infinite;
+  animation: fx-fire 1.8s ease-in-out infinite, fx-spin 4s linear infinite;
 }
-.fx-fire > * { background: white; border-radius: 50%; }
 
-/* Hologram — iridescent cyberpunk */
-@keyframes fx-hologram-hue { to { filter: hue-rotate(360deg); } }
-.fx-hologram {
-  padding: 3px;
-  background: conic-gradient(from 45deg, #a855f7, #06b6d4, #22d3ee, #a855f7, #ec4899, #a855f7);
-  box-shadow: 0 0 24px 4px rgba(168,85,247,0.7);
-  animation: fx-spin 5s linear infinite, fx-hologram-hue 8s linear infinite;
+/* 7. Galaxy — Ultraviolet cosmos spinning ring */
+@keyframes fx-galaxy {
+  0%, 100% { box-shadow: 0 0 0 3px #9333ea, 0 0 24px 6px rgba(147,51,234,0.7); }
+  50% { box-shadow: 0 0 0 4.5px #c084fc, 0 0 36px 10px rgba(192,132,252,0.9); }
 }
-.fx-hologram > * { background: white; border-radius: 50%; }
-
-/* Galaxy — deep purple with rotating nebula */
 .fx-galaxy {
   padding: 4px;
-  background: conic-gradient(from 0deg, #1e1b4b, #7c3aed, #2563eb, #1e1b4b);
-  box-shadow: 0 0 26px 5px rgba(124,58,237,0.7), 0 0 60px 12px rgba(37,99,235,0.3);
-  animation: fx-spin 8s linear infinite;
-}
-.fx-galaxy > * { background: white; border-radius: 50%; }
-
-/* Electric — yellow crackling lightning */
-@keyframes fx-electric {
-  0%, 100% { box-shadow: 0 0 0 2px #fde047, 0 0 18px 4px rgba(253,224,71,0.85); }
-  25%      { box-shadow: -3px -2px 0 2px #facc15, 4px 3px 20px 6px rgba(250,204,21,0.9); }
-  50%      { box-shadow: 3px -3px 0 2px #facc15, -4px 3px 22px 6px rgba(253,224,71,0.9); }
-  75%      { box-shadow: -2px 3px 0 2px #facc15, 3px -3px 20px 6px rgba(250,204,21,0.9); }
-}
-.fx-electric {
-  padding: 2px;
-  background: #fef3c7;
+  background: conic-gradient(from 0deg, #1e1b4b, #7c3aed, #2563eb, #a855f7, #1e1b4b);
   border-radius: 50%;
-  animation: fx-electric 0.35s steps(4) infinite;
+  animation: fx-galaxy 2.5s ease-in-out infinite, fx-spin 7s linear infinite;
 }
-.fx-electric > * { background: white; border-radius: 50%; }
 
-/* Shadow — deep pulsing dark aura */
+/* 8. Shadow — Obsidian dark stealth aura */
 @keyframes fx-shadow {
-  0%, 100% { box-shadow: 0 0 0 2px #111, 0 0 22px 4px rgba(0,0,0,0.7); }
-  50%      { box-shadow: 0 0 0 3px #1f2937, 0 0 30px 8px rgba(0,0,0,0.85); }
+  0%, 100% { box-shadow: 0 0 0 3px #262626, 0 0 20px 4px rgba(0,0,0,0.8); }
+  50% { box-shadow: 0 0 0 4.5px #525252, 0 0 28px 8px rgba(38,38,38,0.95); }
 }
-.fx-shadow { animation: fx-shadow 2s ease-in-out infinite; border-radius: 50%; }
+.fx-shadow {
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #0a0a0a, #404040, #171717, #737373, #0a0a0a);
+  border-radius: 50%;
+  animation: fx-shadow 2.2s ease-in-out infinite, fx-spin 8s linear infinite;
+}
 
-/* Phoenix — red/orange flame renaissance */
+/* 9. Sakura — Blossom rose petal ring */
+@keyframes fx-sakura {
+  0%, 100% { box-shadow: 0 0 0 3px #f43f5e, 0 0 20px 4px rgba(244,63,94,0.6); }
+  50% { box-shadow: 0 0 0 4.5px #fb7185, 0 0 30px 8px rgba(251,113,133,0.85); }
+}
+.fx-sakura {
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #fdf2f8, #f43f5e, #fbcfe8, #f43f5e, #fdf2f8);
+  border-radius: 50%;
+  animation: fx-sakura 2.2s ease-in-out infinite, fx-spin 5s linear infinite;
+}
+
+/* 10. Emerald — Sacred jade green spinning ring */
+@keyframes fx-emerald {
+  0%, 100% { box-shadow: 0 0 0 3px #059669, 0 0 20px 4px rgba(5,150,105,0.6); }
+  50% { box-shadow: 0 0 0 4.5px #34d399, 0 0 30px 8px rgba(52,211,153,0.85); }
+}
+.fx-emerald {
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #022c22, #10b981, #6ee7b7, #047857, #022c22);
+  border-radius: 50%;
+  animation: fx-emerald 2.2s ease-in-out infinite, fx-spin 5s linear infinite;
+}
+
+/* 11. Phoenix — Immortal flame ruby halo */
 @keyframes fx-phoenix {
-  0% { box-shadow: 0 0 0 3px #b91c1c, 0 0 30px 6px rgba(239,68,68,0.8), 0 -10px 30px 8px rgba(249,115,22,0.7); transform: scale(1); }
-  50% { box-shadow: 0 0 0 4px #dc2626, 0 0 40px 10px rgba(239,68,68,0.95), 0 -14px 40px 12px rgba(249,115,22,0.9); transform: scale(1.03); }
-  100% { box-shadow: 0 0 0 3px #b91c1c, 0 0 30px 6px rgba(239,68,68,0.8), 0 -10px 30px 8px rgba(249,115,22,0.7); transform: scale(1); }
+  0%, 100% { box-shadow: 0 0 0 3px #e11d48, 0 0 26px 6px rgba(225,29,72,0.75); transform: scale(1); }
+  50% { box-shadow: 0 0 0 5px #f59e0b, 0 0 38px 12px rgba(245,158,11,0.9); transform: scale(1.03); }
 }
 .fx-phoenix {
-  padding: 3px;
-  background: conic-gradient(from 90deg, #dc2626, #f59e0b, #eab308, #f59e0b, #dc2626);
+  padding: 4px;
+  background: conic-gradient(from 0deg, #dc2626, #f59e0b, #e11d48, #f59e0b, #dc2626);
   border-radius: 50%;
-  animation: fx-phoenix 1.6s ease-in-out infinite, fx-spin 5s linear infinite;
+  animation: fx-phoenix 2s ease-in-out infinite, fx-spin 4s linear infinite;
 }
-.fx-phoenix > * { background: white; border-radius: 50%; }
 
-/* Diamond — bright white/cyan sparkle */
-@keyframes fx-diamond {
-  0%, 100% { box-shadow: 0 0 0 3px #cbd5e1, 0 0 28px 6px rgba(191,219,254,0.8); }
-  50%      { box-shadow: 0 0 0 4px #f8fafc, 0 0 38px 10px rgba(224,242,254,1); }
+/* 12. Valorant — Tactical Radiant Scarlet ring */
+@keyframes fx-valorant {
+  0%, 100% { box-shadow: 0 0 0 3px #ff4655, 0 0 22px 6px rgba(255,70,85,0.75); }
+  50% { box-shadow: 0 0 0 4.5px #00f0ff, 0 0 32px 10px rgba(0,240,255,0.85); }
 }
-.fx-diamond {
-  padding: 3px;
-  background: conic-gradient(from 0deg, #f8fafc, #bae6fd, #f0f9ff, #f8fafc, #e0f2fe, #f8fafc);
-  animation: fx-diamond 1.8s ease-in-out infinite, fx-spin 6s linear infinite;
+.fx-valorant {
+  padding: 4px;
+  background: conic-gradient(from 45deg, #ff4655, #0f1923, #00f0ff, #ff4655);
+  border-radius: 50%;
+  animation: fx-valorant 2s ease-in-out infinite, fx-spin 4s linear infinite;
 }
-.fx-diamond > * { background: white; border-radius: 50%; }
 
-/* SpongeBob (Bob Esponja & Fenda do Biquíni) — porous sponge gold, ocean bubbles and joyful tropical aura */
+/* 13. Cyberpunk — Night City neon yellow & pink */
+@keyframes fx-cyberpunk {
+  0%, 100% { box-shadow: 0 0 0 3px #facc15, 0 0 22px 6px rgba(250,204,21,0.75); }
+  50% { box-shadow: 0 0 0 4.5px #f43f5e, 0 0 32px 10px rgba(244,63,94,0.85); }
+}
+.fx-cyberpunk {
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #facc15, #ec4899, #06b6d4, #facc15);
+  border-radius: 50%;
+  animation: fx-cyberpunk 2s ease-in-out infinite, fx-spin 4.5s linear infinite;
+}
+
+/* 14. Pixel Art — 8-bit Arcade step ring */
+@keyframes fx-pixel-art {
+  0%, 100% { box-shadow: 0 0 0 3px #38bdf8, 0 0 18px 4px rgba(56,189,248,0.7); }
+  50% { box-shadow: 0 0 0 4px #4ade80, 0 0 26px 8px rgba(74,222,128,0.85); }
+}
+.fx-pixel-art {
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #38bdf8, #4ade80, #facc15, #38bdf8);
+  border-radius: 50%;
+  animation: fx-pixel-art 1.5s steps(6) infinite, fx-spin 6s steps(12) infinite;
+}
+
+/* 15. Hogwarts — Wizarding castle starlight gold */
+@keyframes fx-hogwarts {
+  0%, 100% { box-shadow: 0 0 0 3px #f59e0b, 0 0 22px 6px rgba(245,158,11,0.75); }
+  50% { box-shadow: 0 0 0 4.5px #818cf8, 0 0 32px 10px rgba(129,140,248,0.85); }
+}
+.fx-hogwarts {
+  padding: 4px;
+  background: conic-gradient(from 0deg, #1e1b4b, #f59e0b, #4338ca, #fbbf24, #1e1b4b);
+  border-radius: 50%;
+  animation: fx-hogwarts 2.4s ease-in-out infinite, fx-spin 5s linear infinite;
+}
+
+/* 16. SpongeBob — Bikini Bottom bubble spinning ring */
 @keyframes fx-spongebob {
-  0%, 100% {
-    box-shadow: 0 0 0 3px #facc15, 0 0 24px 6px rgba(250,204,21,0.85), 0 0 40px 10px rgba(56,189,248,0.65);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 4px #fbbf24, 0 0 32px 10px rgba(250,204,21,0.95), 0 0 55px 16px rgba(56,189,248,0.85);
-    transform: scale(1.025);
-  }
+  0%, 100% { box-shadow: 0 0 0 3px #facc15, 0 0 22px 6px rgba(250,204,21,0.8); }
+  50% { box-shadow: 0 0 0 4.5px #38bdf8, 0 0 32px 10px rgba(56,189,248,0.85); }
 }
 .fx-spongebob {
   padding: 3.5px;
@@ -332,431 +433,326 @@ h4,
   border-radius: 50%;
   animation: fx-spongebob 1.8s ease-in-out infinite, fx-spin 5s linear infinite;
 }
-.fx-spongebob > * { background: white; border-radius: 50%; }
 
-/* Card-Level Molduras (Efeito na Moldura inteira do bloco do perfil) */
-@keyframes card-glow-pulse {
-  0%, 100% { filter: drop-shadow(0 0 6px rgba(250,204,21,0.4)); }
-  50%      { filter: drop-shadow(0 0 16px rgba(250,204,21,0.75)); }
+/* 17. Stranger Things — Upside Down neon red ring */
+@keyframes fx-stranger-things {
+  0%, 100% { box-shadow: 0 0 0 3px #dc2626, 0 0 24px 6px rgba(220,38,38,0.8); }
+  50% { box-shadow: 0 0 0 4.5px #991b1b, 0 0 34px 10px rgba(153,27,27,0.95); }
+}
+.fx-stranger-things {
+  padding: 4px;
+  background: conic-gradient(from 0deg, #dc2626, #1e1b4b, #ef4444, #000000, #dc2626);
+  border-radius: 50%;
+  animation: fx-stranger-things 2s ease-in-out infinite, fx-spin 5s linear infinite;
+}
+
+/* 18. Riverdale — Bulldogs gold & Serpents emerald ring */
+@keyframes fx-riverdale {
+  0%, 100% { box-shadow: 0 0 0 3px #f59e0b, 0 0 20px 5px rgba(245,158,11,0.7); }
+  50% { box-shadow: 0 0 0 4.5px #10b981, 0 0 30px 8px rgba(16,185,129,0.85); }
+}
+.fx-riverdale {
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #1e3a8a, #f59e0b, #064e3b, #f59e0b, #1e3a8a);
+  border-radius: 50%;
+  animation: fx-riverdale 2.2s ease-in-out infinite, fx-spin 5s linear infinite;
+}
+
+/* 19. Mentalist — Crimson analytical investigation ring */
+@keyframes fx-mentalist {
+  0%, 100% { box-shadow: 0 0 0 3px #b91c1c, 0 0 20px 5px rgba(185,28,28,0.75); }
+  50% { box-shadow: 0 0 0 4.5px #f59e0b, 0 0 30px 8px rgba(245,158,11,0.85); }
+}
+.fx-mentalist {
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #7f1d1d, #f59e0b, #450a0a, #b91c1c, #7f1d1d);
+  border-radius: 50%;
+  animation: fx-mentalist 2.2s ease-in-out infinite, fx-spin 5s linear infinite;
+}
+
+/* 20. One Piece — Grand Line treasure gold ring */
+@keyframes fx-one-piece {
+  0%, 100% { box-shadow: 0 0 0 3px #f59e0b, 0 0 22px 6px rgba(245,158,11,0.8); }
+  50% { box-shadow: 0 0 0 4.5px #fbbf24, 0 0 34px 10px rgba(251,191,36,0.95); }
+}
+.fx-one-piece {
+  padding: 4px;
+  background: conic-gradient(from 0deg, #451a03, #f59e0b, #0c0a09, #fbbf24, #451a03);
+  border-radius: 50%;
+  animation: fx-one-piece 2.2s ease-in-out infinite, fx-spin 5s linear infinite;
+}
+
+/* 21. Chemistry Lab — Bioluminescent science neon ring */
+@keyframes fx-chemistry-lab {
+  0%, 100% { box-shadow: 0 0 0 3px #10b981, 0 0 22px 6px rgba(16,185,129,0.75); }
+  50% { box-shadow: 0 0 0 4.5px #06b6d4, 0 0 32px 10px rgba(6,182,212,0.85); }
+}
+.fx-chemistry-lab {
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #022c22, #10b981, #06b6d4, #34d399, #022c22);
+  border-radius: 50%;
+  animation: fx-chemistry-lab 2s ease-in-out infinite, fx-spin 5s linear infinite;
+}
+
+/* 22. Japan — Torii crimson & sakura gold ring */
+@keyframes fx-japan {
+  0%, 100% { box-shadow: 0 0 0 3px #ef4444, 0 0 22px 6px rgba(239,68,68,0.75); }
+  50% { box-shadow: 0 0 0 4.5px #f59e0b, 0 0 32px 10px rgba(245,158,11,0.85); }
+}
+.fx-japan {
+  padding: 4px;
+  background: conic-gradient(from 0deg, #450a0a, #ef4444, #f59e0b, #fb7185, #450a0a);
+  border-radius: 50%;
+  animation: fx-japan 2.2s ease-in-out infinite, fx-spin 5s linear infinite;
+}
+
+/* CARD-LEVEL MOLDURAS — Zero-shift block container styling */
+.card-moldura-neon,
+.card-moldura-sunset,
+.card-moldura-golden,
+.card-moldura-rainbow,
+.card-moldura-ice,
+.card-moldura-fire,
+.card-moldura-galaxy,
+.card-moldura-shadow,
+.card-moldura-sakura,
+.card-moldura-emerald,
+.card-moldura-phoenix,
+.card-moldura-valorant,
+.card-moldura-cyberpunk,
+.card-moldura-pixel,
+.card-moldura-hogwarts,
+.card-moldura-spongebob,
+.card-moldura-mentalist,
+.card-moldura-stranger-things,
+.card-moldura-riverdale,
+.card-moldura-one-piece,
+.card-moldura-chemistry,
+.card-moldura-japan {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  border-width: 2.5px !important;
+  border-style: solid !important;
+  border-radius: 1rem !important;
+  padding: 1rem !important;
+  position: relative !important;
+  overflow: hidden !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.card-moldura-neon {
+  background: radial-gradient(circle at 50% 15%, #082f49 0%, #031525 60%, #020c15 100%) !important;
+  border-color: #06b6d4 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 16px rgba(6,182,212,0.45), 3px 3px 0px 0px rgba(8,145,178,1) !important;
+}
+
+.card-moldura-sunset {
+  background: linear-gradient(145deg, #fff7ed 0%, #ffedd5 40%, #fecdd3 75%, #fbcfe8 100%) !important;
+  border-color: #ea580c !important;
+  color: #1c1917 !important;
+  box-shadow: 0 0 16px rgba(234,88,12,0.35), 3px 3px 0px 0px rgba(194,65,12,1) !important;
+}
+
+.card-moldura-golden {
+  background: linear-gradient(145deg, #fef9c3 0%, #fef08a 40%, #fde047 80%, #fef3c7 100%) !important;
+  border-color: #d97706 !important;
+  color: #451a03 !important;
+  box-shadow: 0 0 18px rgba(217,119,6,0.45), 3px 3px 0px 0px rgba(180,83,9,1) !important;
+}
+
+.card-moldura-rainbow {
+  background: linear-gradient(135deg, #fdf2f8 0%, #f0fdf4 35%, #ecfeff 70%, #faf5ff 100%) !important;
+  border-color: #ec4899 !important;
+  color: #111827 !important;
+  box-shadow: 0 0 16px rgba(236,72,153,0.35), 3px 3px 0px 0px rgba(168,85,247,1) !important;
+}
+
+.card-moldura-ice {
+  background: linear-gradient(145deg, #f0fdfa 0%, #e0f2fe 45%, #bae6fd 85%, #e0f7fa 100%) !important;
+  border-color: #0284c7 !important;
+  color: #082f49 !important;
+  box-shadow: 0 0 16px rgba(2,132,199,0.35), 3px 3px 0px 0px rgba(3,105,161,1) !important;
+}
+
+.card-moldura-fire {
+  background: linear-gradient(145deg, #fff7ed 0%, #ffedd5 35%, #fee2e2 70%, #ffedd5 100%) !important;
+  border-color: #dc2626 !important;
+  color: #450a0a !important;
+  box-shadow: 0 0 18px rgba(220,38,38,0.4), 3px 3px 0px 0px rgba(185,28,28,1) !important;
+}
+
+.card-moldura-galaxy {
+  background: radial-gradient(circle at 50% 20%, #2e1065 0%, #1e1b4b 55%, #0f0a2a 100%) !important;
+  border-color: #a855f7 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(168,85,247,0.5), 3px 3px 0px 0px rgba(126,34,206,1) !important;
+}
+
+.card-moldura-shadow {
+  background: linear-gradient(145deg, #262626 0%, #171717 50%, #0a0a0a 100%) !important;
+  border-color: #737373 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 16px rgba(0,0,0,0.8), 3px 3px 0px 0px rgba(64,64,64,1) !important;
+}
+
+.card-moldura-sakura {
+  background: linear-gradient(145deg, #fff1f2 0%, #fdf2f8 40%, #fce7f3 80%, #fff1f2 100%) !important;
+  border-color: #f43f5e !important;
+  color: #4c0519 !important;
+  box-shadow: 0 0 16px rgba(244,63,94,0.35), 3px 3px 0px 0px rgba(225,29,72,1) !important;
+}
+
+.card-moldura-emerald {
+  background: linear-gradient(145deg, #f0fdf4 0%, #dcfce7 45%, #bbf7d0 85%, #f0fdf4 100%) !important;
+  border-color: #059669 !important;
+  color: #022c22 !important;
+  box-shadow: 0 0 16px rgba(5,150,105,0.35), 3px 3px 0px 0px rgba(4,120,87,1) !important;
+}
+
+.card-moldura-phoenix {
+  background: linear-gradient(145deg, #fff1f2 0%, #ffe4e6 40%, #fef3c7 85%, #fff1f2 100%) !important;
+  border-color: #e11d48 !important;
+  color: #4c0519 !important;
+  box-shadow: 0 0 20px rgba(225,29,72,0.45), 3px 3px 0px 0px rgba(159,18,57,1) !important;
+}
+
+.card-moldura-valorant {
+  background: linear-gradient(145deg, #0f1923 0%, #16222f 50%, #0b1219 100%) !important;
+  border-color: #ff4655 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(255,70,85,0.45), 3px 3px 0px 0px rgba(189,32,46,1) !important;
+}
+
+.card-moldura-cyberpunk {
+  background: linear-gradient(145deg, #180828 0%, #0d0417 60%, #050209 100%) !important;
+  border-color: #facc15 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(250,204,21,0.45), 3px 3px 0px 0px rgba(202,138,4,1) !important;
+}
+
+.card-moldura-pixel {
+  background: linear-gradient(145deg, #111827 0%, #0f172a 50%, #030712 100%) !important;
+  border-color: #38bdf8 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 16px rgba(56,189,248,0.45), 3px 3px 0px 0px rgba(2,132,199,1) !important;
+}
+
+.card-moldura-hogwarts {
+  background: radial-gradient(circle at 50% 25%, #1e1b4b 0%, #0f172a 60%, #020617 100%) !important;
+  border-color: #f59e0b !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 18px rgba(245,158,11,0.45), 3px 3px 0px 0px rgba(180,83,9,1) !important;
 }
 
 .card-moldura-spongebob {
   background: linear-gradient(135deg, #fef08a 0%, #fde047 50%, #facc15 100%) !important;
   border-color: #ca8a04 !important;
   color: #000000 !important;
-  box-shadow: 0 0 20px rgba(250,204,21,0.65), 4px 4px 0px 0px rgba(161,98,7,1) !important;
-  animation: card-glow-pulse 2.5s ease-in-out infinite;
-}
-
-.card-moldura-neon {
-  background: #0f172a !important;
-  border-color: #22d3ee !important;
-  color: #000000 !important;
-  box-shadow: 0 0 22px rgba(34,211,238,0.55), 4px 4px 0px 0px rgba(6,182,212,1) !important;
-}
-
-.card-moldura-golden {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #fef08a 100%) !important;
-  border-color: #d97706 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 22px rgba(245,158,11,0.6), 4px 4px 0px 0px rgba(180,83,9,1) !important;
-}
-
-.card-moldura-rainbow {
-  border-color: #ec4899 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 20px rgba(236,72,153,0.5), 4px 4px 0px 0px rgba(168,85,247,1) !important;
-}
-
-.card-moldura-ice {
-  background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%) !important;
-  border-color: #38bdf8 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 20px rgba(56,189,248,0.55), 4px 4px 0px 0px rgba(2,132,199,1) !important;
-}
-
-.card-moldura-fire {
-  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%) !important;
-  border-color: #ef4444 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 20px rgba(239,68,68,0.55), 4px 4px 0px 0px rgba(220,38,38,1) !important;
-}
-
-.card-moldura-galaxy {
-  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%) !important;
-  border-color: #c084fc !important;
-  color: #000000 !important;
-  box-shadow: 0 0 25px rgba(192,132,252,0.6), 4px 4px 0px 0px rgba(147,51,234,1) !important;
-}
-
-.card-moldura-shadow {
-  background: #171717 !important;
-  border-color: #525252 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 16px rgba(0,0,0,0.85), 4px 4px 0px 0px rgba(64,64,64,1) !important;
-}
-
-.card-moldura-phoenix {
-  background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%) !important;
-  border-color: #e11d48 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 25px rgba(225,29,72,0.65), 4px 4px 0px 0px rgba(159,18,57,1) !important;
-}
-
-.card-moldura-sakura {
-  background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%) !important;
-  border-color: #f472b6 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 18px rgba(244,114,182,0.55), 4px 4px 0px 0px rgba(219,39,119,1) !important;
-}
-
-.card-moldura-emerald {
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
-  border-color: #10b981 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 18px rgba(16,185,129,0.55), 4px 4px 0px 0px rgba(5,150,105,1) !important;
-}
-
-.card-moldura-sunset {
-  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 40%, #fed7aa 80%, #fbcfe8 100%) !important;
-  border-color: #ea580c !important;
-  color: #000000 !important;
-  box-shadow: 0 0 24px rgba(249,115,22,0.7), 4px 4px 0px 0px rgba(194,65,12,1) !important;
-  animation: card-glow-pulse 2.8s ease-in-out infinite;
-}
-
-/* Mentalist — crimson analytical aura */
-@keyframes fx-mentalist {
-  0%, 100% {
-    box-shadow: 0 0 0 3px #b91c1c, 0 0 24px 6px rgba(185,28,28,0.85), 0 0 36px 8px rgba(153,27,27,0.5);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 4.5px #dc2626, 0 0 34px 10px rgba(220,38,38,0.95), 0 0 50px 14px rgba(153,27,27,0.75);
-    transform: scale(1.025);
-  }
-}
-.fx-mentalist {
-  padding: 3.5px;
-  background: conic-gradient(from 45deg, #991b1b, #dc2626, #fef3c7, #7f1d1d, #991b1b);
-  border-radius: 50%;
-  animation: fx-mentalist 2s ease-in-out infinite, fx-spin 6s linear infinite;
-}
-.fx-mentalist > * { border-radius: 50%; }
-.fx-mentalist span,
-.card-moldura-mentalist [data-testid^="avatar-"] span,
-.card-moldura-mentalist .fx-mentalist span {
-  color: #991b1b !important;
-  font-weight: 900 !important;
-}
-.fx-mentalist [data-testid^="avatar-"]:not(:has(img)),
-.card-moldura-mentalist [data-testid^="avatar-"]:not(:has(img)) {
-  background-color: #fef3c7 !important;
+  box-shadow: 0 0 18px rgba(250,204,21,0.6), 3px 3px 0px 0px rgba(161,98,7,1) !important;
 }
 
 .card-moldura-mentalist {
-  background: #7f1d1d !important;
-  border-color: #991b1b !important;
-  color: #000000 !important;
-  box-shadow: 0 0 24px rgba(185,28,28,0.75), 4px 4px 0px 0px rgba(69,10,10,1) !important;
+  background: linear-gradient(145deg, #7f1d1d 0%, #450a0a 60%, #2b0606 100%) !important;
+  border-color: #b91c1c !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(185,28,28,0.7), 3px 3px 0px 0px rgba(69,10,10,1) !important;
 }
-
-/* Stranger Things — Upside Down Cosmic Red Neon & Hawkins Void */
-@keyframes fx-stranger-things {
-  0%, 100% {
-    box-shadow: 0 0 0 3px #ef4444, 0 0 24px 6px rgba(239,68,68,0.9), 0 0 40px 10px rgba(185,28,28,0.6);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 4.5px #f87171, 0 0 36px 12px rgba(248,113,113,1), 0 0 55px 16px rgba(220,38,38,0.85);
-    transform: scale(1.03);
-  }
-}
-.fx-stranger-things {
-  padding: 3.5px;
-  background: conic-gradient(from 0deg, #dc2626, #7f1d1d, #1e1b4b, #38bdf8, #dc2626);
-  border-radius: 50%;
-  animation: fx-stranger-things 2s ease-in-out infinite, fx-spin 5.5s linear infinite;
-}
-.fx-stranger-things > * { background: #030712; border-radius: 50%; }
 
 .card-moldura-stranger-things {
   background: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #030712 70%, #000000 100%) !important;
   border-color: #dc2626 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 26px rgba(220,38,38,0.8), 0 0 10px rgba(56,189,248,0.5), 4px 4px 0px 0px rgba(127,29,29,1) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 22px rgba(220,38,38,0.7), 3px 3px 0px 0px rgba(127,29,29,1) !important;
 }
-
-/* Riverdale — Varsity Blue, Golden Bulldogs & Southside Serpents */
-@keyframes fx-riverdale {
-  0%, 100% {
-    box-shadow: 0 0 0 3px #f59e0b, 0 0 22px 5px rgba(245,158,11,0.85), 0 0 35px 8px rgba(30,58,138,0.6);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 4.5px #fbbf24, 0 0 32px 10px rgba(251,191,36,0.95), 0 0 48px 12px rgba(5,150,105,0.7);
-    transform: scale(1.025);
-  }
-}
-.fx-riverdale {
-  padding: 3.5px;
-  background: conic-gradient(from 45deg, #1e3a8a, #f59e0b, #059669, #fbbf24, #1e3a8a);
-  border-radius: 50%;
-  animation: fx-riverdale 2.2s ease-in-out infinite, fx-spin 6s linear infinite;
-}
-.fx-riverdale > * { background: #0f172a; border-radius: 50%; }
 
 .card-moldura-riverdale {
-  background: linear-gradient(135deg, #091326 0%, #172554 45%, #064e3b 100%) !important;
+  background: linear-gradient(145deg, #0f172a 0%, #1e3a8a 50%, #064e3b 100%) !important;
   border-color: #f59e0b !important;
-  color: #000000 !important;
-  box-shadow: 0 0 25px rgba(245,158,11,0.7), 0 0 12px rgba(5,150,105,0.5), 4px 4px 0px 0px rgba(15,23,42,1) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 18px rgba(245,158,11,0.65), 3px 3px 0px 0px rgba(30,58,138,1) !important;
 }
-
-/* Cyberpunk — Night City Cyber Yellow & Neon Magenta Glitch */
-@keyframes fx-cyberpunk {
-  0%, 100% {
-    box-shadow: 0 0 0 3px #facc15, 0 0 25px 6px rgba(244,63,94,0.9), 0 0 45px 10px rgba(250,204,21,0.7);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 4.5px #f43f5e, 0 0 35px 12px rgba(6,182,212,0.95), 0 0 55px 15px rgba(244,63,94,0.85);
-    transform: scale(1.03);
-  }
-}
-.fx-cyberpunk {
-  padding: 3.5px;
-  background: conic-gradient(from 45deg, #f43f5e, #facc15, #06b6d4, #a855f7, #f43f5e);
-  border-radius: 50%;
-  animation: fx-cyberpunk 1.8s ease-in-out infinite, fx-spin 5s linear infinite;
-}
-.fx-cyberpunk > * { border-radius: 50%; }
-
-.card-moldura-cyberpunk {
-  background: radial-gradient(circle at 50% 10%, #1e112a 0%, #090a16 70%, #03040b 100%) !important;
-  border-color: #facc15 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 28px rgba(244,63,94,0.75), 0 0 14px rgba(250,204,21,0.6), 4px 4px 0px 0px rgba(250,204,21,1) !important;
-}
-
-/* Hogwarts — Castelo da Magia & Golden Wand Aura */
-@keyframes fx-hogwarts {
-  0%, 100% {
-    box-shadow: 0 0 0 3px #fbbf24, 0 0 24px 6px rgba(251,191,36,0.85), 0 0 40px 10px rgba(99,102,241,0.6);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 4.5px #fef08a, 0 0 34px 11px rgba(251,191,36,1), 0 0 55px 14px rgba(124,58,237,0.8);
-    transform: scale(1.025);
-  }
-}
-.fx-hogwarts {
-  padding: 3.5px;
-  background: conic-gradient(from 0deg, #fbbf24, #312e81, #d97706, #1e1b4b, #fbbf24);
-  border-radius: 50%;
-  animation: fx-hogwarts 2.4s ease-in-out infinite, fx-spin 6.5s linear infinite;
-}
-.fx-hogwarts > * { border-radius: 50%; }
-
-.card-moldura-hogwarts {
-  background: linear-gradient(135deg, #0f0c29 0%, #1b1442 45%, #24143a 100%) !important;
-  border-color: #fbbf24 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 26px rgba(251,191,36,0.75), 0 0 16px rgba(99,102,241,0.5), 4px 4px 0px 0px rgba(180,83,9,1) !important;
-}
-
-/* Pixel Art — Retro 8-bit Arcade & Pixel Green CRT Glow */
-@keyframes fx-pixel-art {
-  0%, 100% {
-    box-shadow: 0 0 0 3px #4ade80, 0 0 20px 5px rgba(74,222,128,0.85), 0 0 35px 8px rgba(56,189,248,0.6);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 4.5px #22c55e, 0 0 30px 9px rgba(74,222,128,0.95), 0 0 48px 12px rgba(244,63,94,0.6);
-    transform: scale(1.02);
-  }
-}
-.fx-pixel-art {
-  padding: 3.5px;
-  background: conic-gradient(from 90deg, #4ade80, #38bdf8, #f43f5e, #eab308, #4ade80);
-  border-radius: 50%;
-  animation: fx-pixel-art 1.5s steps(6) infinite, fx-spin 7s linear infinite;
-}
-.fx-pixel-art > * { border-radius: 50%; }
-
-.card-moldura-pixel {
-  background: linear-gradient(135deg, #09090b 0%, #18181b 50%, #0f172a 100%) !important;
-  border-color: #4ade80 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 22px rgba(74,222,128,0.7), 0 0 10px rgba(56,189,248,0.5), 4px 4px 0px 0px rgba(22,101,52,1) !important;
-}
-
-/* One Piece — Grand Line Nautical Gold & Straw Hat Pirate Aura */
-@keyframes fx-one-piece {
-  0%, 100% {
-    box-shadow: 0 0 0 3px #f59e0b, 0 0 25px 6px rgba(245,158,11,0.85), 0 0 45px 10px rgba(239,68,68,0.6);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 4.5px #fbbf24, 0 0 36px 12px rgba(251,191,36,0.95), 0 0 55px 15px rgba(2,132,199,0.7);
-    transform: scale(1.025);
-  }
-}
-.fx-one-piece {
-  padding: 3.5px;
-  background: conic-gradient(from 0deg, #f59e0b, #ef4444, #0284c7, #fbbf24, #f59e0b);
-  border-radius: 50%;
-  animation: fx-one-piece 2.1s ease-in-out infinite, fx-spin 5.8s linear infinite;
-}
-.fx-one-piece > * { border-radius: 50%; }
 
 .card-moldura-one-piece {
-  background: radial-gradient(circle at 50% 15%, #2a180a 0%, #170d05 60%, #0b0602 100%) !important;
+  background: linear-gradient(145deg, #451a03 0%, #261005 50%, #0c0a09 100%) !important;
   border-color: #f59e0b !important;
-  color: #000000 !important;
-  box-shadow: 0 0 28px rgba(245,158,11,0.75), 0 0 12px rgba(2,132,199,0.55), 4px 4px 0px 0px rgba(120,53,15,1) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(245,158,11,0.65), 3px 3px 0px 0px rgba(180,83,9,1) !important;
 }
-.card-moldura-one-piece [data-testid^="avatar-"]:not(:has(img)) {
-  background-color: #451a03 !important;
-}
-
-/* Laboratório Químico — Toxic Bioluminescent Emerald & Atomic Pulse */
-@keyframes fx-chemistry-lab {
-  0%, 100% {
-    box-shadow: 0 0 0 3px #10b981, 0 0 24px 6px rgba(16,185,129,0.9), 0 0 42px 10px rgba(6,182,212,0.6);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 4.5px #34d399, 0 0 35px 12px rgba(52,211,153,1), 0 0 55px 15px rgba(132,204,22,0.75);
-    transform: scale(1.03);
-  }
-}
-.fx-chemistry-lab {
-  padding: 3.5px;
-  background: conic-gradient(from 45deg, #10b981, #84cc16, #06b6d4, #059669, #10b981);
-  border-radius: 50%;
-  animation: fx-chemistry-lab 1.9s ease-in-out infinite, fx-spin 5.2s linear infinite;
-}
-.fx-chemistry-lab > * { border-radius: 50%; }
 
 .card-moldura-chemistry {
-  background: radial-gradient(circle at 50% 15%, #052e16 0%, #021f15 55%, #010d08 100%) !important;
+  background: linear-gradient(145deg, #022c22 0%, #064e3b 50%, #021a14 100%) !important;
   border-color: #10b981 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 28px rgba(16,185,129,0.75), 0 0 14px rgba(6,182,212,0.5), 4px 4px 0px 0px rgba(6,78,59,1) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(16,185,129,0.65), 3px 3px 0px 0px rgba(4,120,87,1) !important;
 }
-.card-moldura-chemistry [data-testid^="avatar-"]:not(:has(img)) {
-  background-color: #022c22 !important;
-}
-
-/* Japão Tradicional — Imperial Torii Vermilion & Zen Sakura Drift */
-@keyframes fx-japan {
-  0%, 100% {
-    box-shadow: 0 0 0 3px #dc2626, 0 0 24px 6px rgba(220,38,38,0.85), 0 0 40px 10px rgba(244,114,182,0.6);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 4.5px #f43f5e, 0 0 34px 11px rgba(244,63,94,0.95), 0 0 55px 14px rgba(245,158,11,0.75);
-    transform: scale(1.025);
-  }
-}
-.fx-japan {
-  padding: 3.5px;
-  background: conic-gradient(from 0deg, #dc2626, #f472b6, #fbbf24, #991b1b, #dc2626);
-  border-radius: 50%;
-  animation: fx-japan 2.3s ease-in-out infinite, fx-spin 6.2s linear infinite;
-}
-.fx-japan > * { border-radius: 50%; }
 
 .card-moldura-japan {
-  background: radial-gradient(circle at 50% 15%, #3f0713 0%, #1f040a 60%, #0a0104 100%) !important;
-  border-color: #e11d48 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 28px rgba(225,29,72,0.75), 0 0 14px rgba(245,158,11,0.5), 4px 4px 0px 0px rgba(136,19,55,1) !important;
-}
-.card-moldura-japan [data-testid^="avatar-"]:not(:has(img)) {
-  background-color: #450a0a !important;
-}
-
-/* ==========================================================================
-   Valorant — Moldura Tática Radiant Protocol (#ff4655 + #0f1923 + #00f0ff)
-   ========================================================================== */
-@keyframes fx-valorant-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 3px #ff4655, 0 0 20px 4px rgba(255, 70, 85, 0.8), 0 0 35px rgba(0, 240, 255, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 4.5px #00f0ff, 0 0 28px 8px rgba(0, 240, 255, 0.85), 0 0 45px rgba(255, 70, 85, 0.6);
-  }
-}
-
-.fx-valorant {
-  padding: 3.5px;
-  background: conic-gradient(from 45deg, #ff4655, #0f1923, #00f0ff, #ff4655, #ffd700, #ff4655);
-  border-radius: 50%;
-  animation: fx-valorant-pulse 2.2s ease-in-out infinite, fx-spin 8s linear infinite;
-}
-.fx-valorant > * {
-  border-radius: 50%;
-}
-
-/* Preenchimento do Bloco na Tela de Seleção — Visual Tático Carbon Black + Crimson Red */
-.card-moldura-valorant {
-  background: #0f1923 !important;
-  border-color: #ff4655 !important;
+  background: linear-gradient(145deg, #450a0a 0%, #2b0606 50%, #170303 100%) !important;
+  border-color: #ef4444 !important;
   color: #ffffff !important;
-  box-shadow: 0 0 20px rgba(255, 70, 85, 0.45), 4px 4px 0px 0px rgba(0, 0, 0, 1) !important;
+  box-shadow: 0 0 20px rgba(239,68,68,0.65), 3px 3px 0px 0px rgba(185,28,28,1) !important;
 }
 
-.card-moldura-valorant:hover {
-  border-color: #00f0ff !important;
-  box-shadow: 0 0 24px rgba(0, 240, 255, 0.6), 4px 4px 0px 0px rgba(0, 0, 0, 1) !important;
-}
 
-/* Garante que nenhum tema aumente o tamanho original dos blocos no grid de seleção */
-[data-testid="profiles-grid"] > button {
-  min-height: 184px;
-}
-
-/* Painel de perfil e cabeçalho mantêm as letras em preto */
-[data-testid="my-profile-banner"] p,
-[data-testid="my-profile-banner"] span {
-  color: #000000 !important;
-}
-
-/* Na TELA DE SELEÇÃO ([data-testid="profiles-grid"]):
-   Em temas com fundos escuros, a cor da letra do nome do perfil fica BRANCA */
-[data-testid="profiles-grid"] .card-moldura-mentalist .font-heading,
-[data-testid="profiles-grid"] .card-moldura-stranger-things .font-heading,
-[data-testid="profiles-grid"] .card-moldura-cyberpunk .font-heading,
-[data-testid="profiles-grid"] .card-moldura-hogwarts .font-heading,
-[data-testid="profiles-grid"] .card-moldura-pixel .font-heading,
-[data-testid="profiles-grid"] .card-moldura-one-piece .font-heading,
-[data-testid="profiles-grid"] .card-moldura-chemistry .font-heading,
-[data-testid="profiles-grid"] .card-moldura-japan .font-heading,
-[data-testid="profiles-grid"] .card-moldura-shadow .font-heading,
-[data-testid="profiles-grid"] .card-moldura-galaxy .font-heading,
-[data-testid="profiles-grid"] .card-moldura-fire .font-heading,
-[data-testid="profiles-grid"] .card-moldura-phoenix .font-heading,
-[data-testid="profiles-grid"] .card-moldura-emerald .font-heading,
-[data-testid="profiles-grid"] .card-moldura-neon .font-heading,
-[data-testid="profiles-grid"] .card-moldura-valorant .font-heading {
+/* Dark Card Molduras - Text color rule with exemption for Admin/Aluno identification badges */
+.card-moldura-riverdale .student-name,
+.card-moldura-riverdale .profile-name,
+.card-moldura-riverdale .user-name,
+.card-moldura-riverdale h1,
+.card-moldura-riverdale h2,
+.card-moldura-riverdale h3,
+.card-moldura-riverdale h4,
+.card-moldura-stranger-things,
+.card-moldura-stranger-things h1, .card-moldura-stranger-things h2, .card-moldura-stranger-things h3, .card-moldura-stranger-things h4, .card-moldura-stranger-things p,
+.card-moldura-mentalist,
+.card-moldura-mentalist h1, .card-moldura-mentalist h2, .card-moldura-mentalist h3, .card-moldura-mentalist h4, .card-moldura-mentalist p,
+.card-moldura-one-piece,
+.card-moldura-one-piece h1, .card-moldura-one-piece h2, .card-moldura-one-piece h3, .card-moldura-one-piece h4, .card-moldura-one-piece p,
+.card-moldura-chemistry,
+.card-moldura-chemistry h1, .card-moldura-chemistry h2, .card-moldura-chemistry h3, .card-moldura-chemistry h4, .card-moldura-chemistry p,
+.card-moldura-japan,
+.card-moldura-japan h1, .card-moldura-japan h2, .card-moldura-japan h3, .card-moldura-japan h4, .card-moldura-japan p,
+.card-moldura-valorant,
+.card-moldura-valorant h1, .card-moldura-valorant h2, .card-moldura-valorant h3, .card-moldura-valorant h4, .card-moldura-valorant p,
+.card-moldura-cyberpunk,
+.card-moldura-cyberpunk h1, .card-moldura-cyberpunk h2, .card-moldura-cyberpunk h3, .card-moldura-cyberpunk h4, .card-moldura-cyberpunk p,
+.card-moldura-hogwarts,
+.card-moldura-hogwarts h1, .card-moldura-hogwarts h2, .card-moldura-hogwarts h3, .card-moldura-hogwarts h4, .card-moldura-hogwarts p,
+.card-moldura-pixel,
+.card-moldura-pixel h1, .card-moldura-pixel h2, .card-moldura-pixel h3, .card-moldura-pixel h4, .card-moldura-pixel p,
+.card-moldura-galaxy,
+.card-moldura-galaxy h1, .card-moldura-galaxy h2, .card-moldura-galaxy h3, .card-moldura-galaxy h4, .card-moldura-galaxy p,
+.card-moldura-shadow,
+.card-moldura-shadow h1, .card-moldura-shadow h2, .card-moldura-shadow h3, .card-moldura-shadow h4, .card-moldura-shadow p,
+.card-moldura-neon,
+.card-moldura-neon h1, .card-moldura-neon h2, .card-moldura-neon h3, .card-moldura-neon h4, .card-moldura-neon p,
+.card-moldura-fire,
+.card-moldura-fire h1, .card-moldura-fire h2, .card-moldura-fire h3, .card-moldura-fire h4, .card-moldura-fire p,
+.card-moldura-phoenix,
+.card-moldura-phoenix h1, .card-moldura-phoenix h2, .card-moldura-phoenix h3, .card-moldura-phoenix h4, .card-moldura-phoenix p {
   color: #ffffff !important;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
-/* Temas com fundos claros na tela de seleção mantêm letras pretas */
-[data-testid="profiles-grid"] .card-moldura-spongebob .font-heading,
-[data-testid="profiles-grid"] .card-moldura-riverdale .font-heading,
-[data-testid="profiles-grid"] .card-moldura-golden .font-heading,
-[data-testid="profiles-grid"] .card-moldura-rainbow .font-heading,
-[data-testid="profiles-grid"] .card-moldura-ice .font-heading,
-[data-testid="profiles-grid"] .card-moldura-sakura .font-heading,
-[data-testid="profiles-grid"] .card-moldura-sunset .font-heading {
-  color: #000000 !important;
-  text-shadow: none !important;
+/* Explicit badge exemption to keep default identification block styling for Admin / Aluno */
+.nb-badge,
+.nb-badge *,
+[class*="card-moldura-"] .nb-badge,
+[class*="card-moldura-"] .nb-badge * {
+  color: inherit;
 }
-
-
+.bg-red-200.text-red-950,
+.bg-red-200.text-red-950 * {
+  color: #450a0a !important;
+}
+.bg-sky-200.text-sky-950,
+.bg-sky-200.text-sky-950 * {
+  color: #082f49 !important;
+}
+.bg-amber-300.text-amber-950,
+.bg-amber-300.text-amber-950 * {
+  color: #451a03 !important;
+}
 
 

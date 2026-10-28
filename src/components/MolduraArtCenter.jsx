@@ -9,86 +9,18 @@ import { isFramesDisabled } from "@/lib/effects";
 export default function MolduraArtCenter({ effectId }) {
   if (!effectId || isFramesDisabled()) return null;
 
-  if (effectId === "spongebob") {
+      if (effectId === "spongebob") {
     return (
       <div
         className="absolute inset-0 z-0 overflow-hidden rounded-[14px] pointer-events-none transition-all duration-300"
         data-testid="art-spongebob"
       >
-        {/* Tropical undersea gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#38bdf8]/40 via-[#fde047]/30 to-[#facc15]/50" />
-
-        {/* Bikini Bottom elements illustration */}
-        <svg
-          className="absolute inset-0 w-full h-full object-cover opacity-85"
-          viewBox="0 0 200 240"
-          preserveAspectRatio="xMidYMid slice"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <defs>
-            <linearGradient id="seaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.5" />
-              <stop offset="60%" stopColor="#fde047" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.6" />
-            </linearGradient>
-            <radialGradient id="bubbleGlow" cx="30%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
-              <stop offset="50%" stopColor="#bae6fd" stopOpacity="0.6" />
-              <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.2" />
-            </radialGradient>
-          </defs>
-
-          {/* Undersea hill background */}
-          <path d="M-20,180 Q40,140 100,165 T220,150 L220,260 L-20,260 Z" fill="#38bdf8" fillOpacity="0.35" />
-          <path d="M-10,195 Q60,170 120,185 T210,175 L210,260 L-10,260 Z" fill="#0284c7" fillOpacity="0.25" />
-
-          {/* SpongeBob & Patrick Tiki Flowers */}
-          {/* Flower 1 (Pink) */}
-          <g transform="translate(25, 30) scale(0.65)" opacity="0.85">
-            <circle cx="0" cy="-14" r="8" fill="#f472b6" />
-            <circle cx="14" cy="-5" r="8" fill="#f472b6" />
-            <circle cx="9" cy="12" r="8" fill="#f472b6" />
-            <circle cx="-9" cy="12" r="8" fill="#f472b6" />
-            <circle cx="-14" cy="-5" r="8" fill="#f472b6" />
-            <circle cx="0" cy="0" r="6" fill="#fde047" />
-          </g>
-
-          {/* Flower 2 (Purple) */}
-          <g transform="translate(175, 45) scale(0.55)" opacity="0.8">
-            <circle cx="0" cy="-14" r="8" fill="#c084fc" />
-            <circle cx="14" cy="-5" r="8" fill="#c084fc" />
-            <circle cx="9" cy="12" r="8" fill="#c084fc" />
-            <circle cx="-9" cy="12" r="8" fill="#c084fc" />
-            <circle cx="-14" cy="-5" r="8" fill="#c084fc" />
-            <circle cx="0" cy="0" r="6" fill="#fde047" />
-          </g>
-
-          {/* Floating Jellyfish (Pink jellyfish) */}
-          <g transform="translate(160, 95) scale(0.55)" opacity="0.75">
-            <path d="M-18,0 C-18,-16 18,-16 18,0 C12,4 6,2 0,4 C-6,2 -12,4 -18,0 Z" fill="#f472b6" fillOpacity="0.8" />
-            <path d="M-10,2 Q-12,14 -9,22" stroke="#db2777" strokeWidth="2" fill="none" />
-            <path d="M-4,4 Q-2,16 -5,24" stroke="#db2777" strokeWidth="2" fill="none" />
-            <path d="M4,4 Q2,16 5,24" stroke="#db2777" strokeWidth="2" fill="none" />
-            <path d="M10,2 Q12,14 9,22" stroke="#db2777" strokeWidth="2" fill="none" />
-            <circle cx="-6" cy="-4" r="2" fill="#9d174d" />
-            <circle cx="6" cy="-4" r="2" fill="#9d174d" />
-          </g>
-
-          {/* Undersea Bubbles */}
-          <circle cx="35" cy="110" r="7" fill="url(#bubbleGlow)" />
-          <circle cx="45" cy="85" r="4" fill="url(#bubbleGlow)" />
-          <circle cx="150" cy="160" r="9" fill="url(#bubbleGlow)" />
-          <circle cx="165" cy="135" r="5" fill="url(#bubbleGlow)" />
-          <circle cx="28" cy="170" r="6" fill="url(#bubbleGlow)" />
-
-          {/* Sponge texture pores */}
-          <ellipse cx="20" cy="210" rx="8" ry="5" fill="#ca8a04" fillOpacity="0.3" />
-          <ellipse cx="180" cy="205" rx="7" ry="4" fill="#ca8a04" fillOpacity="0.3" />
-          <ellipse cx="170" cy="225" rx="5" ry="3" fill="#ca8a04" fillOpacity="0.25" />
-        </svg>
-
-        {/* Soft vignette for avatar readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-amber-200/90 via-transparent to-amber-100/40 pointer-events-none" />
+        <img
+          src="/assets/aistudio/image_2a9500fc.png"
+          alt="Bob Esponja Moldura Oficial"
+          className="absolute inset-0 w-full h-full object-cover scale-[1.28] origin-[46%_48%] rounded-[14px]"
+          draggable={false}
+        />
       </div>
     );
   }
@@ -245,8 +177,8 @@ export default function MolduraArtCenter({ effectId }) {
               textAnchor="middle"
               fontFamily="Georgia, serif, ui-serif"
               fontWeight="900"
-              fontSize="10"
-              letterSpacing="2.8"
+              fontSize="9.5"
+              letterSpacing="1.2"
               fill="#ef4444"
             >
               STRANGER THINGS
@@ -338,8 +270,8 @@ export default function MolduraArtCenter({ effectId }) {
               textAnchor="middle"
               fontFamily="Impact, fantasy, sans-serif"
               fontWeight="900"
-              fontSize="12"
-              letterSpacing="2"
+              fontSize="10"
+              letterSpacing="0.8"
               fill="#ffe4e6"
               filter="drop-shadow(0 0 5px #f43f5e)"
             >
@@ -1033,7 +965,7 @@ export default function MolduraArtCenter({ effectId }) {
             <text x="4" y="14" fill="#ece8e1" fontSize="7" fontFamily="monospace" fontWeight="900" letterSpacing="1" opacity="0.75">
               SYSTEM // READY
             </text>
-            <text x="125" y="14" fill="#00f0ff" fontSize="7" fontFamily="monospace" fontWeight="900" letterSpacing="1" opacity="0.85">
+            <text x="176" y="14" textAnchor="end" fill="#00f0ff" fontSize="7" fontFamily="monospace" fontWeight="900" letterSpacing="1" opacity="0.85">
               RADIANT
             </text>
           </g>

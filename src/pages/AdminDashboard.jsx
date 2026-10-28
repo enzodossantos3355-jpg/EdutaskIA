@@ -33,19 +33,29 @@ const STATUS_OPTS = [
   { key: "blocked", label: "Bloqueado", icon: Lock, bg: "bg-neutral-300" },
 ];
 
-const subjectColors = ["bg-sky-200", "bg-amber-200", "bg-red-200", "bg-emerald-200", "bg-violet-200", "bg-rose-200"];
+import { useAuth } from "@/context/AuthContext";
+
+const subjectColors = ["bg-sky-200 text-sky-950 font-bold", "bg-amber-200 text-amber-950 font-bold", "bg-red-200 text-red-950 font-bold", "bg-emerald-200 text-emerald-950 font-bold", "bg-violet-200 text-violet-950 font-bold", "bg-rose-200 text-rose-950 font-bold"];
 const colorFor = (s) => subjectColors[(s || "").length % subjectColors.length];
 
 export default function AdminDashboard() {
+  const { user, refresh } = useAuth();
   const { framesDisabled } = useAIStatus();
   const [tab, setTab] = useState("tasks");
+  const [annualCycle, setAnnualCycle] = useState(null);
   const [globalCleanupOpen, setGlobalCleanupOpen] = useState(false);
   const [globalCleanupData, setGlobalCleanupData] = useState(null);
 
   const loadGlobalCleanup = useCallback(async () => {
     try {
-      const { data } = await api.get("/admin/task-cleanup");
+      const [{ data }, statusRes] = await Promise.all([
+        api.get("/admin/task-cleanup"),
+        api.get("/app-status").catch(() => null),
+      ]);
       setGlobalCleanupData(data);
+      if (statusRes?.data?.annual_cycle) {
+        setAnnualCycle(statusRes.data.annual_cycle);
+      }
     } catch {
       // ignore
     }
@@ -82,6 +92,30 @@ export default function AdminDashboard() {
           onConfigureCleanup={() => setGlobalCleanupOpen(true)}
         />
 
+        {/* Banner de Ano Letivo Encerrado */}
+        {annualCycle?.is_closed && (
+          <div className="mb-6 nb-card bg-amber-100 border-2 border-amber-600 p-4 rounded-xl shadow-[4px_4px_0_0_#d97706] flex flex-col sm:flex-row sm:items-center justify-between gap-3 nb-fade-in" data-testid="annual-cycle-closed-banner">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-400 border-2 border-black flex items-center justify-center flex-shrink-0 shadow-[2px_2px_0_0_#000]">
+                <Lock className="w-5 h-5 text-black" />
+              </div>
+              <div>
+                <h3 className="font-heading font-black text-sm sm:text-base text-amber-950">
+                  Ano Letivo {annualCycle?.active_year || 2026} Encerrado — Criação Suspensa
+                </h3>
+                <p className="text-xs text-amber-900 mt-0.5 leading-relaxed">
+                  O ranking anual foi finalizado e os alunos estão na tela de bloqueio com o Pódio Top 3. A criação de novas tarefas, avisos e botões está desativada até você iniciar o próximo ano.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setTab("annual_ranking")}
+              className="nb-btn bg-amber-400 hover:bg-amber-500 text-amber-950 font-heading font-black px-4 py-2 text-xs flex-shrink-0 border-2 border-black shadow-[2px_2px_0_0_#000]"
+            >
+              Iniciar Próximo Ano 🚀
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-2 sm:gap-3 mb-6 sm:mb-8 overflow-x-auto pb-2 scrollbar-none sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
           <button
             onClick={() => setTab("tasks")}
@@ -183,18 +217,18 @@ export default function AdminDashboard() {
             <FileArchive className="w-4 h-4 inline mr-1.5 sm:mr-2 text-sky-950" /> Dados ZIP
           </button>
         </div>
-        {tab === "tasks" && <TasksPanel />}
-        {tab === "announcements" && <AnnouncementsPanel />}
+        {tab === "tasks" && <TasksPanel annualCycle={annualCycle} />}
+        {tab === "announcements" && <AnnouncementsPanel annualCycle={annualCycle} />}
         {tab === "students" && <StudentsPanel />}
-        {tab === "subjects" && <SubjectsPanel />}
+        {tab === "subjects" && <SubjectsPanel annualCycle={annualCycle} />}
         {tab === "logs" && <LoginLogsPanel />}
         {tab === "stats" && <StatsPanel />}
         {tab === "firmware" && <FirmwarePanel />}
         {tab === "ai" && <AIAdminPanel />}
         {tab === "ranking_annual" && <AnnualRankingPanel />}
-        {tab === "store" && !framesDisabled && <StoreEffects />}
+        {tab === "store" && !framesDisabled && <StoreEffects user={user} refresh={refresh} />}
         {tab === "whatsapp" && <WhatsAppConfigPanel />}
-        {tab === "buttons" && <StudentButtonsPanel />}
+        {tab === "buttons" && <StudentButtonsPanel annualCycle={annualCycle} />}
         {tab === "zip_transfer" && <ZipDataTransferPanel />}
 
         {globalCleanupOpen && (
@@ -210,7 +244,7 @@ export default function AdminDashboard() {
 }
 
 // --- Tasks panel ---
-function TasksPanel() {
+function TasksPanel({ annualCycle }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -326,8 +360,15 @@ function TasksPanel() {
           </button>
 
           <button
-            onClick={() => setCreating(true)}
-            className="nb-btn bg-sky-400 px-5 py-3 flex items-center gap-2"
+            onClick={() => {
+              if (annualCycle?.is_closed) {
+                toast.error("O Ano Letivo está encerrado. Inicie o novo ano letivo na aba Ranking Anual para poder criar tarefas.");
+                return;
+              }
+              setCreating(true);
+            }}
+            className={`nb-btn px-5 py-3 flex items-center gap-2 ${annualCycle?.is_closed ? "bg-neutral-200 text-neutral-500 opacity-70" : "bg-sky-400"}`}
+            title={annualCycle?.is_closed ? "Ano Letivo encerrado" : "Criar nova tarefa"}
             data-testid="open-create-task-button"
           >
             <Plus className="w-4 h-4" strokeWidth={3} /> Nova tarefa
@@ -1323,7 +1364,7 @@ function ConfirmDialog({ title, message, confirmLabel, confirmClass = "bg-red-30
 }
 
 // --- Subjects panel ---
-function SubjectsPanel() {
+function SubjectsPanel({ annualCycle }) {
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
@@ -1468,7 +1509,7 @@ function EmptyState({ icon: Icon, title, subtitle }) {
 }
 
 // --- Announcements panel ---
-function AnnouncementsPanel() {
+function AnnouncementsPanel({ annualCycle }) {
   const [items, setItems] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1770,7 +1811,7 @@ function AnnouncementDialog({ announcement, students, onClose, onSaved }) {
                 Marcar como Aviso Especial (Pop-up)
               </label>
               <p className="text-xs text-neutral-600 mt-0.5">
-                Aparecerá automaticamente em pop-up na tela do aluno 1 única vez ao abrir o app e permanecerá com destaque dourado.
+                Aparecerá em pop-up destacado na tela do aluno e permanecerá fixado em destaque no painel de avisos.
               </p>
             </div>
             <input
