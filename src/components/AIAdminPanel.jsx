@@ -151,19 +151,19 @@ export default function AIAdminPanel() {
       <div className="nb-card p-6 sm:p-8 bg-gradient-to-r from-violet-200 via-pink-100 to-sky-100 border-2 border-black flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-[6px_6px_0_0_#000]">
         <div className="space-y-2 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-black text-white rounded-full font-heading font-black text-xs uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Painel de IA do Administrador
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Painel de Inteligência Artificial
           </div>
           <h1 className="font-heading font-black text-2xl sm:text-4xl text-neutral-950 tracking-tight">
-            Controle de Inteligência Artificial & Molduras
+            Controle da IA (Google Gemini)
           </h1>
           <p className="text-xs sm:text-sm text-neutral-800 leading-relaxed font-medium">
-            Escolha o modelo do Gemini para gerar respostas, emita avaliações individuais por IA de cada aluno e controle o estado global e as molduras.
+            Selecione qual versão do Gemini será usada para gerar respostas e resoluções, emita avaliações pedagógicas individuais por IA de cada aluno e ative ou oculte as funções da IA em todo o sistema.
           </p>
         </div>
       </div>
 
-      {/* Grid of Control Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* Grid of Control Cards (2 columns for AI only) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Card 1: Toggle AI */}
         <div className="nb-card p-5 sm:p-6 bg-white border-2 border-black shadow-[4px_4px_0_0_#000] text-neutral-950">
           <div className="flex flex-col justify-between h-full gap-4">
@@ -174,19 +174,21 @@ export default function AIAdminPanel() {
               <div>
                 <h2 className="font-heading font-black text-xl text-neutral-950 flex items-center gap-2">
                   Recursos de IA
-                  <span className="nb-badge text-xs font-black border-black bg-emerald-300 text-black">
+                  <span className={`nb-badge text-xs font-black border-black ${enabled ? "bg-emerald-300 text-black" : "bg-red-400 text-white"}`}>
                     {enabled ? "Ativado" : "Bloqueado"}
                   </span>
                 </h2>
                 <p className="text-xs sm:text-sm text-neutral-700 font-medium mt-1 leading-relaxed">
-                  {enabled ? "Ativados — respostas, resoluções e resumos da IA estão operacionais." : "Bloqueados — nenhuma função de IA responderá até que seja reativada."}
+                  {enabled ? "Ativados — respostas, resoluções e resumos da IA estão operacionais para professores e alunos." : "Bloqueados — nenhuma função de IA responderá até que seja reativada."}
                 </p>
               </div>
             </div>
             <button
               onClick={toggle}
               disabled={toggling}
-              className="nb-btn px-4 py-2.5 flex items-center justify-center gap-2 font-black w-full border-2 border-black shadow-[2px_2px_0_0_#000] bg-red-300 hover:bg-red-400 text-red-950"
+              className={`nb-btn px-4 py-2.5 flex items-center justify-center gap-2 font-black w-full border-2 border-black shadow-[2px_2px_0_0_#000] ${
+                enabled ? "bg-red-300 hover:bg-red-400 text-red-950" : "bg-emerald-300 hover:bg-emerald-400 text-emerald-950"
+              }`}
             >
               <Bot className="w-4 h-4" />
               <span>{toggling ? "Aplicando..." : enabled ? "Bloquear Todos os Recursos de IA" : "Ativar Recursos de IA"}</span>
@@ -204,7 +206,7 @@ export default function AIAdminPanel() {
               <div>
                 <h2 className="font-heading font-black text-xl text-neutral-950 flex items-center gap-2">
                   Interface da IA
-                  <span className="nb-badge text-xs font-black border-black bg-sky-300 text-black">
+                  <span className={`nb-badge text-xs font-black border-black ${aiHidden ? "bg-amber-300 text-black" : "bg-sky-300 text-black"}`}>
                     {aiHidden ? "Oculta" : "Visível"}
                   </span>
                 </h2>
@@ -223,57 +225,6 @@ export default function AIAdminPanel() {
             </button>
           </div>
         </div>
-
-        {/* Card 3: Molduras & Loja + Rotation Toggle */}
-        <div className="nb-card p-5 sm:p-6 bg-gradient-to-br from-amber-100 via-orange-50 to-yellow-100 border-2 border-black shadow-[4px_4px_0_0_#000] text-neutral-950">
-          <div className="flex flex-col justify-between h-full gap-4">
-            <div className="flex items-start gap-3">
-              <div className="w-11 h-11 nb-card bg-amber-300 border-2 border-black flex items-center justify-center flex-shrink-0 text-amber-950 shadow-[2px_2px_0_0_#000]">
-                <Palette className="w-5 h-5 text-amber-950" strokeWidth={2.5} />
-              </div>
-              <div className="min-w-0">
-                <h2 className="font-heading font-black text-xl text-neutral-950 flex items-center gap-2 flex-wrap">
-                  <span>Molduras & Loja</span>
-                  {framesDisabled && <span className="nb-badge bg-red-400 text-black border-black text-xs font-black">Desativadas</span>}
-                  {frameRotationDisabled ? (
-                    <span className="nb-badge bg-sky-200 text-sky-950 border-black text-xs font-black">Estáticas (Sem Giro)</span>
-                  ) : (
-                    <span className="nb-badge bg-amber-300 text-amber-950 border-black text-xs font-black">Giro Ativo 🔄</span>
-                  )}
-                </h2>
-                <p className="text-xs sm:text-sm text-neutral-800 font-medium mt-1 leading-relaxed">
-                  Controle a visibilidade da loja e se as molduras dos perfis giram ou permanecem fixas/estáticas.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full">
-              <button
-                onClick={handleToggleFrames}
-                disabled={togglingFrames}
-                className="nb-btn px-3 py-2.5 flex items-center justify-center gap-1.5 text-xs font-black border-2 border-black shadow-[2px_2px_0_0_#000] bg-red-300 hover:bg-red-400 text-red-950"
-              >
-                <Palette className="w-4 h-4 text-red-950" strokeWidth={2.5} />
-                <span>{togglingFrames ? "Aplicando..." : framesDisabled ? "Reativar Loja" : "Desativar Loja"}</span>
-              </button>
-
-              <button
-                onClick={handleToggleFrameRotation}
-                disabled={togglingRotation}
-                className="nb-btn px-3 py-2.5 flex items-center justify-center gap-1.5 text-xs font-black border-2 border-black shadow-[2px_2px_0_0_#000] bg-sky-300 hover:bg-sky-400 text-sky-950"
-              >
-                <RotateCw className="w-4 h-4 text-sky-950" strokeWidth={2.5} />
-                <span>
-                  {togglingRotation
-                    ? "Aplicando..."
-                    : frameRotationDisabled
-                    ? "Ligar Giro de Molduras 🔄"
-                    : "Desligar Giro de Molduras 🛑"}
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Seção 1: Escolher a IA que será usada para gerar respostas */}
@@ -288,16 +239,18 @@ export default function AIAdminPanel() {
                 Modelo da IA Gemini Usado para Gerar Respostas
               </h2>
               <p className="text-xs text-neutral-600 font-medium">
-                Escolha qual versão do Gemini o sistema utilizará para gerar gabaritos, respostas e textos.
+                Alterne com um clique qual versão do Gemini o sistema utilizará para gerar gabaritos, respostas e textos.
               </p>
             </div>
           </div>
-          <span className="nb-badge bg-amber-300 text-amber-950 border-black font-black text-xs">
-            Modelo Ativo: {model || "gemini-3.8-flash"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="nb-badge bg-black text-white border-2 border-black font-black text-xs px-3 py-1">
+              MODELO ATIVO: <span className="text-amber-300 ml-1">{model || "gemini-3.8-flash"}</span>
+            </span>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {MODEL_OPTIONS.map((opt) => {
             const isSelected = (model || "gemini-3.8-flash") === opt.id;
             return (
@@ -306,19 +259,20 @@ export default function AIAdminPanel() {
                 type="button"
                 disabled={modelChanging}
                 onClick={() => handleModelSelect(opt.id)}
-                className={`nb-card p-4 text-left transition-all duration-200 border-2 flex flex-col justify-between ${
+                className={`nb-card p-4 text-left transition-all duration-200 border-3 flex flex-col justify-between relative ${
                   isSelected
-                    ? "bg-violet-100 border-violet-900 shadow-[4px_4px_0_0_#2e1065]"
-                    : "bg-white border-black hover:bg-neutral-50 shadow-[2px_2px_0_0_#000]"
+                    ? "bg-violet-100/90 border-violet-800 ring-4 ring-violet-400 shadow-[6px_6px_0_0_#2e1065] -translate-y-0.5"
+                    : "bg-white border-black hover:bg-neutral-50 shadow-[2px_2px_0_0_#000] hover:border-black"
                 }`}
                 data-testid={`select-model-${opt.id}`}
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="font-heading font-black text-base text-neutral-950">
-                      {opt.name}
+                    <span className="font-heading font-black text-base text-neutral-950 flex items-center gap-1.5">
+                      {isSelected && <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />}
+                      <span>{opt.name}</span>
                     </span>
-                    <span className={`nb-badge text-[10px] font-black ${opt.badgeBg}`}>
+                    <span className={`nb-badge text-[10px] font-black border border-black ${opt.badgeBg}`}>
                       {opt.tag}
                     </span>
                   </div>
@@ -326,12 +280,26 @@ export default function AIAdminPanel() {
                     {opt.desc}
                   </p>
                 </div>
-                <div className="mt-3 pt-2 border-t border-black/10 flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-neutral-800">
-                    {isSelected ? "✓ Modelo em Uso" : "Clique para Ativar"}
-                  </span>
+
+                <div className="mt-4 pt-3 border-t-2 border-black/10 flex items-center justify-between">
+                  <div className={`px-2.5 py-1 rounded text-[11px] font-black border flex items-center gap-1.5 ${
+                    isSelected
+                      ? "bg-emerald-400 text-emerald-950 border-black shadow-[1px_1px_0_0_#000]"
+                      : "bg-neutral-100 text-neutral-700 border-neutral-300 hover:bg-neutral-200"
+                  }`}>
+                    {isSelected ? (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-emerald-700" />
+                        <span>✓ EM USO NO SISTEMA</span>
+                      </>
+                    ) : (
+                      <span>Selecionar este modelo</span>
+                    )}
+                  </div>
                   {isSelected && (
-                    <span className="w-3 h-3 rounded-full bg-emerald-500 border border-black animate-pulse" />
+                    <span className="nb-badge bg-black text-amber-300 border border-black text-[10px] font-black">
+                      ATIVO
+                    </span>
                   )}
                 </div>
               </button>

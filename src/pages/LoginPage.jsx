@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, ShieldCheck, User, Wrench, Lock, BookOpen, Pencil, Bot } from "lucide-react";
@@ -25,6 +25,16 @@ export default function LoginPage() {
   const [selected, setSelected] = useState(null);
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const passwordInputRef = useRef(null);
+
+  useEffect(() => {
+    if (selected) {
+      const timer = setTimeout(() => {
+        passwordInputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [selected]);
 
   useEffect(() => {
     if (user) {
@@ -278,12 +288,19 @@ export default function LoginPage() {
                     Senha de Acesso
                   </label>
                   <input
+                    ref={passwordInputRef}
                     type="password"
                     required
                     autoFocus
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        onSubmit(e);
+                      }
+                    }}
                     className="nb-input"
                     placeholder="••••••••"
                     data-testid="login-password-input"
@@ -297,6 +314,11 @@ export default function LoginPage() {
                 >
                   {submitting ? "Entrando..." : "Entrar no EduTask"}
                 </button>
+                <div className="pt-1 text-center">
+                  <p className="text-xs text-neutral-500 font-medium" data-testid="forgot-password-notice">
+                    Esqueceu sua senha? Solicite ao administrador
+                  </p>
+                </div>
               </form>
             </div>
           )}

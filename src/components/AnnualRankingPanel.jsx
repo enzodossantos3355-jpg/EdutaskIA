@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Trophy, Calendar, Lock, Play, RefreshCw, CheckCircle2, Clock, AlertTriangle, ShieldCheck, User, Sparkles, History, ChevronDown, ChevronUp } from "lucide-react";
+import { Trophy, Calendar, Lock, Play, RefreshCw, CheckCircle2, Clock, AlertTriangle, ShieldCheck, User, Sparkles, History, ChevronDown, ChevronUp, Coins, Crown, Medal, Award } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import Avatar from "@/components/Avatar";
 import { effectClass } from "@/lib/effects";
@@ -11,6 +11,7 @@ export default function AnnualRankingPanel() {
   const [actionLoading, setActionLoading] = useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [confirmNextYearOpen, setConfirmNextYearOpen] = useState(false);
+  const [closeConfirmationText, setCloseConfirmationText] = useState("");
   const [expandedYear, setExpandedYear] = useState(null);
 
   const loadRanking = useCallback(async () => {
@@ -30,12 +31,17 @@ export default function AnnualRankingPanel() {
   }, [loadRanking]);
 
   const handleCloseAnnualCycle = async () => {
+    if (closeConfirmationText.trim().toUpperCase() !== "ENCERRAR") {
+      toast.error("Digite 'ENCERRAR' para autorizar o encerramento.");
+      return;
+    }
     setActionLoading(true);
     try {
       const res = await api.post("/ranking/annual/close");
       if (res.data?.ok) {
         toast.success("Ranking Anual encerrado! O aplicativo agora está desativado para os alunos.");
         setConfirmCloseOpen(false);
+        setCloseConfirmationText("");
         loadRanking();
       }
     } catch (err) {
@@ -81,9 +87,9 @@ export default function AnnualRankingPanel() {
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
           <div>
             <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <span className="nb-badge bg-black text-white border-black font-black text-xs px-3 py-1 uppercase tracking-wider">
+              <span className="nb-badge bg-black text-white border-2 border-black font-black text-xs px-3 py-1 uppercase tracking-wider shadow-[2px_2px_0_0_#000]">
                 <Trophy className="w-3.5 h-3.5 text-amber-300 inline mr-1" />
-                <span className="text-white">Ano Letivo {cycle.active_year}</span>
+                <span className="text-white font-black">ANO LETIVO {cycle.active_year}</span>
               </span>
               <span className={`nb-badge font-black text-xs px-3 py-1 ${cycle.is_closed ? "bg-red-500 text-white" : "bg-emerald-400 text-black"} border-black`}>
                 {cycle.is_closed ? "🔒 Encerrado / App Desativado para Alunos" : "🟢 Ano Ativo / Alunos Liberados"}
@@ -100,7 +106,10 @@ export default function AnnualRankingPanel() {
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
             {!cycle.is_closed ? (
               <button
-                onClick={() => setConfirmCloseOpen(true)}
+                onClick={() => {
+                  setCloseConfirmationText("");
+                  setConfirmCloseOpen(true);
+                }}
                 className="nb-btn bg-red-500 hover:bg-red-600 text-white px-5 py-3 text-sm flex items-center justify-center gap-2 font-black shadow-[3px_3px_0_0_#000] active:translate-x-[2px] active:translate-y-[2px] w-full sm:w-auto"
                 data-testid="btn-close-annual-cycle"
               >
@@ -129,7 +138,7 @@ export default function AnnualRankingPanel() {
         </div>
       </div>
 
-      {/* Confirmation Modal: Close Annual Cycle */}
+      {/* Confirmation Modal: Close Annual Cycle with Double Protection */}
       {confirmCloseOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="max-w-md w-full nb-card bg-white p-6 border-4 border-black shadow-[8px_8px_0_0_#000] space-y-4">
@@ -145,18 +154,42 @@ export default function AnnualRankingPanel() {
               <li>⚠️ Alunos verão a tela informativa de encerramento do ano letivo ao tentar acessar.</li>
               <li>✔️ O administrador continuará com acesso livre para consultar o ranking e iniciar o próximo ano quando desejar.</li>
             </ul>
+
+            <div className="space-y-1.5 pt-1">
+              <label className="block text-xs font-black uppercase text-neutral-900">
+                Digite a palavra <span className="text-red-600 font-black">ENCERRAR</span> para autorizar:
+              </label>
+              <input
+                type="text"
+                value={closeConfirmationText}
+                onChange={(e) => setCloseConfirmationText(e.target.value)}
+                placeholder="Digite ENCERRAR..."
+                className="nb-input w-full font-mono font-black text-sm uppercase border-2 border-black p-2.5 bg-neutral-50"
+                autoFocus
+                data-testid="input-confirm-close-annual"
+              />
+            </div>
+
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => setConfirmCloseOpen(false)}
+                onClick={() => {
+                  setConfirmCloseOpen(false);
+                  setCloseConfirmationText("");
+                }}
                 disabled={actionLoading}
-                className="nb-btn bg-neutral-200 hover:bg-neutral-300 text-black px-4 py-2 text-sm flex-1 font-bold"
+                className="nb-btn bg-neutral-200 hover:bg-neutral-300 text-black px-4 py-2.5 text-sm flex-1 font-bold"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCloseAnnualCycle}
-                disabled={actionLoading}
-                className="nb-btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm flex-1 font-black shadow-[3px_3px_0_0_#000]"
+                disabled={actionLoading || closeConfirmationText.trim().toUpperCase() !== "ENCERRAR"}
+                className={`nb-btn px-4 py-2.5 text-sm flex-1 font-black shadow-[3px_3px_0_0_#000] border-2 border-black transition-all ${
+                  closeConfirmationText.trim().toUpperCase() === "ENCERRAR"
+                    ? "bg-red-600 hover:bg-red-700 text-white cursor-pointer"
+                    : "bg-neutral-300 text-neutral-500 opacity-50 cursor-not-allowed border-neutral-400"
+                }`}
+                data-testid="btn-confirm-close-annual"
               >
                 {actionLoading ? "Encerrando..." : "Sim, Encerrar Ano"}
               </button>
@@ -249,16 +282,16 @@ export default function AnnualRankingPanel() {
                       {/* Rank Position */}
                       <td className="p-3 text-center">
                         {isTop1 ? (
-                          <span className="inline-flex items-center justify-center w-9 h-9 bg-amber-400 border-2 border-black rounded-full font-black text-black shadow-[2px_2px_0_0_#000]">
-                            🥇 1º
+                          <span className="inline-flex items-center justify-center gap-0.5 px-2 py-1 bg-amber-400 border-2 border-black rounded-full font-black text-black shadow-[2px_2px_0_0_#000] text-xs">
+                            <Crown className="w-3.5 h-3.5 text-amber-950" /> 1º
                           </span>
                         ) : isTop2 ? (
-                          <span className="inline-flex items-center justify-center w-9 h-9 bg-slate-300 border-2 border-black rounded-full font-black text-black shadow-[2px_2px_0_0_#000]">
-                            🥈 2º
+                          <span className="inline-flex items-center justify-center gap-0.5 px-2 py-1 bg-slate-300 border-2 border-black rounded-full font-black text-black shadow-[2px_2px_0_0_#000] text-xs">
+                            <Medal className="w-3.5 h-3.5 text-slate-800" /> 2º
                           </span>
                         ) : isTop3 ? (
-                          <span className="inline-flex items-center justify-center w-9 h-9 bg-amber-600 text-white border-2 border-black rounded-full font-black shadow-[2px_2px_0_0_#000]">
-                            🥉 3º
+                          <span className="inline-flex items-center justify-center gap-0.5 px-2 py-1 bg-amber-600 text-white border-2 border-black rounded-full font-black shadow-[2px_2px_0_0_#000] text-xs">
+                            <Award className="w-3.5 h-3.5 text-white" /> 3º
                           </span>
                         ) : (
                           <span className="inline-flex items-center justify-center w-8 h-8 bg-neutral-200 border border-black rounded-md font-bold text-neutral-800">
@@ -294,14 +327,14 @@ export default function AnnualRankingPanel() {
                       {/* Completed Tasks (Critério Principal) */}
                       <td className="p-3 text-center bg-emerald-50/60 border-x border-black/10">
                         <span className="inline-flex items-center gap-1 text-emerald-950 bg-emerald-200 border border-black px-2.5 py-1 rounded font-black text-sm shadow-[1px_1px_0_0_#000]">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-900" /> {r.completed_tasks} feitas
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-900" /> {r.completed_tasks} {r.completed_tasks === 1 ? "feita" : "feitas"}
                         </span>
                       </td>
 
                       {/* Pending Tasks (Critério de Desempate) */}
                       <td className="p-3 text-center bg-amber-50/40 border-r border-black/10">
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded font-bold border border-black text-xs ${r.pending_tasks > 0 ? "bg-red-100 text-red-900" : "bg-neutral-100 text-neutral-700"}`}>
-                          <Clock className="w-3.5 h-3.5" /> {r.pending_tasks} pendentes
+                          <Clock className="w-3.5 h-3.5" /> {r.pending_tasks} {r.pending_tasks === 1 ? "pendente" : "pendentes"}
                         </span>
                       </td>
 
@@ -317,8 +350,8 @@ export default function AnnualRankingPanel() {
 
                       {/* Total Points (Saldo da Loja) */}
                       <td className="p-3 text-center">
-                        <span className="nb-badge bg-amber-200 text-amber-950 border-black font-bold text-xs px-2.5 py-0.5">
-                          🪙 {r.points} pts
+                        <span className="nb-badge bg-amber-200 text-amber-950 border-black font-bold text-xs px-2.5 py-0.5 inline-flex items-center gap-1">
+                          <Coins className="w-3.5 h-3.5 text-amber-800" /> {r.points} pts
                         </span>
                       </td>
                     </tr>
@@ -374,7 +407,9 @@ export default function AnnualRankingPanel() {
                               <td className="p-2 font-black">{hr.rank}º</td>
                               <td className="p-2 font-bold">{hr.name}</td>
                               <td className="p-2 text-center font-bold">{hr.points} pts</td>
-                              <td className="p-2 text-center font-bold text-emerald-700">{hr.completed_tasks}</td>
+                              <td className="p-2 text-center font-bold text-emerald-700">
+                                {hr.completed_tasks} {hr.completed_tasks === 1 ? "feita" : "feitas"}
+                              </td>
                             </tr>
                           ))}
                         </tbody>

@@ -49,6 +49,7 @@ export default function StudentButtonsPanel({ annualCycle }) {
   const [color, setColor] = useState("emerald");
   const [icon, setIcon] = useState("🔗");
   const [active, setActive] = useState(true);
+  const [openInNewTab, setOpenInNewTab] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [btnToDelete, setBtnToDelete] = useState(null);
@@ -77,6 +78,7 @@ export default function StudentButtonsPanel({ annualCycle }) {
     setColor("emerald");
     setIcon("🔗");
     setActive(true);
+    setOpenInNewTab(true);
     setModalOpen(true);
   };
 
@@ -88,6 +90,7 @@ export default function StudentButtonsPanel({ annualCycle }) {
     setColor(btn.color || "emerald");
     setIcon(btn.icon || "🔗");
     setActive(btn.active !== false);
+    setOpenInNewTab(btn.open_in_new_tab !== false);
     setModalOpen(true);
   };
 
@@ -111,6 +114,7 @@ export default function StudentButtonsPanel({ annualCycle }) {
         color,
         icon,
         active,
+        open_in_new_tab: openInNewTab,
       };
 
       if (editingBtn) {
@@ -178,14 +182,14 @@ export default function StudentButtonsPanel({ annualCycle }) {
               <h2 className="font-heading font-black text-xl sm:text-2xl text-neutral-900 leading-tight">
                 Botões & Links para Alunos
               </h2>
-              <span className="nb-badge bg-black text-white text-[11px] font-bold">
+              <span className="nb-badge bg-amber-300 text-black border-2 border-black text-xs font-black tracking-wide uppercase px-2.5 py-0.5 shadow-[1.5px_1.5px_0_0_#000]">
                 Acessos Rápidos Personalizados
               </span>
             </div>
           </div>
           <p className="text-xs sm:text-sm text-neutral-700 leading-relaxed pt-1">
             Crie botões personalizados que levam os alunos diretamente para qualquer link da sua escolha
-            (Google Classroom, videoaulas, apostilas, formulários, simulados, bibliotecas digitais, etc.).
+            (Google Classroom, videoaulas, resumos, formulários, simulados, bibliotecas digitais, etc.).
           </p>
         </div>
 
@@ -208,7 +212,7 @@ export default function StudentButtonsPanel({ annualCycle }) {
       ) : buttons.length === 0 ? (
         <div className="nb-card p-10 sm:p-14 text-center space-y-4 border-2 border-dashed border-neutral-400 bg-neutral-50/60">
           <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 border-2 border-black flex items-center justify-center mx-auto text-2xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-            🔗
+            <Link2 className="w-8 h-8 text-amber-800" />
           </div>
           <div className="max-w-md mx-auto space-y-1">
             <h3 className="font-heading font-black text-lg text-neutral-900">
@@ -248,8 +252,8 @@ export default function StudentButtonsPanel({ annualCycle }) {
                   <div className="space-y-3">
                     {/* Top Badges */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="nb-badge bg-neutral-200 text-neutral-800 text-[10px] font-bold">
-                        {btn.icon || "🔗"} {colorStyle.label}
+                      <span className="nb-badge bg-neutral-200 text-neutral-800 text-[10px] font-bold flex items-center gap-1">
+                        <Link2 className="w-3 h-3 text-neutral-700" /> {colorStyle.label}
                       </span>
                       <button
                         onClick={() => handleToggleActive(btn)}
@@ -285,7 +289,7 @@ export default function StudentButtonsPanel({ annualCycle }) {
                         title={`Abrir link: ${btn.url}`}
                       >
                         <span className="flex items-center gap-2 truncate">
-                          <span className="text-base">{btn.icon || "🔗"}</span>
+                          <Link2 className="w-4 h-4 flex-shrink-0 opacity-90" />
                           <span className="truncate">{btn.name}</span>
                         </span>
                         <ExternalLink className="w-4 h-4 flex-shrink-0 opacity-80" />
@@ -384,7 +388,7 @@ export default function StudentButtonsPanel({ annualCycle }) {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex: Google Sala de Aula, Link da Videoaula, Apostila Virtual..."
+                  placeholder="Ex: Google Sala de Aula, Link da Videoaula, Resumo Virtual..."
                   className="nb-input bg-white text-sm font-bold"
                   data-testid="input-button-name"
                 />
@@ -488,6 +492,21 @@ export default function StudentButtonsPanel({ annualCycle }) {
                 />
                 <label htmlFor="btn-active-check" className="text-xs font-bold text-neutral-800 cursor-pointer">
                   Visível para os alunos na tela inicial (Ativo)
+                </label>
+              </div>
+
+              {/* Opção Abrir em Nova Aba */}
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="btn-new-tab-check"
+                  checked={openInNewTab}
+                  onChange={(e) => setOpenInNewTab(e.target.checked)}
+                  className="w-4 h-4 rounded border-2 border-black text-sky-600 focus:ring-0 cursor-pointer"
+                  data-testid="input-button-open-new-tab"
+                />
+                <label htmlFor="btn-new-tab-check" className="text-xs font-bold text-neutral-800 cursor-pointer">
+                  Abrir link em nova aba (target=&quot;_blank&quot;)
                 </label>
               </div>
 

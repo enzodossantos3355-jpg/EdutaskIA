@@ -21,8 +21,9 @@ export default function TaskCalendar({ tasks }) {
   const tasksByDate = {};
   tasks.forEach((t) => {
     if (!t.due_date) return;
-    if (!tasksByDate[t.due_date]) tasksByDate[t.due_date] = [];
-    tasksByDate[t.due_date].push(t);
+    const dateKey = String(t.due_date).split("T")[0].trim();
+    if (!tasksByDate[dateKey]) tasksByDate[dateKey] = [];
+    tasksByDate[dateKey].push(t);
   });
 
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Trophy, Calendar as CalendarIcon, Star, Sparkles, ChevronDown, Loader2 } from "lucide-react";
+import { Trophy, Calendar as CalendarIcon, Star, Sparkles, ChevronDown, Loader2, Crown, CheckCircle2, Target } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import Avatar from "@/components/Avatar";
 import { effectClass } from "@/lib/effects";
@@ -78,18 +78,20 @@ export default function PrizeBanner() {
       data-testid="prize-banner"
     >
 
-      <div className="absolute top-0 right-0 w-32 h-32 opacity-15 text-9xl select-none pointer-events-none">{prize.emoji}</div>
+      <div className="absolute top-0 right-0 w-32 h-32 opacity-15 select-none pointer-events-none flex items-center justify-center">
+        <Trophy className="w-28 h-28 text-amber-900" />
+      </div>
       
       {/* Barra compacta para celular (evita rolagem excessiva) */}
       <div className="sm:hidden flex items-center justify-between gap-2 relative z-10">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xl flex-shrink-0">{prize.emoji}</span>
+          <Trophy className="w-5 h-5 text-amber-900 flex-shrink-0" />
           <div className="min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-wider text-amber-900 truncate">
-              {ai_winner ? `🏆 Vencedor • ${month_label}` : hasTie ? `👑 Empate Top 1 • ${days_remaining}d` : `Prêmio do mês • ${days_remaining}d restantes`}
+              {ai_winner ? `Vencedor • ${month_label}` : hasTie ? `Empate Top 1 • ${days_remaining}d` : `Prêmio do mês • ${days_remaining}d restantes`}
             </div>
             <div className="font-heading font-black text-xs text-neutral-900 truncate">
-              {ai_winner ? `🎉 ${ai_winner.winner_name}` : hasTie ? `👑 ${topLeaders.map(l => l.name).join(' & ')} (${topLeaderOnTime} no prazo)` : leader ? `👑 ${leader.name} (${leaderOnTime} no prazo)` : prize.title}
+              {ai_winner ? ai_winner.winner_name : hasTie ? `${topLeaders.map(l => l.name).join(' & ')} (${topLeaderOnTime} no prazo)` : leader ? `${leader.name} (${leaderOnTime} no prazo)` : prize.title}
             </div>
           </div>
         </div>
@@ -111,7 +113,7 @@ export default function PrizeBanner() {
           <div className="flex items-center gap-2 mb-1">
             <Trophy className="w-5 h-5 text-amber-950" strokeWidth={2.5} />
             <span className="text-xs font-black uppercase tracking-wider text-amber-950">
-              {isWinner ? "🎉 Você Venceu a Premiação do Mês!" : (ai_winner.tied_winners?.length > 1 || ai_winner.is_tie) ? `Vencedores Empatados do Mês • ${month_label}` : `Vencedor(a) do Mês • ${month_label}`}
+              {isWinner ? "Você Venceu a Premiação do Mês!" : (ai_winner.tied_winners?.length > 1 || ai_winner.is_tie) ? `Vencedores Empatados do Mês • ${month_label}` : `Vencedor(a) do Mês • ${month_label}`}
             </span>
           </div>
 
@@ -130,9 +132,11 @@ export default function PrizeBanner() {
                   />
                   <div>
                     <div className="font-heading font-black text-sm text-neutral-900 leading-tight">{tw.name}</div>
-                    <span className="text-[10px] font-bold text-amber-900">👑 1º Lugar Empatado</span>
-                    <div className="text-[10px] font-bold text-emerald-800">
-                      ✓ {tw.on_time_month ?? topLeaderOnTime} no prazo
+                    <span className="text-[10px] font-bold text-amber-900 flex items-center gap-1">
+                      <Crown className="w-3 h-3 text-amber-800" /> 1º Lugar Empatado
+                    </span>
+                    <div className="text-[10px] font-bold text-emerald-800 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> {tw.on_time_month ?? topLeaderOnTime} no prazo
                     </div>
                   </div>
                 </div>
@@ -141,13 +145,14 @@ export default function PrizeBanner() {
           ) : (
             <div className="flex items-center gap-2 flex-wrap">
               <div className="font-heading font-black text-xl sm:text-2xl text-neutral-900 flex items-center gap-2 flex-wrap">
-                <span>🎉 {ai_winner.winner_name}</span>
+                <Trophy className="w-6 h-6 text-amber-900" />
+                <span>{ai_winner.winner_name}</span>
                 {isWinner && (
                   <span className="nb-badge bg-emerald-300 text-emerald-950 text-xs font-bold">É você! Parabéns!</span>
                 )}
               </div>
-              <span className="nb-badge bg-emerald-200 text-emerald-950 text-xs font-bold">
-                🎯 {ai_winner.on_time_month ?? leaderOnTime} tarefa(s) no prazo
+              <span className="nb-badge bg-emerald-200 text-emerald-950 text-xs font-bold flex items-center gap-1">
+                <Target className="w-3.5 h-3.5" /> {ai_winner.on_time_month ?? leaderOnTime} tarefa(s) no prazo
               </span>
             </div>
           )}
@@ -161,7 +166,7 @@ export default function PrizeBanner() {
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {ai_winner.criteria.map((c, i) => (
                     <span key={i} className="nb-badge bg-amber-100 text-neutral-900 text-[10px]">
-                      ✓ {c}
+                      {c}
                     </span>
                   ))}
                 </div>
@@ -177,8 +182,8 @@ export default function PrizeBanner() {
 
       <div className="relative z-10 flex items-start justify-between flex-wrap gap-4">
         <div className="flex items-start gap-3">
-          <div className="w-11 h-11 sm:w-12 sm:h-12 nb-card flex items-center justify-center bg-amber-300 text-2xl flex-shrink-0">
-            {prize.emoji}
+          <div className="w-11 h-11 sm:w-12 sm:h-12 nb-card flex items-center justify-center bg-amber-300 text-2xl flex-shrink-0 border-2 border-black">
+            <Trophy className="w-6 h-6 text-amber-950" />
           </div>
           <div className="min-w-0">
             <div className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-amber-900">
@@ -192,8 +197,8 @@ export default function PrizeBanner() {
                 {prize.description}
               </p>
             )}
-            <div className="mt-2 text-xs font-medium inline-block px-2.5 py-1 rounded-md border bg-white/80 border-amber-900/20 text-neutral-900">
-              ✨ Pontos de tarefas servem exclusivamente para a Loja de Molduras.
+            <div className="mt-2 text-xs font-medium inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border bg-white/80 border-amber-900/20 text-neutral-900">
+              <Sparkles className="w-3.5 h-3.5 text-amber-600" /> Pontos de tarefas servem exclusivamente para a Loja de Molduras.
             </div>
           </div>
         </div>
@@ -216,7 +221,7 @@ export default function PrizeBanner() {
               </div>
               <div className="leading-tight min-w-0">
                 <div className="text-[10px] font-black uppercase tracking-wider text-amber-800 flex items-center gap-1">
-                  👑 Empate no 1º Lugar ({topLeaders.length})
+                  <Crown className="w-3 h-3 text-amber-800" /> Empate no 1º Lugar ({topLeaders.length})
                 </div>
                 <div className="font-bold text-xs sm:text-sm font-heading text-neutral-900 flex items-center gap-1 truncate max-w-[200px]">
                   {topLeaders.map((l) => l.name).join(" & ")}

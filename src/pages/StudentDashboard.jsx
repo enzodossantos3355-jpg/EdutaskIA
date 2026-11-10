@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { Calendar as CalendarIcon, Paperclip, Check, BookOpen, Filter, Megaphone, LayoutGrid, CalendarDays, Sparkles, ShoppingBag, BarChart3, HelpCircle, Star, ExternalLink, Image as ImageIcon, Loader2, Copy, CheckCheck, FileText, ChevronDown, ChevronUp, Lock, Bot, Coins, RotateCcw, Volume2 } from "lucide-react";
+import { Calendar as CalendarIcon, Paperclip, Check, BookOpen, Filter, Megaphone, LayoutGrid, CalendarDays, Sparkles, ShoppingBag, BarChart3, HelpCircle, Star, ExternalLink, Image as ImageIcon, Loader2, Copy, CheckCheck, FileText, ChevronDown, ChevronUp, Lock, Bot, Coins, RotateCcw, Volume2, Scissors, Gem, Link2, Zap } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import { useAuth } from "@/context/AuthContext";
@@ -13,6 +13,7 @@ import PrizeBanner from "@/components/PrizeBanner";
 import AIDailySummary from "@/components/AIDailySummary";
 import StoreEffects from "@/components/StoreEffects";
 import StudentAIStatsView from "@/components/StudentAIStatsView";
+import StudentResumosPanel from "@/components/StudentResumosPanel";
 import AIChatDialog from "@/components/AIChatDialog";
 import SpecialAnnouncementModal from "@/components/SpecialAnnouncementModal";
 import AppDeactivatedScreen from "@/components/AppDeactivatedScreen";
@@ -115,14 +116,17 @@ function BotSandboxBanner({ onPointsUpdated }) {
 
       {/* Cortes explicativos */}
       <div className="mt-3 pt-3 border-t border-cyan-800/20 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-        <div className="flex items-center gap-1.5 text-neutral-800 bg-white/70 p-1.5 border border-black/30">
-          <span className="font-black text-cyan-950">✂️ Corte 1:</span> Fora do ranking e prêmio mensal da IA
+        <div className="flex items-center gap-1.5 text-neutral-800 bg-white/70 p-1.5 border border-black/30 font-medium">
+          <Scissors className="w-3.5 h-3.5 text-cyan-900 flex-shrink-0" />
+          <span className="font-black text-cyan-950">Corte 1:</span> Fora do ranking e prêmio mensal da IA
         </div>
-        <div className="flex items-center gap-1.5 text-neutral-800 bg-white/70 p-1.5 border border-black/30">
-          <span className="font-black text-cyan-950">✂️ Corte 2:</span> Bloqueado de disparos de WhatsApp
+        <div className="flex items-center gap-1.5 text-neutral-800 bg-white/70 p-1.5 border border-black/30 font-medium">
+          <Scissors className="w-3.5 h-3.5 text-cyan-900 flex-shrink-0" />
+          <span className="font-black text-cyan-950">Corte 2:</span> Bloqueado de disparos de WhatsApp
         </div>
-        <div className="flex items-center gap-1.5 text-neutral-800 bg-white/70 p-1.5 border border-black/30">
-          <span className="font-black text-cyan-950">✂️ Corte 3:</span> Não afeta médias gerais da turma
+        <div className="flex items-center gap-1.5 text-neutral-800 bg-white/70 p-1.5 border border-black/30 font-medium">
+          <Scissors className="w-3.5 h-3.5 text-cyan-900 flex-shrink-0" />
+          <span className="font-black text-cyan-950">Corte 3:</span> Não afeta médias gerais da turma
         </div>
       </div>
     </div>
@@ -170,7 +174,11 @@ export default function StudentDashboard() {
         ]);
         const currentUserId = user?.id;
         const mapped = (allTasks || [])
-          .filter((t) => !t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(currentUserId))
+          .filter((t) => {
+            const validAssigned = (t.assigned_to || []).filter((id) => id && typeof id === "string" && id.trim().length > 0);
+            if (validAssigned.length === 0) return true;
+            return validAssigned.some((id) => String(id).trim() === String(currentUserId).trim());
+          })
           .map((t) => {
             const comp = (allCompletions || []).find((c) => c.task_id === t.id && c.user_id === currentUserId);
             return {
@@ -200,6 +208,17 @@ export default function StudentDashboard() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Listener para auto-atualização de tarefas quando criadas/modificadas pelo professor ou ao focar a aba
+  useEffect(() => {
+    const handleRefresh = () => load();
+    window.addEventListener("tasks-updated", handleRefresh);
+    window.addEventListener("focus", handleRefresh);
+    return () => {
+      window.removeEventListener("tasks-updated", handleRefresh);
+      window.removeEventListener("focus", handleRefresh);
+    };
+  }, [load]);
+
   // Listener para evento customizado do botão superior da Loja no AppHeader
   useEffect(() => {
     const handleStoreTabEvent = () => {
@@ -213,8 +232,9 @@ export default function StudentDashboard() {
 
   // Automatic one-time pop-up trigger on app launch for special announcements
   useEffect(() => {
-    if (!user?.id || !announcements || announcements.length === 0) return;
-    const unseenSpecial = announcements.find((a) => {
+    const list = Array.isArray(announcements) ? announcements : [];
+    if (!user?.id || list.length === 0) return;
+    const unseenSpecial = list.find((a) => {
       if (!a.is_special) return false;
       const seenKey = `edutask_seen_special_ann_${user.id}_${a.id}`;
       return !localStorage.getItem(seenKey);
@@ -232,11 +252,13 @@ export default function StudentDashboard() {
   };
 
   const specialAnnouncements = useMemo(() => {
-    return announcements.filter((a) => a.is_special);
+    const list = Array.isArray(announcements) ? announcements : [];
+    return list.filter((a) => a.is_special);
   }, [announcements]);
 
   const regularAnnouncements = useMemo(() => {
-    return announcements.filter((a) => !a.is_special);
+    const list = Array.isArray(announcements) ? announcements : [];
+    return list.filter((a) => !a.is_special);
   }, [announcements]);
 
   const subjects = useMemo(() => {
@@ -270,8 +292,8 @@ export default function StudentDashboard() {
         playTaskCompleteSound();
         toast.success(
           earned > 0
-            ? `+${earned} pontos! ${onTime ? "🎯 No prazo!" : "Entregue com atraso"}`
-            : "Tarefa concluída! 🎉"
+            ? `+${earned} pontos! ${onTime ? "No prazo!" : "Entregue com atraso"}`
+            : "Tarefa concluída com sucesso!"
         );
         fireConfetti();
       }
@@ -292,7 +314,7 @@ export default function StudentDashboard() {
             points_awarded: task.points || 10,
             on_time: true,
           });
-          toast.success("Tarefa concluída! 🎉");
+          toast.success("Tarefa concluída com sucesso!");
           fireConfetti();
         }
         load();
@@ -335,7 +357,18 @@ export default function StudentDashboard() {
             }`}
             data-testid="student-tab-tasks"
           >
-            <span>💎</span> Minhas tarefas
+            <Gem className="w-4 h-4 text-cyan-800 flex-shrink-0" />
+            <span>Minhas tarefas</span>
+          </button>
+          <button
+            onClick={() => setTab("resumos")}
+            className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
+              tab === "resumos" ? "bg-yellow-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"
+            }`}
+            data-testid="student-tab-resumos"
+          >
+            <BookOpen className="w-4 h-4 text-yellow-900 flex-shrink-0" />
+            <span>Resumos & Apostilas</span>
           </button>
           {!framesDisabled && (
             <button
@@ -345,7 +378,8 @@ export default function StudentDashboard() {
               }`}
               data-testid="student-tab-store"
             >
-              <span>🗺️</span> Loja de Molduras 🖼️
+              <ShoppingBag className="w-4 h-4 text-amber-900 flex-shrink-0" />
+              <span>Loja de Molduras</span>
             </button>
           )}
           {!aiHidden && (
@@ -356,7 +390,8 @@ export default function StudentDashboard() {
               }`}
               data-testid="student-tab-stats"
             >
-              <span>📊</span> Estatísticas & Líder IA
+              <BarChart3 className="w-4 h-4 text-violet-900 flex-shrink-0" />
+              <span>Estatísticas & Líder IA</span>
             </button>
           )}
           {!aiHidden && (
@@ -377,7 +412,8 @@ export default function StudentDashboard() {
               data-testid="student-tab-chat"
               title={!aiEnabled ? "IA desativada temporariamente" : "Tirar Dúvidas com IA"}
             >
-              <span>✨</span> Tirar Dúvida
+              <Sparkles className="w-4 h-4 text-pink-700 flex-shrink-0" />
+              <span>Tirar Dúvida</span>
             </button>
           )}
         </div>
@@ -386,6 +422,8 @@ export default function StudentDashboard() {
           <StoreEffects />
         ) : tab === "stats" ? (
           <StudentAIStatsView />
+        ) : tab === "resumos" ? (
+          <StudentResumosPanel />
         ) : (<>
         <div className="mb-4 sm:mb-8">
           <h1 className="font-heading font-black text-2xl sm:text-5xl tracking-tight">
@@ -401,7 +439,8 @@ export default function StudentDashboard() {
           <div className="mb-6 sm:mb-8 space-y-2.5" data-testid="student-custom-buttons-section">
             <div className="flex items-center gap-2">
               <span className="font-heading font-black text-sm sm:text-base text-neutral-800 flex items-center gap-1.5">
-                <span>🔗</span> Acessos Rápidos & Links Úteis
+                <Link2 className="w-4 h-4 text-indigo-700 flex-shrink-0" />
+                <span>Acessos Rápidos & Links Úteis</span>
               </span>
               <span className="nb-badge bg-black text-white text-[10px] font-bold">
                 {customButtons.length}
@@ -420,7 +459,7 @@ export default function StudentDashboard() {
                     data-testid={`student-action-button-${btn.id}`}
                   >
                     <div className="min-w-0 flex items-center gap-2.5">
-                      <span className="text-lg sm:text-xl flex-shrink-0">{btn.icon || "🔗"}</span>
+                      <Link2 className="w-5 h-5 flex-shrink-0 text-black/80" />
                       <div className="min-w-0">
                         <div className="font-heading font-black text-xs sm:text-sm truncate">
                           {btn.name}
@@ -896,9 +935,9 @@ function StudentAnswerSection({ task, aiEnabled = true }) {
 
         <div className="flex items-center gap-1.5 p-1 bg-neutral-100 rounded-lg border border-black/20">
           {[
-            { key: "short", label: "⚡ Curto" },
-            { key: "medium", label: "📝 Médio" },
-            { key: "detailed", label: "📚 Detalhado" },
+            { key: "short", label: "Curto", Icon: Zap },
+            { key: "medium", label: "Médio", Icon: FileText },
+            { key: "detailed", label: "Detalhado", Icon: BookOpen },
           ].map((opt) => (
             <button
               key={opt.key}
@@ -917,6 +956,7 @@ function StudentAnswerSection({ task, aiEnabled = true }) {
               }`}
               data-testid={`select-length-${opt.key}-${task.id}`}
             >
+              <opt.Icon className="w-3 h-3 flex-shrink-0" />
               <span>{opt.label}</span>
             </button>
           ))}

@@ -48,7 +48,7 @@ export const DEFAULT_EFFECTS = {
   },
   spongebob: {
     id: "spongebob",
-    name: "Moldura Fenda do Biquíni — Bob Esponja 🍍",
+    name: "Moldura Fenda do Biquíni — Bob Esponja",
     emoji: "🍍",
     description: "Super moldura da Fenda do Biquíni com a Casa de Abacaxi, águas-vivas reluzentes, floral Tiki submarino e bolhas tropicais!",
     cost: 120,

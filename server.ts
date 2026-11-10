@@ -290,10 +290,14 @@ const DEFAULT_EFFECTS = [
 
 const DEFAULT_APP_INFO = {
   id: 'app_info',
-  version: '1.1.0',
-  codename: 'Edutask AI Edition',
-  release_notes: 'Atualização do sistema: Sistema de níveis desligado; pontos de tarefas exclusivamente para comprar molduras na loja; e vencedor final do mês avaliado por Inteligência Artificial.',
+  version: '1.3.0',
+  codename: 'Edutask AI Resumos & Performance Edition',
+  release_notes: 'Versão 1.3.0 com gerador de resumos por IA, renderização matemática KaTeX, integração com Google Drive, botões de atalho personalizados e disparador oficial no WhatsApp.',
   features: [
+    'Gerador de Resumos por IA com suporte KaTeX e exportação PDF/PNG/MD',
+    'Integração com Google Drive para importação de apostilas e fotos',
+    'Atalhos & Botões Customizados para alunos',
+    'Disparador WhatsApp Oficial para comunicado e foto do firmware',
     'Perfis estilo Netflix para Alunos e Admin',
     'Entrega de tarefas com anexos, respostas e prazos',
     'Gabarito inteligente gerado por IA através de fotos da tarefa',
@@ -351,6 +355,19 @@ interface GeneratedTaskAnswer {
   answer: string;
   length: 'short' | 'medium' | 'detailed';
   generated_at: string;
+}
+
+export interface SummaryTopic {
+  id: string;
+  subject: string;
+  topic: string;
+  summary_text: string;
+  key_concepts: string[];
+  formulas: string[];
+  source_image_ids: string[];
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
 }
 
 interface TaskItem {
@@ -527,6 +544,7 @@ class Database {
   login_logs: LoginLog[] = [];
   point_adjustments: PointAdjustment[] = [];
   files: Map<string, FileRecord> = new Map();
+  summaries: Map<string, SummaryTopic> = new Map();
   ai_chats: Map<string, ChatSession> = new Map();
   effect_overrides: Record<string, { cost?: number; rarity?: string }> = {};
   monthly_prize: any = null;
@@ -535,7 +553,7 @@ class Database {
   task_cleanup_config: {
     enabled: boolean;
     cleanup_time: string; // "HH:MM"
-    days_after_due: number; // 0 = tarefas que vencem hoje/vencidas
+    days_after_due: number; // dias após o vencimento
     delete_only_if_completed: boolean;
     last_run_at: string | null;
     last_run_date: string | null; // "YYYY-MM-DD" para garantir execução única por dia
@@ -544,8 +562,8 @@ class Database {
   } = {
     enabled: true,
     cleanup_time: '23:59',
-    days_after_due: 0,
-    delete_only_if_completed: false,
+    days_after_due: 7,
+    delete_only_if_completed: true,
     last_run_at: null,
     last_run_date: null,
     last_deleted_count: 0,
@@ -633,8 +651,10 @@ class Database {
     rankings: any[];
   }> = [];
   ai_model: string = 'gemini-3.8-flash';
+  summary_ai_model: string = 'gemini-3.8-flash';
   webhook_logs: any[] = [];
   task_student_answers: Map<string, GeneratedTaskAnswer> = new Map();
+  summary_generations: Map<string, any> = new Map();
 
   private firebaseSynced: boolean = false;
   private syncPromise: Promise<void> | null = null;
@@ -666,7 +686,7 @@ class Database {
   async syncWithFirebase() {
     try {
       console.log('[Firebase] Sincronizando coleções do Firestore...');
-      const [tasks, users, announcements, completions, subjects, comments, settings, studentAnswers, remoteFiles] = await Promise.all([
+      const [tasks, users, announcements, completions, subjects, comments, settings, studentAnswers, remoteFiles, remoteSummaries, remoteSummaryGens] = await Promise.all([
         firebaseService.getAllTasks(),
         firebaseService.getAllUsers(),
         firebaseService.getAllAnnouncements(),
@@ -676,6 +696,8 @@ class Database {
         firebaseService.getSettings('system'),
         firebaseService.getAllStudentAnswers(),
         firebaseService.getAllFiles(),
+        firebaseService.getAllSummaries(),
+        firebaseService.getAllSummaryGenerations(),
       ]);
 
       if (tasks && tasks.length > 0) {
@@ -780,6 +802,7 @@ class Database {
         if (settings.app_info) this.app_info = settings.app_info;
         if (settings.effect_overrides) this.effect_overrides = settings.effect_overrides;
         if (settings.ai_model) this.ai_model = settings.ai_model;
+        if (settings.summary_ai_model) this.summary_ai_model = settings.summary_ai_model;
         if (settings.ai_enabled !== undefined) this.ai_enabled = settings.ai_enabled;
         if (settings.ai_hidden !== undefined) this.ai_hidden = settings.ai_hidden;
         if (settings.frames_disabled !== undefined) this.frames_disabled = settings.frames_disabled;
@@ -798,6 +821,7 @@ class Database {
           annual_cycle: this.annual_cycle,
           annual_history: this.annual_history,
           ai_model: this.ai_model,
+          summary_ai_model: this.summary_ai_model,
         });
       }
 
@@ -821,6 +845,26 @@ class Database {
             });
           }
         });
+      }
+
+      if (remoteSummaries && remoteSummaries.length > 0) {
+        remoteSummaries.forEach((s) => {
+          if (s.id) this.summaries.set(s.id, s);
+        });
+      } else if (this.summaries.size > 0) {
+        for (const summary of this.summaries.values()) {
+          await firebaseService.saveSummary(summary);
+        }
+      }
+
+      if (remoteSummaryGens && remoteSummaryGens.length > 0) {
+        remoteSummaryGens.forEach((g) => {
+          if (g.id) this.summary_generations.set(g.id, g);
+        });
+      } else if (this.summary_generations.size > 0) {
+        for (const gen of this.summary_generations.values()) {
+          await firebaseService.saveSummaryGeneration(gen);
+        }
       }
 
       this.saveToDisk();
@@ -856,7 +900,10 @@ class Database {
         annual_cycle: this.annual_cycle,
         annual_history: this.annual_history,
         ai_model: this.ai_model,
+        summary_ai_model: this.summary_ai_model,
         task_student_answers: Array.from(this.task_student_answers.entries()),
+        summaries: Array.from(this.summaries.entries()),
+        summary_generations: Array.from(this.summary_generations.entries()),
       };
       fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
     } catch (e) {
@@ -889,7 +936,10 @@ class Database {
         if (data.annual_cycle) this.annual_cycle = data.annual_cycle;
         if (data.annual_history) this.annual_history = data.annual_history;
         if (data.ai_model) this.ai_model = data.ai_model;
+        if (data.summary_ai_model) this.summary_ai_model = data.summary_ai_model;
         if (data.task_student_answers) this.task_student_answers = new Map(data.task_student_answers);
+        if (data.summaries) this.summaries = new Map(data.summaries);
+        if (data.summary_generations) this.summary_generations = new Map(data.summary_generations);
         // Ensure admin does not have a trivial '123' password
         for (const u of this.users.values()) {
           if (u.equipped_effect === 'minecraft') {
@@ -1224,7 +1274,7 @@ api.post('/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-api.get('/auth/me', requireAuth, (req, res) => {
+api.get(['/me', '/auth/me'], requireAuth, (req, res) => {
   const user = (req as any).user as User;
   res.json({
     id: user.id,
@@ -1232,9 +1282,9 @@ api.get('/auth/me', requireAuth, (req, res) => {
     name: user.name,
     role: user.role,
     status: user.status,
-    points: user.points,
-    streak_count: user.streak_count,
-    longest_streak: user.longest_streak,
+    points: user.points || 0,
+    streak_count: user.streak_count || 0,
+    longest_streak: user.longest_streak || 0,
     equipped_effect: user.equipped_effect || 'none',
     owned_effects: user.owned_effects || ['none'],
     has_avatar: Boolean(user.avatar_data),
@@ -1585,6 +1635,564 @@ api.delete('/subjects/:subject_id', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------------------------------------------------------------------------
+// Summaries / Apostilas com Detecção Inteligente e Prevenção de Duplicatas
+// ---------------------------------------------------------------------------
+
+export function normalizeTopicString(str: string): string {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+export function areTopicsSimilar(t1: string, t2: string): boolean {
+  const n1 = normalizeTopicString(t1);
+  const n2 = normalizeTopicString(t2);
+  if (!n1 || !n2) return false;
+  if (n1 === n2) return true;
+  if (n1.includes(n2) || n2.includes(n1)) return true;
+
+  const words1 = new Set(n1.split(' ').filter((w) => w.length > 2));
+  const words2 = new Set(n2.split(' ').filter((w) => w.length > 2));
+  if (words1.size === 0 || words2.size === 0) return false;
+
+  let intersection = 0;
+  for (const w of words1) {
+    if (words2.has(w)) intersection++;
+  }
+  const union = new Set([...words1, ...words2]).size;
+  return (intersection / union) >= 0.35 || intersection >= 2;
+}
+
+export function deduplicateSummaries(): { merged_count: number } {
+  let mergedCount = 0;
+  const bySubject: Record<string, SummaryTopic[]> = {};
+
+  for (const s of db.summaries.values()) {
+    const subKey = s.subject.trim().toLowerCase();
+    if (!bySubject[subKey]) bySubject[subKey] = [];
+    bySubject[subKey].push(s);
+  }
+
+  for (const [, list] of Object.entries(bySubject)) {
+    if (list.length <= 1) continue;
+    const removedIds = new Set<string>();
+
+    for (let i = 0; i < list.length; i++) {
+      const primary = list[i];
+      if (removedIds.has(primary.id)) continue;
+
+      for (let j = i + 1; j < list.length; j++) {
+        const candidate = list[j];
+        if (removedIds.has(candidate.id)) continue;
+
+        if (areTopicsSimilar(primary.topic, candidate.topic)) {
+          console.log(`[Deduplicate] Mesclando tópico duplicado "${candidate.topic}" (${candidate.id}) no tópico principal "${primary.topic}" (${primary.id})`);
+
+          // Mescla texto explicativo se trouxer conteúdo novo
+          if (candidate.summary_text && !primary.summary_text.includes(candidate.summary_text.slice(0, 40))) {
+            primary.summary_text = `${primary.summary_text}\n\n${candidate.summary_text}`.trim();
+          }
+
+          // Mescla conceitos-chave únicos
+          const mergedConcepts = new Set([...(primary.key_concepts || []), ...(candidate.key_concepts || [])]);
+          primary.key_concepts = Array.from(mergedConcepts).filter(Boolean);
+
+          // Mescla fórmulas únicas
+          const mergedFormulas = new Set([...(primary.formulas || []), ...(candidate.formulas || [])]);
+          primary.formulas = Array.from(mergedFormulas).filter(Boolean);
+
+          // Mescla IDs das imagens fontes
+          const mergedImages = new Set([...(primary.source_image_ids || []), ...(candidate.source_image_ids || [])]);
+          primary.source_image_ids = Array.from(mergedImages).filter(Boolean);
+
+          primary.updated_at = new Date().toISOString();
+
+          // Remove o duplicado
+          db.summaries.delete(candidate.id);
+          removedIds.add(candidate.id);
+          firebaseService.deleteSummary(candidate.id).catch(console.warn);
+          mergedCount++;
+        }
+      }
+    }
+  }
+
+  if (mergedCount > 0) {
+    db.saveToDisk();
+    console.log(`[Deduplicate] Total de ${mergedCount} tópicos duplicados mesclados com sucesso!`);
+  }
+  return { merged_count: mergedCount };
+}
+
+api.get('/summaries', requireAuth, (req, res) => {
+  // Executa checagem de deduplicação para garantir que não haja tópicos repetidos
+  deduplicateSummaries();
+
+  const { subject } = req.query;
+  let allSummaries = Array.from(db.summaries.values());
+  if (subject && typeof subject === 'string' && subject.trim()) {
+    allSummaries = allSummaries.filter(
+      (s) => s.subject.toLowerCase() === subject.trim().toLowerCase()
+    );
+  }
+  res.json(allSummaries);
+});
+
+api.post('/admin/summaries/deduplicate', requireAdmin, (req, res) => {
+  const result = deduplicateSummaries();
+  res.json({ ok: true, ...result, summaries: Array.from(db.summaries.values()) });
+});
+
+let processSourceLock: Promise<any> = Promise.resolve();
+
+api.post('/admin/summaries/process-source', requireAdmin, upload.array('images', 10), async (req, res) => {
+  // Enfileira chamadas concorrentes para garantir que a segunda chamada veja o tópico criado pela primeira
+  const currentTask = async () => {
+    try {
+      const { subject } = req.body || {};
+      if (!subject || !subject.trim()) {
+        return res.status(400).json({ detail: 'Nome da matéria é obrigatório' });
+      }
+
+      const files = (req.files as Express.Multer.File[]) || [];
+      if (!files || files.length === 0) {
+        return res.status(400).json({ detail: 'Envie pelo menos uma foto fonte para resumo' });
+      }
+
+      const savedFileIds: string[] = [];
+      const imageParts: any[] = [];
+
+      for (const file of files) {
+        const mime = resolveImageMime(file);
+        const ext = path.extname(file.originalname || '.jpg') || '.jpg';
+        const fileId = `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const diskPath = path.resolve(UPLOAD_DIR, `${fileId}${ext}`);
+
+        try {
+          fs.writeFileSync(diskPath, file.buffer);
+        } catch (err) {
+          console.warn('Could not save summary source file to disk:', err);
+        }
+
+        db.files.set(fileId, {
+          id: fileId,
+          original_filename: file.originalname || 'imagem_resumo.jpg',
+          content_type: mime,
+          size: file.size,
+          data: file.buffer,
+          uploaded_by: (req as any).user?.id || 'admin',
+          created_at: new Date().toISOString(),
+        });
+
+        savedFileIds.push(fileId);
+
+        imageParts.push({
+          inlineData: {
+            data: file.buffer.toString('base64'),
+            mimeType: mime,
+          },
+        });
+      }
+
+      const existingTopics = Array.from(db.summaries.values()).filter(
+        (s) => s.subject.toLowerCase() === subject.trim().toLowerCase()
+      );
+
+      const existingTopicsOverview = existingTopics.map((t) => ({
+        id: t.id,
+        topic: t.topic,
+        summary_text: t.summary_text,
+        key_concepts: t.key_concepts,
+        formulas: t.formulas,
+      }));
+
+      const promptText = `Você é um tutor pedagógico e especialista em criação de apostilas de estudos do Edutask.
+Analise com atenção as imagens de apostilas/anotações enviadas relativas à matéria "${subject.trim()}".
+
+Abaixo estão os assuntos/tópicos já existentes cadastrados para a matéria "${subject.trim()}":
+${JSON.stringify(existingTopicsOverview, null, 2)}
+
+INSTRUÇÕES PEDAGÓGICAS RIGOROSAS:
+1. ATENÇÃO: NUNCA crie múltiplos tópicos ou duplicações para o mesmo assunto! Se o conteúdo das imagens for sobre um assunto que já existe (ou se for uma continuação, exemplo ou exercício do mesmo tema), você DEVE obrigatoriamente marcar "is_existing_topic": true e apontar para o "topic_id" existente.
+2. Se pertencer a um assunto EXISTENTE:
+   - Defina "is_existing_topic": true e informe "topic_id" com o ID correspondente.
+   - SINTETIZE e INTEGRE o novo conteúdo ao resumo existente, melhorando a explicação sem repetir parágrafos ou gerar redundâncias.
+   - Atualize a lista de conceitos-chave ("key_concepts") e equações/fórmulas ("formulas") unificando o conhecimento.
+3. Se for genuinamente um assunto NOVO e diferente de todos os anteriores:
+   - Defina "is_existing_topic": false e "topic_id": null.
+   - Escolha um título de assunto didático e preciso ("topic_title").
+   - Escreva um resumo bem estruturado, claro e didático ("summary_text") em linguagem acessível e organizada.
+   - Liste os conceitos-chave ("key_concepts") e fórmulas/equações essenciais ("formulas").
+
+Retorne EXCLUSIVAMENTE um objeto JSON com a seguinte estrutura:
+{
+  "is_existing_topic": boolean,
+  "topic_id": string | null,
+  "topic_title": string,
+  "summary_text": string,
+  "key_concepts": string[],
+  "formulas": string[]
+}`;
+
+      const geminiRes = await callGeminiGenerate({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: promptText }, ...imageParts],
+          },
+        ],
+        config: {
+          responseMimeType: 'application/json',
+        },
+        preferredModel: db.summary_ai_model || 'gemini-3.8-flash',
+      });
+
+      const responseText = geminiRes?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      let aiParsed: any = {};
+      try {
+        aiParsed = JSON.parse(responseText);
+      } catch (e) {
+        console.warn('Erro ao parsear resposta da IA:', responseText);
+      }
+
+      const proposedTitle = (aiParsed.topic_title || '').trim();
+
+      // Busca por correspondência existente inteligente (evita qualquer duplicação)
+      let matchedExistingTopic: SummaryTopic | null = null;
+
+      // 1. Pelo ID retornado pela IA
+      if (aiParsed.is_existing_topic && aiParsed.topic_id && db.summaries.has(aiParsed.topic_id)) {
+        matchedExistingTopic = db.summaries.get(aiParsed.topic_id)!;
+      }
+
+      // 2. Por similaridade de título na mesma matéria
+      if (!matchedExistingTopic && proposedTitle) {
+        for (const t of existingTopics) {
+          if (areTopicsSimilar(t.topic, proposedTitle)) {
+            matchedExistingTopic = t;
+            console.log(`[ProcessSource] Correspondência encontrada por similaridade de título: "${proposedTitle}" -> "${t.topic}"`);
+            break;
+          }
+        }
+      }
+
+      // 3. Por sobreposição de conceitos-chave
+      if (!matchedExistingTopic && Array.isArray(aiParsed.key_concepts) && aiParsed.key_concepts.length > 0) {
+        const incomingConcepts = new Set(aiParsed.key_concepts.map((c: string) => normalizeTopicString(c)));
+        for (const t of existingTopics) {
+          let matchCount = 0;
+          for (const c of t.key_concepts || []) {
+            if (incomingConcepts.has(normalizeTopicString(c))) {
+              matchCount++;
+            }
+          }
+          if (matchCount >= 2) {
+            matchedExistingTopic = t;
+            console.log(`[ProcessSource] Correspondência encontrada por conceitos-chave: "${t.topic}"`);
+            break;
+          }
+        }
+      }
+
+      const nowIso = new Date().toISOString();
+      let targetSummary: SummaryTopic;
+      let isNewTopic = false;
+
+      if (matchedExistingTopic) {
+        targetSummary = matchedExistingTopic;
+        // Mantém o título mais informativo
+        if (proposedTitle && proposedTitle.length > targetSummary.topic.length) {
+          targetSummary.topic = proposedTitle;
+        }
+
+        // Integra o texto sem duplicar frases
+        const newText = (aiParsed.summary_text || '').trim();
+        if (newText && !targetSummary.summary_text.includes(newText.slice(0, 40))) {
+          targetSummary.summary_text = `${targetSummary.summary_text}\n\n${newText}`.trim();
+        }
+
+        // Combina conceitos únicos
+        const combinedConcepts = new Set([
+          ...(targetSummary.key_concepts || []),
+          ...(aiParsed.key_concepts || []),
+        ]);
+        targetSummary.key_concepts = Array.from(combinedConcepts).filter(Boolean);
+
+        // Combina fórmulas únicas
+        const combinedFormulas = new Set([
+          ...(targetSummary.formulas || []),
+          ...(aiParsed.formulas || []),
+        ]);
+        targetSummary.formulas = Array.from(combinedFormulas).filter(Boolean);
+
+        // Combina imagens fontes
+        const combinedImages = new Set([
+          ...(targetSummary.source_image_ids || []),
+          ...savedFileIds,
+        ]);
+        targetSummary.source_image_ids = Array.from(combinedImages).filter(Boolean);
+        targetSummary.updated_at = nowIso;
+      } else {
+        isNewTopic = true;
+        const newId = `sum-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+        targetSummary = {
+          id: newId,
+          subject: subject.trim(),
+          topic: proposedTitle || 'Assunto ' + new Date().toLocaleDateString('pt-BR'),
+          summary_text: aiParsed.summary_text || 'Resumo processado a partir das imagens fornecidas.',
+          key_concepts: Array.isArray(aiParsed.key_concepts) ? aiParsed.key_concepts : [],
+          formulas: Array.isArray(aiParsed.formulas) ? aiParsed.formulas : [],
+          source_image_ids: savedFileIds,
+          created_at: nowIso,
+          updated_at: nowIso,
+          created_by: (req as any).user?.id || 'admin',
+        };
+      }
+
+      db.summaries.set(targetSummary.id, targetSummary);
+      db.saveToDisk();
+      await firebaseService.saveSummary(targetSummary).catch(console.warn);
+
+      // Executa deduplicação de segurança
+      deduplicateSummaries();
+
+      res.json({
+        ok: true,
+        summary: targetSummary,
+        is_new_topic: isNewTopic,
+      });
+    } catch (err: any) {
+      console.error('[Resumos AI Error]', err);
+      res.status(500).json({ detail: err.message || 'Erro ao processar imagens para resumo' });
+    }
+  };
+
+  const nextTask = processSourceLock.catch(() => {}).then(currentTask);
+  processSourceLock = nextTask;
+  await nextTask;
+});
+
+api.post('/admin/summaries/topics', requireAdmin, async (req, res) => {
+  const { subject, topic, summary_text, key_concepts, formulas, source_image_ids } = req.body || {};
+  if (!subject || !subject.trim() || !topic || !topic.trim()) {
+    return res.status(400).json({ detail: 'Matéria e Título do Assunto são obrigatórios' });
+  }
+
+  const id = `sum-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+  const nowIso = new Date().toISOString();
+  const newTopic: SummaryTopic = {
+    id,
+    subject: subject.trim(),
+    topic: topic.trim(),
+    summary_text: summary_text || '',
+    key_concepts: Array.isArray(key_concepts) ? key_concepts : [],
+    formulas: Array.isArray(formulas) ? formulas : [],
+    source_image_ids: Array.isArray(source_image_ids) ? source_image_ids : [],
+    created_at: nowIso,
+    updated_at: nowIso,
+    created_by: (req as any).user?.id || 'admin',
+  };
+
+  db.summaries.set(id, newTopic);
+  db.saveToDisk();
+  await firebaseService.saveSummary(newTopic).catch(console.warn);
+
+  res.json(newTopic);
+});
+
+api.put('/admin/summaries/topics/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const existing = db.summaries.get(id);
+  if (!existing) return res.status(404).json({ detail: 'Assunto de resumo não encontrado' });
+
+  const { subject, topic, summary_text, key_concepts, formulas, source_image_ids } = req.body || {};
+  if (subject !== undefined) existing.subject = subject.trim();
+  if (topic !== undefined) existing.topic = topic.trim();
+  if (summary_text !== undefined) existing.summary_text = summary_text;
+  if (key_concepts !== undefined) existing.key_concepts = Array.isArray(key_concepts) ? key_concepts : [];
+  if (formulas !== undefined) existing.formulas = Array.isArray(formulas) ? formulas : [];
+  if (source_image_ids !== undefined) existing.source_image_ids = Array.isArray(source_image_ids) ? source_image_ids : [];
+  existing.updated_at = new Date().toISOString();
+
+  db.summaries.set(id, existing);
+  db.saveToDisk();
+  await firebaseService.saveSummary(existing).catch(console.warn);
+
+  res.json(existing);
+});
+
+api.delete('/admin/summaries/topics/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  if (!db.summaries.has(id)) {
+    return res.status(404).json({ detail: 'Assunto não encontrado' });
+  }
+
+  db.summaries.delete(id);
+  db.saveToDisk();
+  await firebaseService.deleteSummary(id).catch(console.warn);
+
+  res.json({ ok: true });
+});
+
+api.put('/admin/summaries/model', requireAdmin, async (req, res) => {
+  const { summary_ai_model } = req.body || {};
+  if (!summary_ai_model) return res.status(400).json({ detail: 'Modelo obrigatório' });
+  db.summary_ai_model = summary_ai_model;
+  db.saveToDisk();
+  await firebaseService.saveSettings('system', {
+    monthly_prize: db.monthly_prize,
+    task_cleanup_config: db.task_cleanup_config,
+    whatsapp_config: db.whatsapp_config,
+    app_info: db.app_info,
+    effect_overrides: db.effect_overrides,
+    ai_enabled: db.ai_enabled,
+    ai_hidden: db.ai_hidden,
+    frames_disabled: db.frames_disabled,
+    annual_cycle: db.annual_cycle,
+    annual_history: db.annual_history,
+    ai_model: db.ai_model,
+    summary_ai_model: db.summary_ai_model,
+  }).catch(console.warn);
+  res.json({ ok: true, summary_ai_model: db.summary_ai_model });
+});
+
+api.get('/summaries/drive', requireAuth, (req, res) => {
+  const filesList = Array.from(db.files.values()).filter((f) =>
+    f.content_type?.startsWith('image/')
+  );
+  const summariesList = Array.from(db.summaries.values());
+  const driveItems = filesList.map((file) => {
+    const parentSummary = summariesList.find((s) =>
+      s.source_image_ids?.includes(file.id)
+    );
+    return {
+      id: file.id,
+      original_filename: file.original_filename,
+      content_type: file.content_type,
+      size: file.size,
+      created_at: file.created_at,
+      subject: parentSummary ? parentSummary.subject : 'Geral / Fontes',
+      topic: parentSummary ? parentSummary.topic : 'Material de Estudo',
+    };
+  });
+  res.json(driveItems);
+});
+
+api.get('/summaries/history', requireAuth, (req, res) => {
+  const user = (req as any).user;
+  const now = Date.now();
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+  const userGens = Array.from(db.summary_generations.values()).filter((g) => {
+    if (g.user_id !== user.id) return false;
+    const genTime = new Date(g.generated_at || 0).getTime();
+    return genTime >= sevenDaysAgo;
+  });
+
+  res.json(userGens.sort((a, b) => new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime()));
+});
+
+api.post('/summaries/generate-personalized', requireAuth, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { selected_subjects, selected_topic_ids, format = 'pdf', focus_style = 'completo', student_notes } = req.body || {};
+
+    let topicsToSummarize: SummaryTopic[] = [];
+    if (Array.isArray(selected_topic_ids) && selected_topic_ids.length > 0) {
+      topicsToSummarize = selected_topic_ids
+        .map((id) => db.summaries.get(id))
+        .filter((t): t is SummaryTopic => Boolean(t));
+    } else if (Array.isArray(selected_subjects) && selected_subjects.length > 0) {
+      const subSet = new Set(selected_subjects.map((s) => s.toLowerCase()));
+      topicsToSummarize = Array.from(db.summaries.values()).filter((t) =>
+        subSet.has(t.subject.toLowerCase())
+      );
+    } else {
+      topicsToSummarize = Array.from(db.summaries.values());
+    }
+
+    if (topicsToSummarize.length === 0) {
+      return res.status(400).json({ detail: 'Nenhum assunto encontrado para os filtros selecionados.' });
+    }
+
+    const topicsContent = topicsToSummarize.map((t) => ({
+      materia: t.subject,
+      assunto: t.topic,
+      conteudo: t.summary_text,
+      conceitos_chave: t.key_concepts,
+      formulas: t.formulas,
+    }));
+
+    const promptText = `Você é o Gerador Inteligente de Resumos do Edutask.
+O aluno solicitou um resumo personalizado único, perfeitamente acentuado e altamente organizado.
+
+Parâmetros da Solicitação:
+- Formato Escolhido: ${format === 'pdf' ? 'Apostila / PDF de Impressão' : 'Foto / Cartão Visual Infográfico'}
+- Foco do Estudo: ${focus_style}
+- Notas do Aluno: ${student_notes || 'Nenhuma nota adicional'}
+
+Conteúdo Base Selecionado:
+${JSON.stringify(topicsContent, null, 2)}
+
+INSTRUÇÕES OBRIGATÓRIAS DE FORMATO E PORTUGUÊS:
+1. IDIOMA E ACENTUAÇÃO: Escreva em Português do Brasil com ACENTUAÇÃO IMPECÁVEL (utilize todos os caracteres especiais como á, é, í, ó, ú, ã, õ, ç, ê, ô, º, ª e símbolos matemáticos).
+2. ESTRUTURA DE MARKDOWN RICA:
+   - Use # para o Título Principal da Apostila/Ficha.
+   - Use ## para Seções de Matéria e Tópicos Principais.
+   - Use ### para Subtópicos, Conceitos-Chave ou Caixas de Fórmulas.
+   - Use negritos **palavra em destaque** em termos essenciais, definições e fórmulas.
+   - Use listas com marcadores - para organizar ideias, passos de resolução e pontos-chave.
+3. ESTILO DE ACORDO COM O FORMATO:
+   - Se formato = 'pdf' (Impressão): Crie uma Apostila Completa com Introdução, Sumário de Tópicos, Conceitos Explicados em Detalhes, Tabela/Destaques de Fórmulas, Dicas de Prova e Exercícios Resolvidos Exemplo.
+   - Se formato = 'image' (Ficha Visual): Crie uma Ficha de Estudo Infográfica compacta e objetiva, ideal para memorização rápida antes de provas.
+4. Personalize as explicações focando em clareza pedagógica para alunos do Ensino Fundamental e Médio.`;
+
+    const geminiRes = await callGeminiGenerate({
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: promptText }],
+        },
+      ],
+      preferredModel: db.summary_ai_model || 'gemini-3.8-flash',
+    });
+
+    const markdownResult = geminiRes?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const nowIso = new Date().toISOString();
+    const genRecord = {
+      id: `sgen-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      user_id: user.id,
+      subject_names: selected_subjects || topicsToSummarize.map((t) => t.subject),
+      format,
+      focus_style,
+      student_notes: student_notes || '',
+      result_markdown: markdownResult,
+      generated_at: nowIso,
+    };
+
+    db.summary_generations.set(genRecord.id, genRecord);
+    db.saveToDisk();
+    await firebaseService.saveSummaryGeneration(genRecord).catch(console.warn);
+
+    res.json({
+      ok: true,
+      id: genRecord.id,
+      result_markdown: markdownResult,
+      format,
+      generated_at: nowIso,
+      topics_count: topicsToSummarize.length,
+    });
+  } catch (err: any) {
+    console.error('[Personalized Summary Error]', err);
+    res.status(500).json({ detail: err.message || 'Erro ao gerar resumo personalizado' });
+  }
+});
+
 api.post('/admin/clean-test-data', requireAdmin, async (req, res) => {
   try {
     const studentsToDelete = Array.from(db.users.values()).filter((u) => u.role !== 'admin');
@@ -1676,6 +2284,21 @@ api.post('/files/upload', requireAdmin, upload.single('file'), async (req, res) 
     size: req.file.size,
     content_type: record.content_type,
   });
+});
+
+api.get('/files/:file_id', (req, res) => {
+  const { file_id } = req.params;
+  const file = getFileRecord(file_id);
+  if (file && file.data) {
+    res.setHeader('Content-Type', file.content_type || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.send(file.data);
+  }
+
+  // Fallback transparent 1x1 png pixel so browser never throws 404 image errors
+  const fallbackPixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+  res.setHeader('Content-Type', 'image/png');
+  res.send(fallbackPixel);
 });
 
 api.get('/files/:file_id/download', async (req, res) => {
@@ -1902,7 +2525,11 @@ api.get('/tasks', requireAuth, (req, res) => {
   }
 
   // Student view: only tasks assigned to them or to all
-  const filtered = allTasks.filter((t) => !t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(user.id));
+  const filtered = allTasks.filter((t) => {
+    const validAssigned = (t.assigned_to || []).filter((id) => id && typeof id === 'string' && id.trim().length > 0);
+    if (validAssigned.length === 0) return true; // Atribuída para todos os alunos
+    return validAssigned.some((id) => String(id).trim() === String(user.id).trim());
+  });
   res.json(filtered.map((t) => buildTaskResponseForStudent(t, user.id)));
 });
 
@@ -1915,6 +2542,10 @@ api.post('/tasks', requireAdmin, async (req, res) => {
     return res.status(400).json({ detail: 'Campos obrigatórios ausentes' });
   }
 
+  const cleanAssignedTo = (Array.isArray(assigned_to) ? assigned_to : [])
+    .map((id) => (typeof id === 'string' ? id.trim() : id))
+    .filter((id): id is string => Boolean(id) && typeof id === 'string' && id.length > 0);
+
   const id = `task-${Date.now()}`;
   const newTask: TaskItem = {
     id,
@@ -1923,7 +2554,7 @@ api.post('/tasks', requireAdmin, async (req, res) => {
     subject: subject.trim(),
     due_date,
     points: Math.max(0, parseInt(points) || 10),
-    assigned_to: Array.isArray(assigned_to) ? assigned_to : [],
+    assigned_to: cleanAssignedTo,
     attachments: Array.isArray(attachments) ? attachments : [],
     admin_photos: Array.isArray(admin_photos) ? admin_photos : [],
     answer: (answer || '').trim(),
@@ -2118,7 +2749,11 @@ api.put('/tasks/:task_id', requireAdmin, async (req, res) => {
   if (subject) task.subject = subject.trim();
   if (due_date) task.due_date = due_date;
   if (points !== undefined) task.points = Math.max(0, parseInt(points) || 0);
-  if (Array.isArray(assigned_to)) task.assigned_to = assigned_to;
+  if (Array.isArray(assigned_to)) {
+    task.assigned_to = assigned_to
+      .map((id) => (typeof id === 'string' ? id.trim() : id))
+      .filter((id): id is string => Boolean(id) && typeof id === 'string' && id.length > 0);
+  }
   if (Array.isArray(attachments)) task.attachments = attachments;
   if (Array.isArray(admin_photos)) task.admin_photos = admin_photos;
   if (answer !== undefined) task.answer = answer.trim();
@@ -2305,6 +2940,7 @@ api.delete('/tasks/:task_id', requireAdmin, async (req, res) => {
 // ---------------------------------------------------------------------------
 function getTasksEligibleForCleanup(): TaskItem[] {
   const cfg = db.task_cleanup_config;
+  if (!cfg || !cfg.enabled) return [];
   const clock = getSystemClock();
 
   // Data de corte oficial calculada pelo Relógio do Sistema menos days_after_due
@@ -2317,7 +2953,8 @@ function getTasksEligibleForCleanup(): TaskItem[] {
   );
 
   db.tasks.forEach((t) => {
-    if (t.due_date && t.due_date <= cutoffDateStr) {
+    const taskDateStr = (t.due_date || '').split('T')[0];
+    if (taskDateStr && taskDateStr <= cutoffDateStr) {
       if (cfg.delete_only_if_completed) {
         const completionsForTask = db.completions.filter((c) => c.task_id === t.id);
         if (completionsForTask.length >= activeStudents.length && activeStudents.length > 0) {

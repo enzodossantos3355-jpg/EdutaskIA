@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Lock, RefreshCw, Trophy, Calendar, LogOut, Medal, Sparkles, CheckCircle2, Clock } from "lucide-react";
+import { Lock, RefreshCw, Trophy, Calendar, LogOut, Medal, Sparkles, CheckCircle2, Clock, Crown, Award } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Avatar from "@/components/Avatar";
 import { effectClass } from "@/lib/effects";
@@ -75,7 +75,7 @@ export default function AppDeactivatedScreen({ onCheckStatus, annualCycle }) {
         <div className="mb-8 text-left bg-gradient-to-b from-amber-50/80 to-yellow-50/60 p-4 sm:p-6 rounded-2xl border-2 border-black shadow-[4px_4px_0_0_#000]">
           <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">🏆</span>
+              <Trophy className="w-7 h-7 text-amber-500 flex-shrink-0" />
               <div>
                 <h2 className="font-heading font-black text-base sm:text-xl text-neutral-950">
                   Pódio Final — Top 3 do Ranking Anual
@@ -123,7 +123,7 @@ export default function AppDeactivatedScreen({ onCheckStatus, annualCycle }) {
                   ? "bg-slate-300 text-slate-900 border-slate-600"
                   : "bg-amber-600 text-white border-amber-900";
 
-                const medalEmoji = isFirst ? "🥇" : isSecond ? "🥈" : "🥉";
+                const MedalIcon = isFirst ? Crown : isSecond ? Medal : Award;
                 const rankTitle = isFirst ? "1º Campeão Anual" : isSecond ? "2º Vice-Campeão" : "3º Lugar";
 
                 return (
@@ -133,7 +133,7 @@ export default function AppDeactivatedScreen({ onCheckStatus, annualCycle }) {
                       isFirst ? "sm:-translate-y-2 order-1 sm:order-2" : isSecond ? "order-2 sm:order-1" : "order-3"
                     }`}
                   >
-                    <div className="text-2xl sm:text-3xl mb-1">{medalEmoji}</div>
+                    <MedalIcon className={`w-8 h-8 mx-auto mb-1 ${isFirst ? "text-amber-600" : isSecond ? "text-slate-600" : "text-amber-800"}`} />
                     <span className={`nb-badge text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 py-0.5 border mb-2 inline-block ${badgeBg}`}>
                       {rankTitle}
                     </span>
@@ -175,8 +175,9 @@ export default function AppDeactivatedScreen({ onCheckStatus, annualCycle }) {
 
           {/* Destaque individual para o aluno conectado */}
           {currentUserInTop3 && (
-            <div className="mt-4 p-3 bg-emerald-100 border-2 border-emerald-600 rounded-xl text-center font-bold text-emerald-950 text-xs sm:text-sm shadow-[2px_2px_0_0_#059669]">
-              🎉 Parabéns, {user?.name}! Você conquistou o <strong className="font-black text-emerald-950">{currentUserInTop3.rank}º Lugar Geral</strong> no Ranking Anual deste ano letivo!
+            <div className="mt-4 p-3 bg-emerald-100 border-2 border-emerald-600 rounded-xl text-center font-bold text-emerald-950 text-xs sm:text-sm shadow-[2px_2px_0_0_#059669] flex items-center justify-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+              <span>Parabéns, {user?.name}! Você conquistou o <strong className="font-black text-emerald-950">{currentUserInTop3.rank}º Lugar Geral</strong> no Ranking Anual deste ano letivo!</span>
             </div>
           )}
         </div>

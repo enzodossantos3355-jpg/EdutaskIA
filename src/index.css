@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "katex/dist/katex.min.css";
 
 @layer base {
   :root {
@@ -132,22 +133,36 @@ h4,
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  color: #020617 !important;
 }
 
 /* Explicit high-contrast text utility rules for badges, status pills, recipient tags, and chips */
-.nb-badge,
-.nb-badge *,
-.nb-pill,
-.nb-pill *,
-[class*="card-moldura-"] .nb-badge,
-[class*="card-moldura-"] .nb-badge *,
-[class*="card-moldura-"] .nb-pill,
-[class*="card-moldura-"] .nb-pill * {
+.nb-badge.bg-white,
+.nb-badge.bg-neutral-100,
+.nb-badge.bg-neutral-200,
+.nb-badge.bg-slate-100,
+.nb-badge.bg-sky-100,
+.nb-badge.bg-sky-200,
+.nb-badge.bg-emerald-100,
+.nb-badge.bg-amber-100,
+.nb-badge.bg-violet-100,
+.nb-badge.bg-rose-100 {
   color: #020617;
 }
 
-/* Ensure text color utility classes inside pills/badges ALWAYS take precedence over parent frame white text rules */
+.nb-badge.bg-black,
+.nb-badge.bg-neutral-900,
+.nb-badge.bg-slate-900,
+.nb-badge.bg-zinc-900 {
+  color: #fde047;
+}
+
+
+.text-amber-300, .text-amber-300 *, [class*="card-moldura-"] .text-amber-300, [class*="card-moldura-"] .text-amber-300 * { color: #fde047 !important; }
+.text-amber-200, .text-amber-200 *, [class*="card-moldura-"] .text-amber-200, [class*="card-moldura-"] .text-amber-200 * { color: #fef08a !important; }
+.text-amber-400, .text-amber-400 *, [class*="card-moldura-"] .text-amber-400, [class*="card-moldura-"] .text-amber-400 * { color: #fbbf24 !important; }
+.text-yellow-300, .text-yellow-300 *, [class*="card-moldura-"] .text-yellow-300, [class*="card-moldura-"] .text-yellow-300 * { color: #fde047 !important; }
+.text-white, .text-white *, [class*="card-moldura-"] .text-white, [class*="card-moldura-"] .text-white * { color: #ffffff !important; }
+
 .text-emerald-950, .text-emerald-950 *, [class*="card-moldura-"] .text-emerald-950, [class*="card-moldura-"] .text-emerald-950 * { color: #022c22 !important; }
 .text-emerald-900, .text-emerald-900 *, [class*="card-moldura-"] .text-emerald-900, [class*="card-moldura-"] .text-emerald-900 * { color: #064e3b !important; }
 .text-sky-950, .text-sky-950 *, [class*="card-moldura-"] .text-sky-950, [class*="card-moldura-"] .text-sky-950 * { color: #082f49 !important; }
@@ -169,6 +184,7 @@ h4,
 .text-neutral-950, .text-neutral-950 *, [class*="card-moldura-"] .text-neutral-950, [class*="card-moldura-"] .text-neutral-950 * { color: #0a0a0a !important; }
 .text-neutral-900, .text-neutral-900 *, [class*="card-moldura-"] .text-neutral-900, [class*="card-moldura-"] .text-neutral-900 * { color: #171717 !important; }
 .text-black, .text-black *, [class*="card-moldura-"] .text-black, [class*="card-moldura-"] .text-black * { color: #000000 !important; }
+
 
 /* Force dark text for light background pills inside any card frame */
 [class*="card-moldura-"] .bg-sky-100, [class*="card-moldura-"] .bg-sky-200, [class*="card-moldura-"] .bg-sky-300,

@@ -1,3 +1,6 @@
+import React from "react";
+import { CheckCircle2, Pin, AlertTriangle, Zap, Clock } from "lucide-react";
+
 export function daysUntil(dateStr) {
   if (!dateStr) return null;
   const now = new Date();
@@ -26,14 +29,14 @@ export function daysUntil(dateStr) {
 
 export function getPriority(dueDate, isCompleted = false) {
   if (isCompleted) {
-    return { level: "completed", label: "Concluída", bg: "bg-emerald-200 text-emerald-950", icon: "✅" };
+    return { level: "completed", label: "Concluída", bg: "bg-emerald-200 text-emerald-950", icon: <CheckCircle2 className="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-emerald-800" /> };
   }
   const days = daysUntil(dueDate);
-  if (days == null) return { level: "medium", label: "Normal", bg: "bg-sky-200 text-sky-950", icon: "📌" };
-  if (days < 0) return { level: "overdue", label: "Atrasada", bg: "bg-red-300 text-red-950 animate-pulse", icon: "🚨" };
-  if (days === 0) return { level: "today", label: "Hoje", bg: "bg-amber-300 text-amber-950 font-bold", icon: "⚡" };
-  if (days <= 2) return { level: "high", label: "Urgente", bg: "bg-amber-200 text-amber-950", icon: "⏳" };
-  return { level: "normal", label: "Normal", bg: "bg-sky-200 text-sky-950", icon: "📌" };
+  if (days == null) return { level: "medium", label: "Normal", bg: "bg-sky-200 text-sky-950", icon: <Pin className="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-sky-800" /> };
+  if (days < 0) return { level: "overdue", label: "Atrasada", bg: "bg-red-300 text-red-950 animate-pulse", icon: <AlertTriangle className="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-red-900" /> };
+  if (days === 0) return { level: "today", label: "Hoje", bg: "bg-amber-300 text-amber-950 font-bold", icon: <Zap className="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-amber-900" /> };
+  if (days <= 2) return { level: "high", label: "Urgente", bg: "bg-amber-200 text-amber-950", icon: <Clock className="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-amber-900" /> };
+  return { level: "normal", label: "Normal", bg: "bg-sky-200 text-sky-950", icon: <Pin className="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-sky-800" /> };
 }
 
 export function formatDateBR(dateInput, includeTime = false) {

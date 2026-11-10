@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Sparkles, Star, Megaphone, X, CheckCircle2, Bell, Calendar } from "lucide-react";
+import { Sparkles, Star, Megaphone, X, CheckCircle2, Bell, Calendar, Pin } from "lucide-react";
 import { formatDateBR } from "@/lib/priority";
 
 /**
@@ -39,12 +39,12 @@ export default function SpecialAnnouncementModal({
         {/* Top Accent Gradient Header */}
         <div className="relative bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-5 sm:px-6 py-4 border-b-2 border-black flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-black text-amber-300 flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] shrink-0 border border-black">
-              <Sparkles className="w-5 h-5 animate-pulse" />
+            <div className="w-10 h-10 rounded-xl bg-amber-400 text-black flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] shrink-0 border-2 border-black">
+              <Sparkles className="w-5 h-5 text-black animate-pulse" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="bg-black text-amber-300 text-[10px] sm:text-[11px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md border border-black">
+                <span className="bg-amber-400 text-black text-[10px] sm:text-[11px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md border border-black shadow-[1px_1px_0_0_#000]">
                   Aviso Especial
                 </span>
                 <Star className="w-3.5 h-3.5 text-black fill-black" />
@@ -89,7 +89,7 @@ export default function SpecialAnnouncementModal({
           </div>
 
           <div className="text-xs text-neutral-800 bg-neutral-100 rounded-xl p-3 border border-neutral-300 flex items-start gap-2.5">
-            <span className="text-base leading-none shrink-0">📌</span>
+            <Pin className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
             <span className="font-bold leading-snug">
               Este comunicado permanece fixado em destaque no seu painel de avisos para consulta sempre que precisar.
             </span>

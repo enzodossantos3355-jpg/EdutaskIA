@@ -8,7 +8,6 @@ import { AIStatusProvider } from "@/context/AIStatusContext";
 import LoginPage from "@/pages/LoginPage";
 import AdminDashboard from "@/pages/AdminDashboard";
 import StudentDashboard from "@/pages/StudentDashboard";
-import Clock from "@/components/Clock";
 
 function ProtectedRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -33,12 +32,6 @@ function HomeRedirect() {
   return <Navigate to={user.role === "admin" ? "/admin" : "/aluno"} replace />;
 }
 
-function AuthedClock() {
-  const { user } = useAuth();
-  if (!user) return null;
-  return <Clock />;
-}
-
 function App() {
   // Load Google Fonts: Outfit + DM Sans
   useEffect(() => {
@@ -56,7 +49,6 @@ function App() {
           <AuthProvider>
             <AIStatusProvider>
             <Toaster position="top-right" richColors />
-            <AuthedClock />
             <Routes>
               <Route path="/" element={<HomeRedirect />} />
               <Route path="/login" element={<LoginPage />} />

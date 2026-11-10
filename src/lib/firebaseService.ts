@@ -484,4 +484,79 @@ export const firebaseService = {
       handleFirestoreError(e, OperationType.DELETE, path);
     }
   },
+
+  // Summaries / Apostilas
+  async getAllSummaries(): Promise<any[]> {
+    const path = 'summaries';
+    try {
+      const snap = await getDocs(collection(db, path));
+      const list: any[] = [];
+      snap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return list;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.LIST, path);
+    }
+  },
+
+  async saveSummary(summary: any): Promise<boolean> {
+    const sumId = summary.id || `sum_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const path = `summaries/${sumId}`;
+    try {
+      const sanitized = sanitizeFirestoreData({ ...summary, id: sumId });
+      await setDoc(doc(db, 'summaries', sumId), sanitized, { merge: true });
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.WRITE, path);
+    }
+  },
+
+  async deleteSummary(sumId: string): Promise<boolean> {
+    const path = `summaries/${sumId}`;
+    try {
+      await deleteDoc(doc(db, 'summaries', sumId));
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.DELETE, path);
+    }
+  },
+
+  // Student Summary Generations (Recent 7 days history)
+  async getAllSummaryGenerations(): Promise<any[]> {
+    const path = 'summary_generations';
+    try {
+      const snap = await getDocs(collection(db, path));
+      const list: any[] = [];
+      snap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return list;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.LIST, path);
+    }
+  },
+
+  async saveSummaryGeneration(gen: any): Promise<boolean> {
+    const genId = gen.id || `sgen_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const path = `summary_generations/${genId}`;
+    try {
+      const sanitized = sanitizeFirestoreData({ ...gen, id: genId });
+      await setDoc(doc(db, 'summary_generations', genId), sanitized, { merge: true });
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.WRITE, path);
+    }
+  },
+
+  async deleteSummaryGeneration(genId: string): Promise<boolean> {
+    const path = `summary_generations/${genId}`;
+    try {
+      await deleteDoc(doc(db, 'summary_generations', genId));
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.DELETE, path);
+    }
+  },
 };
+

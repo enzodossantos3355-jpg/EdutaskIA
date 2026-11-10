@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, ShoppingBag, Palette, Bot } from "lucide-react";
+import { Pencil, Bot } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useAIStatus } from "@/context/AIStatusContext";
 import api from "@/lib/api";
@@ -60,7 +60,8 @@ export default function MyProfileBanner({ bg = null, onOpenStore = null }) {
               size={56}
               bg={user.role === "admin" ? "bg-red-300" : "bg-sky-300"}
               effect={effectClass(user.equipped_effect)}
-              compact={false}
+              compact={true}
+              showLabelButtons={false}
             />
             <div className="min-w-0 flex-1">
               <p className="font-heading font-bold text-base sm:text-lg leading-tight flex items-center gap-2 flex-wrap text-black">
@@ -86,23 +87,6 @@ export default function MyProfileBanner({ bg = null, onOpenStore = null }) {
               )}
             </div>
           </div>
-
-          {onOpenStore && !framesDisabled && (
-            <div className="w-full sm:w-auto">
-              <button
-                onClick={onOpenStore}
-                className="nb-btn bg-amber-300 hover:bg-amber-400 active:bg-amber-500 text-neutral-950 px-3.5 py-2 text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] min-h-[40px] w-full sm:w-auto touch-manipulation active:translate-y-0.5"
-                data-testid="profile-open-store-button"
-                title="Acessar a Loja de Molduras"
-              >
-                <Palette className="w-4 h-4 text-amber-950 flex-shrink-0" />
-                <span className="font-heading font-black">
-                  Loja de Molduras
-                </span>
-                <span className="text-sm">🖼️</span>
-              </button>
-            </div>
-          )}
         </div>
         {isAluno && stats && (
           <div className="flex-1 min-w-full sm:min-w-[280px] max-w-2xl">

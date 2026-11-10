@@ -22,7 +22,7 @@ export default function AppHeader({ title }) {
   const handleToggleSound = () => {
     const next = toggleSound();
     setSoundOn(next);
-    toast.info(next ? "🔊 Efeitos sonoros ativados!" : "🔇 Efeitos sonoros desativados!");
+    toast.info(next ? "Efeitos sonoros ativados!" : "Efeitos sonoros desativados!");
   };
 
   return (
@@ -44,7 +44,7 @@ export default function AppHeader({ title }) {
         </div>
         <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
           {user?.role === "admin" && (
-            <div className="hidden sm:block">
+            <div className="block">
               <AdminSystemClock compact />
             </div>
           )}

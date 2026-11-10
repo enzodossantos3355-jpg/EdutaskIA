@@ -26,75 +26,91 @@ import api, { formatApiError } from "@/lib/api";
 
 const SYSTEM_FEATURES = [
   {
+    id: "ai-summaries-generator",
+    emoji: "📝",
+    title: "Gerador de Resumos por IA",
+    category: "Inteligência Artificial",
+    description: "Síntese automática de matérias, fórmulas KaTeX, exemplos práticos e exportação em PDF, PNG e Markdown.",
+    status: "Ativo",
+  },
+  {
+    id: "google-drive-sync",
+    emoji: "☁️",
+    title: "Integração com Google Drive",
+    category: "Armazenamento & Nuvem",
+    description: "Seleção direta de fontes de estudo, arquivos de apostilas e fotos enviadas do Google Drive.",
+    status: "Ativo",
+  },
+  {
+    id: "custom-student-buttons",
+    emoji: "🔗",
+    title: "Atalhos & Botões Customizados",
+    category: "Navegação",
+    description: "Criação de botões personalizados com links diretos para o Google Classroom, resumos e videoaulas.",
+    status: "Ativo",
+  },
+  {
+    id: "whatsapp-dispatch",
+    emoji: "📲",
+    title: "Disparador WhatsApp de Comunicados",
+    category: "Comunicação",
+    description: "Disparo oficial de avisos institucionais, relatórios de tarefas e imagens do firmware nos grupos.",
+    status: "Ativo",
+  },
+  {
     id: "netflix-profiles",
+    emoji: "👤",
     title: "Perfis Estilo Netflix",
     category: "Acessos & UI",
-    emoji: "🎬",
     description: "Alternância ágil entre alunos e admin com avatares customizados, fotos e autenticação segura.",
     status: "Ativo",
   },
   {
     id: "task-delivery",
+    emoji: "📚",
     title: "Entrega e Gestão de Tarefas",
     category: "Acadêmico",
-    emoji: "📋",
     description: "Criação de tarefas com anexos, fotos de quadro/livro, prazos rigorosos e status de pontualidade.",
     status: "Ativo",
   },
   {
     id: "ai-answers",
+    emoji: "✨",
     title: "Gabarito Inteligente com IA",
     category: "Inteligência Artificial",
-    emoji: "🤖",
     description: "Geração de gabaritos em tamanhos Curto, Médio e Detalhado orientados pela fonte colocada pelo professor.",
     status: "Ativo",
   },
   {
     id: "ai-tutor",
+    emoji: "💡",
     title: "Tutor Pedagógico Sutil",
     category: "Inteligência Artificial",
-    emoji: "💡",
     description: "Tira-dúvidas socrático que orienta o raciocínio do aluno sem alucinar respostas falsas.",
     status: "Ativo",
   },
   {
     id: "effects-store",
+    emoji: "🎨",
     title: "Loja de Molduras de Avatar",
     category: "Gamificação",
-    emoji: "🛍️",
     description: "Pontos obtidos em tarefas servem exclusivamente para desbloquear auras, molduras e cosméticos.",
     status: "Ativo",
   },
   {
     id: "ai-monthly-eval",
-    title: "Avaliação Mensal do Vencedor por IA",
+    emoji: "🏆",
+    title: "Avaliação Mensal por IA",
     category: "Inteligência Artificial",
-    emoji: "👑",
     description: "Eleição do aluno vencedor do mês avaliado por pontualidade e penalizado por tarefas não feitas.",
-    status: "Ativo",
-  },
-  {
-    id: "whatsapp-integration",
-    title: "Notificações WhatsApp (2 Grupos)",
-    category: "Comunicação",
-    emoji: "📱",
-    description: "Disparo automático e lembretes diários para o grupo de tarefas e grupo de fotos com enunciado.",
-    status: "Ativo",
-  },
-  {
-    id: "high-precision-access",
-    title: "Auditoria de Acessos de Máxima Precisão",
-    category: "Segurança & Logs",
-    emoji: "🔒",
-    description: "Registro milimétrico de login, IP, papéis de usuário, visualização segura de senhas e sincronização Firestore.",
     status: "Ativo",
   },
 ];
 
-function renderFirmwareToCanvas(canvas, appInfo) {
+function renderFirmwareToCanvas(canvas, appInfo, featuresState = {}) {
   const ctx = canvas.getContext("2d");
   const width = 1200;
-  const height = 800;
+  const height = 950;
   canvas.width = width;
   canvas.height = height;
 
@@ -119,7 +135,7 @@ function renderFirmwareToCanvas(canvas, appInfo) {
   ctx.fillText("⚡ EDUTASK — FIRMWARE DO SISTEMA", 70, 105);
 
   ctx.font = "700 24px DM Sans, sans-serif";
-  ctx.fillText(`Versão Oficial Instalada: v${appInfo.version || "1.2.0"} • ${appInfo.codename || "Core Edition"}`, 70, 145);
+  ctx.fillText(`Versão Oficial Instalada: v${appInfo.version || "1.3.0"} • ${appInfo.codename || "AI Resumos & Performance Edition"}`, 70, 145);
 
   ctx.font = "600 16px DM Sans, sans-serif";
   ctx.fillText(`Data de Compilação: ${new Date().toLocaleDateString("pt-BR")} | Precisão do Sistema de Acessos: 100% Ativa`, 70, 175);
@@ -135,14 +151,14 @@ function renderFirmwareToCanvas(canvas, appInfo) {
 
   ctx.fillStyle = "#451A03";
   ctx.font = "500 14px DM Sans, sans-serif";
-  ctx.fillText("Autenticação RBAC estrita • Auditoria de log em tempo real • Senhas visíveis exclusivamente para o Administrador • Firebase Ativo", 60, 285);
+  ctx.fillText("Controle de acessos seguro • Proteção de dados • Painel administrativo exclusivo", 60, 285);
 
   // Features Header
   ctx.fillStyle = "#0A0A0A";
   ctx.font = "900 22px Outfit, sans-serif";
-  ctx.fillText("📋 FUNÇÕES E MÓDULOS ATIVOS NESTA VERSÃO (8 DISPONÍVEIS):", 45, 340);
+  ctx.fillText(`📋 FUNÇÕES E MÓDULOS ATIVOS NESTA VERSÃO (${SYSTEM_FEATURES.length} DISPONÍVEIS):`, 45, 340);
 
-  // Draw Grid of 8 Features
+  // Draw Grid of Features
   const cols = 2;
   const cardWidth = 535;
   const cardHeight = 85;
@@ -154,6 +170,7 @@ function renderFirmwareToCanvas(canvas, appInfo) {
     const row = Math.floor(index / cols);
     const x = startX + col * (cardWidth + 30);
     const y = startY + row * (cardHeight + 15);
+    const isEnabled = featuresState[feat.id] !== false;
 
     // Card bg
     ctx.fillStyle = "#FFFFFF";
@@ -167,7 +184,7 @@ function renderFirmwareToCanvas(canvas, appInfo) {
     ctx.fillRect(x + 10, y + 10, 60, 65);
     ctx.strokeRect(x + 10, y + 10, 60, 65);
     ctx.font = "30px sans-serif";
-    ctx.fillText(feat.emoji, x + 24, y + 54);
+    ctx.fillText(feat.emoji || "⚡", x + 24, y + 54);
 
     // Text
     ctx.fillStyle = "#0A0A0A";
@@ -175,12 +192,12 @@ function renderFirmwareToCanvas(canvas, appInfo) {
     ctx.fillText(feat.title, x + 85, y + 32);
 
     // Badge
-    ctx.fillStyle = "#D1FAE5";
+    ctx.fillStyle = isEnabled ? "#D1FAE5" : "#F3F4F6";
     ctx.fillRect(x + cardWidth - 85, y + 15, 70, 20);
     ctx.strokeRect(x + cardWidth - 85, y + 15, 70, 20);
-    ctx.fillStyle = "#065F46";
+    ctx.fillStyle = isEnabled ? "#065F46" : "#4B5563";
     ctx.font = "800 10px DM Sans, sans-serif";
-    ctx.fillText("✓ ATIVO", x + cardWidth - 73, y + 29);
+    ctx.fillText(isEnabled ? "✓ ATIVO" : "DESATIV.", x + cardWidth - 73, y + 29);
 
     // Description
     ctx.fillStyle = "#4B5563";
@@ -201,41 +218,60 @@ function renderFirmwareToCanvas(canvas, appInfo) {
 
 export default function FirmwarePanel() {
   const [appInfo, setAppInfo] = useState({
-    version: "1.2.0",
-    codename: "Edutask AI Core Engine",
-    release_notes: "Versão com auditoria de acessos de precisão máxima, gabarito por IA baseado em fontes do professor e loja de molduras.",
+    version: "1.3.0",
+    codename: "Edutask AI Resumos & Performance Engine",
+    release_notes: "Versão 1.3.0 com gerador de resumos por IA, renderização matemática KaTeX, integração com Google Drive, atalhos customizados e auditoria de segurança.",
     updated_at: new Date().toISOString(),
   });
+  const [featuresState, setFeaturesState] = useState({
+    "ai-summaries-generator": true,
+    "google-drive-sync": true,
+    "custom-student-buttons": true,
+    "whatsapp-dispatch": true,
+    "netflix-profiles": true,
+    "task-delivery": true,
+    "ai-answers": true,
+    "ai-tutor": true,
+    "effects-store": true,
+    "ai-monthly-eval": true,
+  });
+  const [togglingFeature, setTogglingFeature] = useState(null);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
   const [sendingWhatsapp, setSendingWhatsapp] = useState(false);
   const [whatsappTarget, setWhatsappTarget] = useState("all");
   const [customCaption, setCustomCaption] = useState("");
-  const [cleanModalOpen, setCleanModalOpen] = useState(false);
-  const [cleaningTestData, setCleaningTestData] = useState(false);
   const canvasRef = useRef(null);
 
   useEffect(() => {
-    api.get("/app-info")
-      .then(({ data }) => {
-        if (data) setAppInfo((prev) => ({ ...prev, ...data }));
-      })
-      .catch(() => {});
+    Promise.all([
+      api.get("/app-info").catch(() => null),
+      api.get("/firmware/features").catch(() => null),
+    ]).then(([infoRes, featRes]) => {
+      if (infoRes?.data) setAppInfo((prev) => ({ ...prev, ...infoRes.data }));
+      if (featRes?.data && typeof featRes.data === "object") {
+        setFeaturesState((prev) => ({ ...prev, ...featRes.data }));
+      }
+    });
   }, []);
 
-  const handleCleanTestData = async () => {
-    setCleaningTestData(true);
+  const handleToggleFeature = async (featureId, title) => {
+    const currentVal = featuresState[featureId] !== false;
+    const nextVal = !currentVal;
+    setFeaturesState((prev) => ({ ...prev, [featureId]: nextVal }));
+    setTogglingFeature(featureId);
     try {
-      const { data } = await api.post("/admin/clean-test-data");
-      toast.success(data?.message || "Vestígios de testes removidos com sucesso!");
-      setCleanModalOpen(false);
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      await api.put(`/firmware/features/${featureId}`, { enabled: nextVal });
+      toast.success(
+        nextVal
+          ? `⚡ Módulo "${title}" ativado com sucesso!`
+          : `⏸️ Módulo "${title}" desativado!`
+      );
     } catch (err) {
-      toast.error(formatApiError(err?.response?.data?.detail) || "Erro ao limpar dados de teste");
+      setFeaturesState((prev) => ({ ...prev, [featureId]: currentVal }));
+      toast.error(formatApiError(err?.response?.data?.detail) || `Falha ao alternar módulo "${title}"`);
     } finally {
-      setCleaningTestData(false);
+      setTogglingFeature(null);
     }
   };
 
@@ -247,7 +283,7 @@ export default function FirmwarePanel() {
         toast.error("Erro ao inicializar renderizador de imagem.");
         return;
       }
-      renderFirmwareToCanvas(canvas, appInfo);
+      renderFirmwareToCanvas(canvas, appInfo, featuresState);
 
       // Download
       const dataUrl = canvas.toDataURL("image/png");
@@ -276,7 +312,7 @@ export default function FirmwarePanel() {
 
     setSendingWhatsapp(true);
     try {
-      renderFirmwareToCanvas(canvas, appInfo);
+      renderFirmwareToCanvas(canvas, appInfo, featuresState);
       const dataUrl = canvas.toDataURL("image/png");
 
       const payload = {
@@ -426,125 +462,58 @@ export default function FirmwarePanel() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {SYSTEM_FEATURES.map((feat) => (
-            <div
-              key={feat.id}
-              className="nb-card p-4 bg-white flex items-start gap-3.5 border-2 border-black hover:translate-y-[-2px] transition-transform"
-              data-testid={`firmware-feature-${feat.id}`}
-            >
-              <div className="w-12 h-12 nb-card bg-sky-100 flex items-center justify-center text-2xl flex-shrink-0 border-2 border-black">
-                {feat.emoji}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
-                  <h3 className="font-heading font-bold text-base text-neutral-900">
-                    {feat.title}
-                  </h3>
-                  <span className="nb-badge bg-emerald-100 text-emerald-900 border border-emerald-700/30 text-[10px] font-bold">
-                    ✓ {feat.status}
-                  </span>
+          {SYSTEM_FEATURES.map((feat) => {
+            const isEnabled = featuresState[feat.id] !== false;
+            const isBusy = togglingFeature === feat.id;
+            return (
+              <div
+                key={feat.id}
+                className={`nb-card p-4 flex items-start gap-3.5 border-2 border-black transition-all ${
+                  isEnabled ? "bg-white" : "bg-neutral-100 opacity-80"
+                }`}
+                data-testid={`firmware-feature-${feat.id}`}
+              >
+                <div className="w-12 h-12 nb-card bg-sky-100 flex items-center justify-center text-2xl flex-shrink-0 border-2 border-black">
+                  {feat.emoji}
                 </div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-1">
-                  {feat.category}
-                </div>
-                <p className="text-xs text-neutral-700 leading-normal">
-                  {feat.description}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Maintenance & Test Data Purge Section */}
-      <div className="nb-card p-5 bg-rose-50 border-2 border-rose-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start gap-3.5">
-          <div className="w-11 h-11 nb-card bg-rose-200 flex items-center justify-center flex-shrink-0 text-xl font-black">
-            <Trash2 className="w-5 h-5 text-rose-900" />
-          </div>
-          <div>
-            <h3 className="font-heading font-black text-base sm:text-lg text-rose-950">
-              Limpeza de Vestígios & Dados de Teste
-            </h3>
-            <p className="text-xs sm:text-sm text-rose-900/80 mt-0.5">
-              Remove perfis de teste, tarefas simuladas, registros e redefine o prêmio do mês para que não interfiram no uso real do sistema.
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={() => setCleanModalOpen(true)}
-          className="nb-btn bg-rose-500 hover:bg-rose-600 text-white font-black px-4 py-2 text-xs sm:text-sm flex items-center gap-2 flex-shrink-0"
-          data-testid="open-clean-test-data-btn"
-        >
-          <Trash2 className="w-4 h-4" />
-          <span>Limpar Vestígios de Teste</span>
-        </button>
-      </div>
-
-      {/* Modal: Confirm Clean Test Data */}
-      {cleanModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5" data-testid="clean-test-data-modal">
-          <div className="nb-card bg-white w-full max-w-md p-5 sm:p-6 border-3 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] space-y-4">
-            <div className="flex items-start justify-between gap-3 border-b border-black/10 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 nb-card bg-rose-100 flex items-center justify-center text-rose-700 flex-shrink-0">
-                  <AlertTriangle className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-heading font-black text-lg text-neutral-900">
-                    Limpar Dados de Teste
-                  </h3>
-                  <p className="text-xs text-neutral-600">
-                    Ação administrativa de purga
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                    <h3 className="font-heading font-bold text-base text-neutral-900">
+                      {feat.title}
+                    </h3>
+                    {/* Toggle Switch Interativo e Funcional */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleFeature(feat.id, feat.title)}
+                      disabled={isBusy}
+                      className={`nb-btn px-2.5 py-1 text-xs font-heading font-black rounded-lg border-2 border-black flex items-center gap-1.5 transition-all ${
+                        isEnabled
+                          ? "bg-emerald-300 hover:bg-emerald-400 text-emerald-950 shadow-[2px_2px_0px_0px_#000]"
+                          : "bg-neutral-200 hover:bg-neutral-300 text-neutral-600 shadow-[1px_1px_0px_0px_#000]"
+                      }`}
+                      data-testid={`toggle-firmware-feature-${feat.id}`}
+                      title={`Clique para ${isEnabled ? "desativar" : "ativar"} o módulo "${feat.title}"`}
+                    >
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full border border-black transition-colors ${
+                          isEnabled ? "bg-emerald-600 animate-pulse" : "bg-neutral-400"
+                        }`}
+                      />
+                      <span>{isBusy ? "Salvando..." : isEnabled ? "ATIVO" : "DESLIGADO"}</span>
+                    </button>
+                  </div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-1">
+                    {feat.category}
+                  </div>
+                  <p className="text-xs text-neutral-700 leading-normal">
+                    {feat.description}
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setCleanModalOpen(false)}
-                className="nb-btn bg-white hover:bg-neutral-100 px-2 py-1"
-                aria-label="Fechar"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs sm:text-sm text-neutral-800 leading-relaxed">
-              Tem certeza que deseja apagar todos os alunos de teste, tarefas, entregas simuladas e redefinir o prêmio do mês? 
-              <br /><br />
-              <strong>A conta de Administrador e as matérias padrão serão preservadas intactas.</strong>
-            </p>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setCleanModalOpen(false)}
-                className="nb-btn bg-white px-4 py-2 text-xs sm:text-sm"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleCleanTestData}
-                disabled={cleaningTestData}
-                className="nb-btn bg-rose-500 hover:bg-rose-600 text-white font-black px-4 py-2 text-xs sm:text-sm flex items-center gap-2"
-                data-testid="confirm-clean-test-data-btn"
-              >
-                {cleaningTestData ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Limpando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-4 h-4" />
-                    <span>Confirmar e Limpar Tudo</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+            );
+          })}
         </div>
-      )}
+      </div>
 
       {/* Modal: Mandar no Zap a Foto do Firmware */}
       {whatsappModalOpen && (

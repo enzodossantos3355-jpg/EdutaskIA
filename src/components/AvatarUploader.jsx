@@ -147,28 +147,37 @@ export default function AvatarUploader({
 
   return (
     <div className="flex items-center gap-3" data-testid="avatar-uploader">
-      <div className="relative inline-block">
-        <Avatar
-          userId={userId}
-          name={name}
-          size={size}
-          hasAvatar={localHasAvatar}
-          version={version}
-          bg={bg}
-          tierBorderColor={tierBorderColor}
-          effect={effect}
-          square={square || effect === "fx-minecraft" || effect === "minecraft"}
-        />
+      <div className="relative inline-block group">
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          className="cursor-pointer transition-transform active:scale-95"
+          title="Clique para alterar foto de perfil"
+        >
+          <Avatar
+            userId={userId}
+            name={name}
+            size={size}
+            hasAvatar={localHasAvatar}
+            version={version}
+            bg={bg}
+            tierBorderColor={tierBorderColor}
+            effect={effect}
+            square={square || effect === "fx-minecraft" || effect === "minecraft"}
+          />
+        </div>
 
         {/* Action icons directly on avatar badge */}
         <div className="absolute -bottom-1 -right-1 flex items-center gap-1 z-10">
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={(e) => {
+              e.stopPropagation();
+              fileInputRef.current?.click();
+            }}
             disabled={uploading}
-            className="nb-btn bg-amber-300 hover:bg-amber-400 p-1.5 rounded-md shadow-[2px_2px_0px_0px_#0a0a0a]"
+            className="nb-btn bg-amber-300 hover:bg-amber-400 p-1.5 rounded-full border border-black shadow-[1.5px_1.5px_0px_0px_#0a0a0a] transition-transform hover:scale-105 active:scale-95"
             data-testid="avatar-upload-button"
-            title="Escolher nova foto"
+            title="Escolher nova foto de perfil"
             aria-label="Escolher foto"
           >
             {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" strokeWidth={2.5} />}
@@ -177,9 +186,12 @@ export default function AvatarUploader({
           {localHasAvatar && (
             <button
               type="button"
-              onClick={remove}
+              onClick={(e) => {
+                e.stopPropagation();
+                remove();
+              }}
               disabled={uploading}
-              className="nb-btn bg-red-400 hover:bg-red-500 text-white p-1.5 rounded-md shadow-[2px_2px_0px_0px_#0a0a0a]"
+              className="nb-btn bg-red-400 hover:bg-red-500 text-white p-1.5 rounded-full border border-black shadow-[1.5px_1.5px_0px_0px_#0a0a0a] transition-transform hover:scale-105 active:scale-95"
               data-testid="avatar-remove-button-icon"
               title="Remover foto do perfil"
               aria-label="Remover foto"

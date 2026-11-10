@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot, Rocket, Zap, BookOpen, FileText, Settings } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import AppHeader from "@/components/AppHeader";
@@ -21,6 +21,7 @@ import WhatsAppDispatchDialog from "@/components/WhatsAppDispatchDialog";
 import ZipDataTransferPanel from "@/components/ZipDataTransferPanel";
 import StudentButtonsPanel from "@/components/StudentButtonsPanel";
 import AnnualRankingPanel from "@/components/AnnualRankingPanel";
+import AdminResumosPanel from "@/components/AdminResumosPanel";
 import { useAIStatus } from "@/context/AIStatusContext";
 import { effectClass, pullScreenToStore } from "@/lib/effects";
 import { getPriority, formatDateBR } from "@/lib/priority";
@@ -46,6 +47,8 @@ export default function AdminDashboard() {
   const [globalCleanupOpen, setGlobalCleanupOpen] = useState(false);
   const [globalCleanupData, setGlobalCleanupData] = useState(null);
 
+  const [mainSection, setMainSection] = useState("estudos"); // "estudos" | "configuracoes"
+
   const loadGlobalCleanup = useCallback(async () => {
     try {
       const [{ data }, statusRes] = await Promise.all([
@@ -69,6 +72,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     const handleOpenStore = () => {
       if (framesDisabled) return;
+      setMainSection("estudos");
       setTab("store");
       pullScreenToStore();
     };
@@ -81,16 +85,10 @@ export default function AdminDashboard() {
       <AppHeader title="Painel do Administrador" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-8 pb-24 sm:pb-8">
         <MyProfileBanner onOpenStore={!framesDisabled ? () => {
+          setMainSection("estudos");
           setTab("store");
           pullScreenToStore();
         } : null} />
-
-        {/* Relógio do Sistema (Garante a hora exata do servidor para auto-exclusão e rotinas) */}
-        <AdminSystemClock
-          nextCleanupTime={globalCleanupData?.config?.cleanup_time}
-          cleanupEnabled={globalCleanupData?.config?.enabled}
-          onConfigureCleanup={() => setGlobalCleanupOpen(true)}
-        />
 
         {/* Banner de Ano Letivo Encerrado */}
         {annualCycle?.is_closed && (
@@ -109,118 +107,233 @@ export default function AdminDashboard() {
               </div>
             </div>
             <button
-              onClick={() => setTab("annual_ranking")}
-              className="nb-btn bg-amber-400 hover:bg-amber-500 text-amber-950 font-heading font-black px-4 py-2 text-xs flex-shrink-0 border-2 border-black shadow-[2px_2px_0_0_#000]"
+              onClick={() => {
+                setMainSection("estudos");
+                setTab("ranking_annual");
+              }}
+              className="nb-btn bg-amber-400 hover:bg-amber-500 text-amber-950 font-heading font-black px-4 py-2 text-xs flex-shrink-0 border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5"
             >
-              Iniciar Próximo Ano 🚀
+              <Rocket className="w-3.5 h-3.5" />
+              <span>Iniciar Próximo Ano</span>
             </button>
           </div>
         )}
+
+        {/* 2 Botões Mestres Principais: Tarefas & Estudos vs Configurações */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-5" data-testid="admin-master-tabs">
+          <button
+            type="button"
+            onClick={() => {
+              setMainSection("estudos");
+              if (!["tasks", "announcements", "subjects", "resumos", "ranking_annual", "store", "buttons"].includes(tab)) {
+                setTab("tasks");
+              }
+            }}
+            className={`p-3.5 sm:p-4 rounded-2xl border-3 border-black text-left transition-all flex items-center justify-between gap-3 ${
+              mainSection === "estudos"
+                ? "bg-amber-300 text-black shadow-[4px_4px_0px_0px_#000] -translate-x-0.5 -translate-y-0.5"
+                : "bg-white hover:bg-amber-50 text-neutral-800 shadow-[2px_2px_0px_0px_#000]"
+            }`}
+            data-testid="master-tab-estudos"
+          >
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl border-2 border-black flex items-center justify-center shrink-0 shadow-[2px_2px_0px_0px_#000] ${
+                mainSection === "estudos" ? "bg-amber-400 text-black" : "bg-amber-100 text-black"
+              }`}>
+                <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-heading font-black text-sm sm:text-base leading-tight uppercase tracking-tight truncate">
+                  Tarefas & Estudos
+                </div>
+                <div className="text-[11px] sm:text-xs text-neutral-700 font-bold truncate">
+                  Tarefas, avisos, matérias e resumos
+                </div>
+              </div>
+            </div>
+            {mainSection === "estudos" && (
+              <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 bg-amber-400 text-black text-[10px] font-black uppercase rounded-lg border-2 border-black shrink-0">
+                ✓ Ativo
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setMainSection("configuracoes");
+              if (!["students", "logs", "stats", "firmware", "ai", "whatsapp", "zip_transfer"].includes(tab)) {
+                setTab("students");
+              }
+            }}
+            className={`p-3.5 sm:p-4 rounded-2xl border-3 border-black text-left transition-all flex items-center justify-between gap-3 ${
+              mainSection === "configuracoes"
+                ? "bg-sky-300 text-black shadow-[4px_4px_0px_0px_#000] -translate-x-0.5 -translate-y-0.5"
+                : "bg-white hover:bg-sky-50 text-neutral-800 shadow-[2px_2px_0px_0px_#000]"
+            }`}
+            data-testid="master-tab-configuracoes"
+          >
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl border-2 border-black flex items-center justify-center shrink-0 shadow-[2px_2px_0px_0px_#000] ${
+                mainSection === "configuracoes" ? "bg-sky-400 text-black" : "bg-sky-100 text-black"
+              }`}>
+                <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-heading font-black text-sm sm:text-base leading-tight uppercase tracking-tight truncate">
+                  Configurações
+                </div>
+                <div className="text-[11px] sm:text-xs text-neutral-700 font-bold truncate">
+                  Alunos, IA, WhatsApp, logs e sistema
+                </div>
+              </div>
+            </div>
+            {mainSection === "configuracoes" && (
+              <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 bg-sky-400 text-black text-[10px] font-black uppercase rounded-lg border-2 border-black shrink-0">
+                ✓ Ativo
+              </span>
+            )}
+
+          </button>
+        </div>
+
+        {/* Sub-Tabs do Grupo Selecionado */}
         <div className="flex items-center gap-2 sm:gap-3 mb-6 sm:mb-8 overflow-x-auto pb-2 scrollbar-none sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
-          <button
-            onClick={() => setTab("tasks")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "tasks" ? "bg-sky-400 font-bold" : "bg-white"}`}
-            data-testid="tab-tasks"
-          >
-            <ListTodo className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Tarefas
-          </button>
-          <button
-            onClick={() => setTab("announcements")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "announcements" ? "bg-violet-300 font-bold" : "bg-white"}`}
-            data-testid="tab-announcements"
-          >
-            <Megaphone className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Avisos
-          </button>
-          <button
-            onClick={() => setTab("students")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "students" ? "bg-amber-300 font-bold" : "bg-white"}`}
-            data-testid="tab-students"
-          >
-            <Users className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Alunos
-          </button>
-          <button
-            onClick={() => setTab("subjects")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "subjects" ? "bg-red-300 font-bold" : "bg-white"}`}
-            data-testid="tab-subjects"
-          >
-            <BookMarked className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Matérias
-          </button>
-          <button
-            onClick={() => setTab("logs")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "logs" ? "bg-emerald-300 font-bold" : "bg-white"}`}
-            data-testid="tab-logs"
-          >
-            <History className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Acessos
-          </button>
-          <button
-            onClick={() => setTab("stats")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "stats" ? "bg-violet-400 font-bold" : "bg-white"}`}
-            data-testid="tab-stats"
-          >
-            <BarChart3 className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Estatísticas
-          </button>
-          <button
-            onClick={() => setTab("firmware")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "firmware" ? "bg-sky-300 font-bold" : "bg-white"}`}
-            data-testid="tab-firmware"
-          >
-            <Cpu className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Firmware
-          </button>
-          <button
-            onClick={() => setTab("ai")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "ai" ? "bg-gradient-to-r from-violet-300 to-pink-300 font-bold" : "bg-white"}`}
-            data-testid="tab-ai"
-          >
-            <Sparkles className="w-4 h-4 inline mr-1.5 sm:mr-2" /> IA
-          </button>
-          {!framesDisabled && (
-            <button
-              onClick={() => {
-                setTab("store");
-                pullScreenToStore();
-              }}
-              className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "store" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"}`}
-              data-testid="tab-store"
-              title="Acessar Loja de Molduras"
-            >
-              <ShoppingBag className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Loja de Molduras 🖼️
-            </button>
+          {mainSection === "estudos" ? (
+            <>
+              <button
+                onClick={() => setTab("tasks")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "tasks" ? "bg-sky-400 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-tasks"
+              >
+                <ListTodo className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Tarefas
+              </button>
+              <button
+                onClick={() => setTab("announcements")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "announcements" ? "bg-violet-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-announcements"
+              >
+                <Megaphone className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Avisos
+              </button>
+              <button
+                onClick={() => setTab("subjects")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "subjects" ? "bg-red-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-subjects"
+              >
+                <BookMarked className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Matérias
+              </button>
+              <button
+                onClick={() => setTab("resumos")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "resumos" ? "bg-yellow-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-resumos"
+                title="Apostilas e Resumos por Matéria"
+              >
+                <BookOpen className="w-4 h-4 inline mr-1.5 sm:mr-2 text-yellow-950" /> Resumos
+              </button>
+              <button
+                onClick={() => setTab("ranking_annual")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "ranking_annual" ? "bg-amber-400 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-ranking-annual"
+                title="Ranking Anual dos Alunos e Controle do Ano Letivo"
+              >
+                <Trophy className="w-4 h-4 inline mr-1.5 sm:mr-2 text-amber-950" /> Ranking Anual
+              </button>
+              {!framesDisabled && (
+                <button
+                  onClick={() => {
+                    setTab("store");
+                    pullScreenToStore();
+                  }}
+                  className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "store" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                  data-testid="tab-store"
+                  title="Acessar Loja de Molduras"
+                >
+                  <ShoppingBag className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Loja de Molduras
+                </button>
+              )}
+              <button
+                onClick={() => setTab("buttons")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "buttons" ? "bg-indigo-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-buttons"
+                title="Criar e gerenciar botões para os alunos"
+              >
+                <Link2 className="w-4 h-4 inline mr-1.5 sm:mr-2 text-indigo-950" /> Botões dos Alunos
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setTab("students")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "students" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-students"
+              >
+                <Users className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Alunos
+              </button>
+              <button
+                onClick={() => setTab("logs")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "logs" ? "bg-emerald-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-logs"
+              >
+                <History className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Acessos
+              </button>
+              <button
+                onClick={() => setTab("stats")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "stats" ? "bg-violet-400 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-stats"
+              >
+                <BarChart3 className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Estatísticas
+              </button>
+              <button
+                onClick={() => setTab("firmware")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "firmware" ? "bg-sky-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-firmware"
+              >
+                <Cpu className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Firmware
+              </button>
+              <button
+                onClick={() => setTab("ai")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "ai" ? "bg-gradient-to-r from-violet-300 to-pink-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-ai"
+              >
+                <Sparkles className="w-4 h-4 inline mr-1.5 sm:mr-2" /> IA
+              </button>
+              <button
+                onClick={() => setTab("whatsapp")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "whatsapp" ? "bg-emerald-400 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-whatsapp"
+              >
+                <MessageSquare className="w-4 h-4 inline mr-1.5 sm:mr-2 text-emerald-950" /> WhatsApp
+              </button>
+              <button
+                onClick={() => setTab("zip_transfer")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "zip_transfer" ? "bg-sky-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-zip-transfer"
+              >
+                <FileArchive className="w-4 h-4 inline mr-1.5 sm:mr-2 text-sky-950" /> Dados ZIP
+              </button>
+              <button
+                type="button"
+                onClick={() => setGlobalCleanupOpen(true)}
+                className="nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 bg-rose-200 hover:bg-rose-300 text-rose-950 font-bold shadow-[2px_2px_0px_0px_#000]"
+                data-testid="btn-open-task-cleanup"
+                title="Configurar exclusão automática de tarefas com hora do servidor"
+              >
+                <Clock className="w-4 h-4 inline mr-1.5 sm:mr-2 text-rose-900" />
+                Limpeza de Tarefas
+                {globalCleanupData?.config?.enabled && (
+                  <span className="ml-1.5 px-1.5 py-0.5 bg-black text-white text-[10px] rounded font-mono">
+                    {globalCleanupData.config.cleanup_time}
+                  </span>
+                )}
+              </button>
+            </>
           )}
-          <button
-            onClick={() => setTab("whatsapp")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "whatsapp" ? "bg-emerald-400 font-bold" : "bg-white"}`}
-            data-testid="tab-whatsapp"
-          >
-            <MessageSquare className="w-4 h-4 inline mr-1.5 sm:mr-2 text-emerald-950" /> WhatsApp
-          </button>
-          <button
-            onClick={() => setTab("buttons")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "buttons" ? "bg-indigo-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"}`}
-            data-testid="tab-buttons"
-            title="Criar e gerenciar botões para os alunos"
-          >
-            <Link2 className="w-4 h-4 inline mr-1.5 sm:mr-2 text-indigo-950" /> Botões dos Alunos 🔗
-          </button>
-          <button
-            onClick={() => setTab("ranking_annual")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "ranking_annual" ? "bg-amber-400 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"}`}
-            data-testid="tab-ranking-annual"
-            title="Ranking Anual dos Alunos e Controle do Ano Letivo"
-          >
-            <Trophy className="w-4 h-4 inline mr-1.5 sm:mr-2 text-amber-950" /> Ranking Anual 🏆
-          </button>
-          <button
-            onClick={() => setTab("zip_transfer")}
-            className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "zip_transfer" ? "bg-sky-300 font-bold" : "bg-white"}`}
-            data-testid="tab-zip-transfer"
-          >
-            <FileArchive className="w-4 h-4 inline mr-1.5 sm:mr-2 text-sky-950" /> Dados ZIP
-          </button>
         </div>
         {tab === "tasks" && <TasksPanel annualCycle={annualCycle} />}
         {tab === "announcements" && <AnnouncementsPanel annualCycle={annualCycle} />}
         {tab === "students" && <StudentsPanel />}
         {tab === "subjects" && <SubjectsPanel annualCycle={annualCycle} />}
+        {tab === "resumos" && <AdminResumosPanel />}
         {tab === "logs" && <LoginLogsPanel />}
         {tab === "stats" && <StatsPanel />}
         {tab === "firmware" && <FirmwarePanel />}
@@ -858,7 +971,9 @@ function TaskDialog({ task, onClose, onSaved }) {
             <div className="border-t border-black/10 pt-3">
               <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-black text-neutral-900">📷 Fotos do Enunciado / Livro / Quadro</span>
+                  <span className="text-xs font-black text-neutral-900 flex items-center gap-1">
+                    <ImageIcon className="w-3.5 h-3.5 text-neutral-800" /> Fotos do Enunciado / Livro / Quadro
+                  </span>
                   <span className="nb-badge bg-neutral-200 text-neutral-800 text-[9px] font-bold">
                     Material de Apoio
                   </span>
@@ -867,22 +982,23 @@ function TaskDialog({ task, onClose, onSaved }) {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <div className="flex items-center gap-1 bg-neutral-100 p-0.5 rounded-lg border border-black/20">
                       {[
-                        { key: "short", label: "⚡ Curto" },
-                        { key: "medium", label: "📝 Médio" },
-                        { key: "detailed", label: "📚 Detalhado" },
+                        { key: "short", label: "Curto", Icon: Zap },
+                        { key: "medium", label: "Médio", Icon: FileText },
+                        { key: "detailed", label: "Detalhado", Icon: BookOpen },
                       ].map((opt) => (
                         <button
                           key={opt.key}
                           type="button"
                           disabled={generatingAnswer}
                           onClick={() => setAnswerLength(opt.key)}
-                          className={`px-2 py-0.5 text-[10px] font-bold rounded transition-all ${
+                          className={`px-2 py-0.5 text-[10px] font-bold rounded transition-all flex items-center gap-1 ${
                             answerLength === opt.key
                               ? "bg-amber-300 text-neutral-950 border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                               : "text-neutral-700 hover:text-black hover:bg-white/60"
                           }`}
                         >
-                          {opt.label}
+                          <opt.Icon className="w-2.5 h-2.5 flex-shrink-0" />
+                          <span>{opt.label}</span>
                         </button>
                       ))}
                     </div>
@@ -1891,7 +2007,8 @@ function LoginLogsPanel() {
       <div className="flex items-end justify-between mb-6 flex-wrap gap-4">
         <div>
           <h1 className="font-heading font-black text-3xl sm:text-5xl tracking-tight">Acessos</h1>
-          <p className="text-neutral-600 mt-1">Histórico de logins dos alunos. Apagado automaticamente após 7 dias.</p>
+          <p className="text-neutral-600 mt-1">Registros e histórico de logins dos alunos.</p>
+
         </div>
         {logs.length > 0 && (
           <button
@@ -2082,10 +2199,13 @@ function StatsPanel() {
           {/* Header Badges */}
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="nb-badge bg-black text-amber-300 text-xs font-black uppercase tracking-wider">
-                {isTie
-                  ? `👑 Empate no 1º Lugar (${leaders.length} alunos empatados) • ${stats.ai_monthly.month_label}`
-                  : `👑 Líder da Avaliação Pedagógica IA • ${stats.ai_monthly.month_label}`}
+              <span className="nb-badge bg-black text-amber-300 text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                <Crown className="w-4 h-4 text-amber-300" />
+                <span>
+                  {isTie
+                    ? `Empate no 1º Lugar (${leaders.length} alunos empatados) • ${stats.ai_monthly.month_label}`
+                    : `Líder da Avaliação Pedagógica IA • ${stats.ai_monthly.month_label}`}
+                </span>
               </span>
               <span className="nb-badge bg-white text-neutral-900 text-xs font-bold">
                 Nota IA: {leaders[0]?.score || stats.ai_monthly.leader?.score || 98}/100
@@ -2094,8 +2214,9 @@ function StatsPanel() {
 
             {activeWinner && (
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={`nb-badge text-xs font-black ${hasCustomWinner ? "bg-emerald-300 text-emerald-950 border-emerald-950" : "bg-amber-400 text-amber-950 border-amber-950"}`}>
-                  {hasCustomWinner ? `🏆 Vencedor Escolhido: ${activeWinner.winner_name}` : `👑 Empate Oficializado: ${activeWinner.winner_name}`}
+                <span className={`nb-badge text-xs font-black flex items-center gap-1.5 ${hasCustomWinner ? "bg-emerald-300 text-emerald-950 border-emerald-950" : "bg-amber-400 text-amber-950 border-amber-950"}`}>
+                  <Trophy className="w-3.5 h-3.5" />
+                  <span>{hasCustomWinner ? `Vencedor Escolhido: ${activeWinner.winner_name}` : `Empate Oficializado: ${activeWinner.winner_name}`}</span>
                 </span>
                 <button
                   onClick={handleRemoveWinnerChoice}
@@ -2153,8 +2274,8 @@ function StatsPanel() {
                             <h4 className="font-heading font-black text-lg text-neutral-900 leading-tight truncate">
                               {l.name}
                             </h4>
-                            <span className="nb-badge bg-amber-200 text-amber-900 text-[10px] font-black">
-                              👑 1º Lugar
+                            <span className="nb-badge bg-amber-200 text-amber-900 text-[10px] font-black flex items-center gap-1">
+                              <Crown className="w-3 h-3 text-amber-800" /> 1º Lugar
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
@@ -2165,8 +2286,8 @@ function StatsPanel() {
                             <span className="nb-badge bg-white text-neutral-800 text-[10px] font-bold">
                               {l.uncompleted_count === 0 ? "0 pendências" : `${l.uncompleted_count} pend.`}
                             </span>
-                            <span className="nb-badge bg-violet-100 text-violet-950 text-[10px] font-bold">
-                              🛍️ {l.points || 0} pts
+                            <span className="nb-badge bg-violet-100 text-violet-950 text-[10px] font-bold flex items-center gap-1">
+                              <Coins className="w-3 h-3 text-violet-700" /> {l.points || 0} pts
                             </span>
                           </div>
                         </div>
@@ -2186,7 +2307,8 @@ function StatsPanel() {
                             title={`Escolher ${l.name} para vencer o prêmio individualmente`}
                             data-testid={`choose-winner-${l.id}`}
                           >
-                            👉 Escolher {l.name} como Vencedor(a)
+                            <Trophy className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Escolher {l.name} como Vencedor(a)</span>
                           </button>
                         )}
                       </div>
@@ -2208,7 +2330,7 @@ function StatsPanel() {
                   data-testid="confirm-joint-tie-btn"
                 >
                   <Users className="w-4 h-4 text-amber-700" />
-                  {hasJointTieWinner ? "✅ Empate Conjunto Oficializado (Ambos Vencem)" : "🤝 Oficializar Empate Conjunto (Ambos Vencem)"}
+                  {hasJointTieWinner ? "Empate Conjunto Oficializado (Ambos Vencem)" : "Oficializar Empate Conjunto (Ambos Vencem)"}
                 </button>
 
                 {activeWinner && (
@@ -2349,7 +2471,8 @@ function StatsPanel() {
 
       {/* Conclusões últimos 7 dias */}
       <div>
-        <h2 className="font-heading font-bold text-2xl mb-3">Conclusões nos últimos 7 dias</h2>
+        <h2 className="font-heading font-bold text-2xl mb-3">Resumo Semanal de Conclusões</h2>
+
         <div className="nb-card bg-white p-5">
           <div className="flex items-end gap-2 h-40" data-testid="completions-chart">
             {stats.completions_per_day.map((d) => {
