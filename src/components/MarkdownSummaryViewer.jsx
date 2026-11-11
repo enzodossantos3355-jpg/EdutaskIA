@@ -1,75 +1,128 @@
 import {
   Printer,
   Copy,
-  Download,
   Image as ImageIcon,
   Sparkles,
   BookOpen,
   CheckCircle,
   Calculator,
   Lightbulb,
-  FileText,
 } from "lucide-react";
 import {
   copySummaryToClipboard,
   printSummaryReport,
   downloadSummaryAsImage,
-  downloadSummaryFile,
 } from "@/lib/summaryExport";
 import { MathRenderer, hasLatexMath } from "@/lib/mathUtils";
 
 /**
- * Parses inline markdown like **bold**, *italic*, and `code` into React JSX elements.
+ * Strips stray code fences, lone backtick lines, and cleans up raw LLM markdown.
+ */
+function cleanMarkdownText(md) {
+  if (!md) return "";
+  return md
+    .replace(/^```(?:markdown|latex|math|text)?\s*$/gim, "")
+    .replace(/^`+\s*$/gm, "")
+    .trim();
+}
+
+/**
+ * Checks if a trimmed block is a standalone display math equation (e.g. $$...$$ or \begin{cases}...\end{cases}).
+ */
+function isDisplayMathBlock(text) {
+  if (!text) return false;
+  const t = text.trim();
+  return (
+    (t.startsWith("$$") && t.endsWith("$$")) ||
+    (t.startsWith("\\[") && t.endsWith("\\]")) ||
+    /^\s*\\begin\{[a-zA-Z*]+\}[\s\S]*\\end\{[a-zA-Z*]+\}\s*$/i.test(t)
+  );
+}
+
+/**
+ * Checks if a block is explicitly a multi-step calculation box with labeled steps.
+ */
+function isStepCalculationBlock(text) {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  const hasStepWord =
+    lower.includes("passo 1") ||
+    lower.includes("passo a passo") ||
+    lower.includes("etapa 1") ||
+    lower.includes("resolução passo a passo") ||
+    lower.includes("cálculo ilustrado");
+  return hasStepWord && text.split("\n").filter((l) => l.trim()).length > 1;
+}
+
+/**
+ * Parses inline markdown like **bold**, *italic*, `code`, and $math$ into React JSX elements.
  */
 function renderInlineMarkdown(text) {
   if (!text) return null;
 
-  // If text contains LaTeX math commands, render with MathRenderer
-  if (hasLatexMath(text)) {
-    return <MathRenderer math={text} inline={true} />;
-  }
-
-  // Split by bold (**text** or __text__) and inline code (`code`)
-  const parts = text.split(/(\*\*.*?\*\*|__.*?__|`.*?`)/g);
+  // Regex matching:
+  // 1: $$ ... $$ (display math)
+  // 2: $ ... $ (inline math)
+  // 3: \begin{env} ... \end{env}
+  // 4: **...** or __...__ (bold)
+  // 5: `...` (inline code)
+  const regex = /(\$\$[\s\S]*?\$\$|\$(?:\\\$|[^\$\n])+?\$|\\begin\{[a-zA-Z*]+\}[\s\S]*?\\end\{[a-zA-Z*]+\}|\*\*.*?\*\*|__.*?__|`.*?`)/g;
+  const parts = text.split(regex).filter(Boolean);
 
   return parts.map((part, index) => {
+    // Display Math
+    if (part.startsWith("$$") && part.endsWith("$$")) {
+      return (
+        <span key={index} className="inline-block my-1 max-w-full overflow-x-auto align-middle">
+          <MathRenderer math={part} inline={false} />
+        </span>
+      );
+    }
+
+    // Inline Math: $...$ or LaTeX environment
+    if ((part.startsWith("$") && part.endsWith("$")) || part.startsWith("\\begin{")) {
+      return <MathRenderer key={index} math={part} inline={true} />;
+    }
+
+    // Bold
     if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) {
+      const inner = part.slice(2, -2);
+      // If bold has math inside, render math inside
+      if (hasLatexMath(inner)) {
+        return (
+          <strong key={index} className="font-black text-black bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+            <MathRenderer math={inner} inline={true} />
+          </strong>
+        );
+      }
       return (
         <strong key={index} className="font-black text-black bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
-          {part.slice(2, -2)}
+          {inner}
         </strong>
       );
     }
+
+    // Code
     if (part.startsWith("`") && part.endsWith("`")) {
+      const codeText = part.slice(1, -1).trim();
+      if (!codeText) return null;
+      if (hasLatexMath(codeText)) {
+        return <MathRenderer key={index} math={codeText} inline={true} />;
+      }
       return (
         <code key={index} className="font-mono text-xs bg-amber-100 text-black px-2 py-0.5 rounded border border-black font-bold">
-          {part.slice(1, -1)}
+          {codeText}
         </code>
       );
     }
+
+    // Plain text: if it has raw LaTeX commands without $, try rendering if valid
+    if (hasLatexMath(part) && (part.includes("\\frac") || part.includes("\\sqrt") || part.includes("\\begin"))) {
+      return <MathRenderer key={index} math={part} inline={true} />;
+    }
+
     return part;
   });
-}
-
-/**
- * Helper to detect if a line or block looks like a math calculation / equation step.
- */
-function isMathBlock(text) {
-  if (!text) return false;
-  const lower = text.toLowerCase();
-  return (
-    lower.includes("passo ") ||
-    lower.includes("fórmula") ||
-    lower.includes("calculo") ||
-    lower.includes("cálculo") ||
-    lower.includes("equação") ||
-    lower.includes("equacao") ||
-    lower.includes("resultado:") ||
-    lower.includes("exemplo prático") ||
-    lower.includes("exemplo de conta") ||
-    hasLatexMath(text) ||
-    /(\d+\s*[\+\-\*\/\=÷×√\^]\s*\d+)/.test(text)
-  );
 }
 
 /**
@@ -88,8 +141,11 @@ export default function MarkdownSummaryViewer({
   const fullTitle = title || "Resumo de Estudo Edutask";
   const fullSubtitle = subtitle || (subjects.length > 0 ? `Matérias: ${subjects.join(" • ")}` : "");
 
+  // Clean raw markdown of stray code fences and lone backtick lines
+  const cleanedMarkdown = cleanMarkdownText(markdown);
+
   // Parse Markdown into structured blocks
-  const blocks = markdown.split("\n\n").filter(Boolean);
+  const blocks = cleanedMarkdown.split(/\n\s*\n/).filter((b) => b.trim().length > 0);
 
   return (
     <div className="space-y-4 font-body" data-testid="markdown-summary-viewer">
@@ -111,7 +167,7 @@ export default function MarkdownSummaryViewer({
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => printSummaryReport({ title: fullTitle, subtitle: fullSubtitle, markdownContent: markdown })}
+              onClick={() => printSummaryReport({ title: fullTitle, subtitle: fullSubtitle, markdownContent: cleanedMarkdown })}
               className="nb-btn px-3.5 py-2 bg-white hover:bg-neutral-100 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black flex items-center gap-1.5 shadow-[2px_2px_0_0_#000] transition-all"
               title="Imprimir ou Salvar como PDF Oficial"
               data-testid="print-summary-btn"
@@ -121,7 +177,7 @@ export default function MarkdownSummaryViewer({
             </button>
 
             <button
-              onClick={() => downloadSummaryAsImage({ title: fullTitle, subtitle: fullSubtitle, markdownContent: markdown, fileName: "Resumo_Edutask.png" })}
+              onClick={() => downloadSummaryAsImage({ title: fullTitle, subtitle: fullSubtitle, markdownContent: cleanedMarkdown, fileName: "Resumo_Edutask.png" })}
               className="nb-btn px-3.5 py-2 bg-emerald-300 hover:bg-emerald-400 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black flex items-center gap-1.5 shadow-[2px_2px_0_0_#000] transition-all"
               title="Baixar resumo formatado em arquivo de Imagem (PNG)"
               data-testid="export-image-summary-btn"
@@ -131,23 +187,13 @@ export default function MarkdownSummaryViewer({
             </button>
 
             <button
-              onClick={() => copySummaryToClipboard(markdown)}
+              onClick={() => copySummaryToClipboard(cleanedMarkdown)}
               className="nb-btn px-3.5 py-2 bg-sky-300 hover:bg-sky-400 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black flex items-center gap-1.5 shadow-[2px_2px_0_0_#000] transition-all"
               title="Copiar todo o texto do resumo"
               data-testid="copy-summary-btn"
             >
               <Copy className="w-4 h-4" />
               <span>Copiar Texto</span>
-            </button>
-
-            <button
-              onClick={() => downloadSummaryFile(markdown, "Resumo_Edutask.md")}
-              className="nb-btn px-3.5 py-2 bg-violet-300 hover:bg-violet-400 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black flex items-center gap-1.5 shadow-[2px_2px_0_0_#000] transition-all"
-              title="Baixar arquivo em formato Markdown .MD"
-              data-testid="download-md-summary-btn"
-            >
-              <Download className="w-4 h-4" />
-              <span>Salvar .MD</span>
             </button>
 
             {onReset && (
@@ -210,7 +256,7 @@ export default function MarkdownSummaryViewer({
             // Section Header ###
             if (trimmed.startsWith("### ")) {
               const headerText = trimmed.replace(/^###\s+/, "");
-              const isMath = isMathBlock(headerText);
+              const isMath = hasLatexMath(headerText) || headerText.toLowerCase().includes("fórmula") || headerText.toLowerCase().includes("equação");
 
               return (
                 <h3 key={idx} className="text-sm sm:text-base font-heading font-black text-neutral-900 mt-4 mb-1.5 flex items-center gap-2">
@@ -240,9 +286,24 @@ export default function MarkdownSummaryViewer({
               );
             }
 
+            // Standalone Display Math Equation Block ($$ ... $$ or \begin{cases} ... \end{cases})
+            if (isDisplayMathBlock(trimmed)) {
+              return (
+                <div key={idx} className="nb-card bg-sky-50/90 p-4 sm:p-5 rounded-2xl border-2 border-black shadow-[3px_3px_0_0_#000] my-4 space-y-2 overflow-x-auto text-center">
+                  <div className="text-xs font-heading font-black uppercase text-sky-950 mb-1.5 text-left flex items-center gap-1.5 border-b border-black/10 pb-1.5">
+                    <Calculator className="w-4 h-4 text-sky-800" />
+                    <span>Fórmula / Equação Matemática:</span>
+                  </div>
+                  <div className="py-2 flex items-center justify-center">
+                    <MathRenderer math={trimmed} inline={false} className="text-base sm:text-lg font-bold" />
+                  </div>
+                </div>
+              );
+            }
+
             // Visual Step-by-Step Math / Calculation Box
-            if (isMathBlock(trimmed)) {
-              const lines = trimmed.split("\n");
+            if (isStepCalculationBlock(trimmed)) {
+              const lines = trimmed.split("\n").filter(l => l.trim().length > 0);
               return (
                 <div key={idx} className="nb-card bg-sky-50/90 p-4 sm:p-5 rounded-2xl border-2 border-black shadow-[3px_3px_0_0_#000] my-4 space-y-3">
                   <div className="flex items-center justify-between border-b-2 border-black/20 pb-2">
@@ -283,7 +344,7 @@ export default function MarkdownSummaryViewer({
 
             // Bullet Lists (- or *)
             if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-              const lines = trimmed.split("\n");
+              const lines = trimmed.split("\n").filter(l => l.trim().length > 0);
               return (
                 <ul key={idx} className="space-y-2 my-3 bg-neutral-50 p-4 rounded-xl border-2 border-black/20 font-medium">
                   {lines.map((line, i) => (

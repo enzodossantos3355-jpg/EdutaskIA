@@ -147,6 +147,18 @@ export default function AdminResumosPanel() {
 
       if (code === "auth/popup-closed-by-user") {
         toast.info("A janela de login do Google foi fechada antes de concluir.");
+      } else if (code === "auth/unauthorized-domain" || msg.includes("unauthorized-domain")) {
+        const domain = typeof window !== "undefined" ? window.location.hostname : "seu-app.onrender.com";
+        setOauthErrorNotice({
+          type: "unauthorized_domain",
+          title: "Domínio do Render Não Autorizado no Firebase",
+          message: `O domínio atual (${domain}) não está cadastrado na lista de domínios permitidos do Firebase Auth. Para liberar o login: 
+1. Acesse o Firebase Console (console.firebase.google.com).
+2. Vá em Authentication > Configurações > Domínios autorizados.
+3. Clique em "Adicionar domínio" e digite: ${domain}
+4. Salve e recarregue a página!`,
+        });
+        toast.error(`Domínio "${domain}" não autorizado no Firebase Auth.`);
       } else if (
         code === "auth/access-blocked" ||
         msg.toLowerCase().includes("test") ||

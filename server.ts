@@ -295,7 +295,7 @@ const DEFAULT_APP_INFO = {
   release_notes: 'Versão 1.3.0 com gerador de resumos por IA, renderização matemática KaTeX, integração com Google Drive, botões de atalho personalizados e disparador oficial no WhatsApp.',
   features: [
     'Gerador de Resumos por IA com suporte KaTeX e exportação PDF/PNG/MD',
-    'Integração com Google Drive para importação de apostilas e fotos',
+    'Integração com Google Drive para importação de resumos e fotos',
     'Atalhos & Botões Customizados para alunos',
     'Disparador WhatsApp Oficial para comunicado e foto do firmware',
     'Perfis estilo Netflix para Alunos e Admin',
@@ -1811,8 +1811,8 @@ api.post('/admin/summaries/process-source', requireAdmin, upload.array('images',
         formulas: t.formulas,
       }));
 
-      const promptText = `Você é um tutor pedagógico e especialista em criação de apostilas de estudos do Edutask.
-Analise com atenção as imagens de apostilas/anotações enviadas relativas à matéria "${subject.trim()}".
+      const promptText = `Você é um tutor pedagógico e especialista em criação de resumos de estudos do Edutask.
+Analise com atenção as fotos e anotações de estudo enviadas relativas à matéria "${subject.trim()}".
 
 Abaixo estão os assuntos/tópicos já existentes cadastrados para a matéria "${subject.trim()}":
 ${JSON.stringify(existingTopicsOverview, null, 2)}
@@ -2132,7 +2132,7 @@ api.post('/summaries/generate-personalized', requireAuth, async (req, res) => {
 O aluno solicitou um resumo personalizado único, perfeitamente acentuado e altamente organizado.
 
 Parâmetros da Solicitação:
-- Formato Escolhido: ${format === 'pdf' ? 'Apostila / PDF de Impressão' : 'Foto / Cartão Visual Infográfico'}
+- Formato Escolhido: ${format === 'pdf' ? 'Resumo Completo / PDF de Impressão' : 'Foto / Cartão Visual Infográfico'}
 - Foco do Estudo: ${focus_style}
 - Notas do Aluno: ${student_notes || 'Nenhuma nota adicional'}
 
@@ -2142,13 +2142,13 @@ ${JSON.stringify(topicsContent, null, 2)}
 INSTRUÇÕES OBRIGATÓRIAS DE FORMATO E PORTUGUÊS:
 1. IDIOMA E ACENTUAÇÃO: Escreva em Português do Brasil com ACENTUAÇÃO IMPECÁVEL (utilize todos os caracteres especiais como á, é, í, ó, ú, ã, õ, ç, ê, ô, º, ª e símbolos matemáticos).
 2. ESTRUTURA DE MARKDOWN RICA:
-   - Use # para o Título Principal da Apostila/Ficha.
+   - Use # para o Título Principal do Resumo.
    - Use ## para Seções de Matéria e Tópicos Principais.
-   - Use ### para Subtópicos, Conceitos-Chave ou Caixas de Fórmulas.
+   - Use ### para Subtópicos, Caixas de Fórmulas e Resoluções.
    - Use negritos **palavra em destaque** em termos essenciais, definições e fórmulas.
    - Use listas com marcadores - para organizar ideias, passos de resolução e pontos-chave.
 3. ESTILO DE ACORDO COM O FORMATO:
-   - Se formato = 'pdf' (Impressão): Crie uma Apostila Completa com Introdução, Sumário de Tópicos, Conceitos Explicados em Detalhes, Tabela/Destaques de Fórmulas, Dicas de Prova e Exercícios Resolvidos Exemplo.
+   - Se formato = 'pdf' (Impressão): Crie um Resumo Completo com Introdução, Sumário de Tópicos, Conceitos Explicados em Detalhes, Tabela/Destaques de Fórmulas, Dicas de Prova e Exercícios Resolvidos Exemplo.
    - Se formato = 'image' (Ficha Visual): Crie uma Ficha de Estudo Infográfica compacta e objetiva, ideal para memorização rápida antes de provas.
 4. Personalize as explicações focando em clareza pedagógica para alunos do Ensino Fundamental e Médio.`;
 

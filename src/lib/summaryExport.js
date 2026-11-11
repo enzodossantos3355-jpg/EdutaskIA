@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { cleanLatexFormula } from "@/lib/mathUtils";
 
 /**
  * Copies text cleanly to clipboard with fallback.
@@ -218,7 +219,7 @@ export function printSummaryReport({ title = "Resumo de Estudo Edutask", subtitl
 /**
  * Downloads the summary as an image file (PNG) rendered on a canvas.
  */
-export function downloadSummaryAsImage({ title = "Apostila de Estudo Edutask", subtitle = "", markdownContent = "", fileName = "Resumo_Edutask.png" }) {
+export function downloadSummaryAsImage({ title = "Resumo de Estudo Edutask", subtitle = "", markdownContent = "", fileName = "Resumo_Edutask.png" }) {
   if (!markdownContent) return;
 
   try {
@@ -372,6 +373,14 @@ function parseMarkdownToHtml(md) {
       return;
     }
 
+    // Clean stray code markers and lone backticks
+    if (trimmed.startsWith("```") || trimmed === "`") return;
+
+    // Convert LaTeX math to readable plain math
+    if (trimmed.includes("$$") || trimmed.includes("\\begin{") || trimmed.includes("\\frac")) {
+      trimmed = cleanLatexFormula(trimmed);
+    }
+
     // Format bold and italic
     trimmed = escapeHtml(trimmed)
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
@@ -413,6 +422,14 @@ function parseMarkdownToLines(md) {
     let trimmed = l.trim();
     if (!trimmed) return;
 
+    // Clean stray backticks or code blocks
+    if (trimmed.startsWith("```") || trimmed === "`") return;
+
+    // Convert LaTeX math to readable formula
+    if (trimmed.includes("$$") || trimmed.includes("\\begin{") || trimmed.includes("\\frac")) {
+      trimmed = cleanLatexFormula(trimmed);
+    }
+
     // Clean bold markdown markers for canvas plain text rendering
     const cleanText = trimmed.replace(/\*\*/g, "").replace(/__/g, "").replace(/`/g, "");
 
@@ -425,7 +442,7 @@ function parseMarkdownToLines(md) {
     } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
       result.push({ type: "list", text: cleanText.replace(/^[-*]\s+/, "") });
     } else {
-      // Chunk long paragraphs into 90 chars per line for canvas
+      // Chunk long paragraphs into 85 chars per line for canvas
       const maxLen = 85;
       if (cleanText.length > maxLen) {
         const words = cleanText.split(" ");

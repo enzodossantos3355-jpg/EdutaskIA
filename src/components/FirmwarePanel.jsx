@@ -38,7 +38,7 @@ const SYSTEM_FEATURES = [
     emoji: "☁️",
     title: "Integração com Google Drive",
     category: "Armazenamento & Nuvem",
-    description: "Seleção direta de fontes de estudo, arquivos de apostilas e fotos enviadas do Google Drive.",
+    description: "Seleção direta de fontes de estudo, arquivos de resumos e fotos enviadas do Google Drive.",
     status: "Ativo",
   },
   {

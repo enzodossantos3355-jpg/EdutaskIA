@@ -368,7 +368,7 @@ export default function StudentDashboard() {
             data-testid="student-tab-resumos"
           >
             <BookOpen className="w-4 h-4 text-yellow-900 flex-shrink-0" />
-            <span>Resumos & Apostilas</span>
+            <span>Resumos de Estudo</span>
           </button>
           {!framesDisabled && (
             <button

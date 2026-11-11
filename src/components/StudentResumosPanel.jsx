@@ -260,7 +260,7 @@ export default function StudentResumosPanel() {
           {loading ? (
             <div className="p-12 text-center text-neutral-700 font-bold flex items-center justify-center gap-3 nb-card bg-white rounded-2xl border-3 border-black shadow-[4px_4px_0_0_#000]">
               <Loader2 className="w-6 h-6 animate-spin text-black" />
-              <span className="font-heading font-black uppercase text-sm">Carregando apostilas de estudo...</span>
+              <span className="font-heading font-black uppercase text-sm">Carregando resumos de estudo...</span>
             </div>
           ) : filteredSummaries.length === 0 ? (
             <div className="p-12 text-center bg-amber-50 rounded-2xl border-3 border-dashed border-black">
@@ -441,25 +441,6 @@ export default function StudentResumosPanel() {
               showToolbar={true}
             />
 
-            {/* Formulas Box */}
-            {readingTopic.formulas && readingTopic.formulas.length > 0 && (
-              <div className="nb-card bg-emerald-50 p-5 rounded-2xl border-2 border-black space-y-3">
-                <h4 className="font-heading font-black text-xs sm:text-sm uppercase text-emerald-950 flex items-center gap-2">
-                  <Calculator className="w-4 h-4 text-emerald-700" /> Fórmulas & Equações Destacadas:
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  {readingTopic.formulas.map((f, i) => (
-                    <div
-                      key={i}
-                      className="nb-card bg-white p-3 rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000]"
-                    >
-                      <MathRenderer math={f} inline={false} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Source Images */}
             {readingTopic.source_image_ids && readingTopic.source_image_ids.length > 0 && (
               <div className="nb-card bg-neutral-50 p-5 rounded-2xl border-2 border-black space-y-3">
@@ -536,7 +517,7 @@ export default function StudentResumosPanel() {
 
             <MarkdownSummaryViewer
               markdown={readingHistoryItem.result_markdown}
-              title="Apostila de Estudo Edutask"
+              title="Resumo de Estudo Edutask"
               subtitle={`Matérias: ${Array.isArray(readingHistoryItem.subject_names) ? readingHistoryItem.subject_names.join(" • ") : "Geral"} | Data: ${new Date(readingHistoryItem.generated_at).toLocaleDateString("pt-BR")}`}
               subjects={Array.isArray(readingHistoryItem.subject_names) ? readingHistoryItem.subject_names : []}
               showToolbar={true}

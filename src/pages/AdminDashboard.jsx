@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot, Rocket, Zap, BookOpen, FileText, Settings } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot, Rocket, Zap, BookOpen, FileText, Settings, Image as ImageIcon, Crown } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import AppHeader from "@/components/AppHeader";
@@ -226,7 +226,7 @@ export default function AdminDashboard() {
                 onClick={() => setTab("resumos")}
                 className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "resumos" ? "bg-yellow-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
                 data-testid="tab-resumos"
-                title="Apostilas e Resumos por Matéria"
+                title="Resumos de Estudo por Matéria"
               >
                 <BookOpen className="w-4 h-4 inline mr-1.5 sm:mr-2 text-yellow-950" /> Resumos
               </button>

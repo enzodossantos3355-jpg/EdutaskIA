@@ -71,9 +71,9 @@ export function MathRenderer({ math, inline = false, className = "" }) {
 
   const rawStr = String(math).trim();
 
-  // Clean stray outer backticks or brackets
+  // Strip all leading and trailing backticks, quotes and spaces
   let targetMath = rawStr
-    .replace(/^[`\s\n]+|[`\s\n]+$/g, "")
+    .replace(/^[`"'\s\n]+|[`"'\s\n]+$/g, "")
     .replace(/^\[\s*\]/g, "")
     .trim();
 
@@ -88,16 +88,21 @@ export function MathRenderer({ math, inline = false, className = "" }) {
     targetMath = targetMath.slice(2, -2).trim();
   }
 
+  // Strip residual backticks if any
+  targetMath = targetMath.replace(/^`+|`+$/g, "").trim();
+
   // Normalize uppercase \BEGIN{CASES} to \begin{cases}
   targetMath = targetMath.replace(/\\BEGIN\{CASES\}/gi, "\\begin{cases}");
   targetMath = targetMath.replace(/\\END\{CASES\}/gi, "\\end{cases}");
+  targetMath = targetMath.replace(/\\BEGIN\{MATRIX\}/gi, "\\begin{matrix}");
+  targetMath = targetMath.replace(/\\END\{MATRIX\}/gi, "\\end{matrix}");
 
   if (!targetMath) return null;
 
   try {
     const html = katex.renderToString(targetMath, {
       displayMode: !inline,
-      throwOnError: false,
+      throwOnError: true,
       output: "htmlAndMathml",
     });
 
@@ -108,10 +113,10 @@ export function MathRenderer({ math, inline = false, className = "" }) {
       />
     );
   } catch (err) {
-    // Fallback to cleaned plain text math
+    // Fallback to cleaned readable plain text math without raw LaTeX noise
     const readableFallback = cleanLatexFormula(targetMath);
     return (
-      <span className={`font-mono text-xs font-bold text-slate-900 ${className}`}>
+      <span className={`font-mono text-xs font-bold text-slate-900 bg-sky-50 px-2 py-0.5 rounded border border-black/30 inline-block align-middle ${className}`}>
         {readableFallback}
       </span>
     );
