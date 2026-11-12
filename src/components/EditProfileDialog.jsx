@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { X, Loader2, Check } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import AvatarUploader from "@/components/AvatarUploader";
+import ModalPortal from "@/components/ModalPortal";
 
 /**
  * Dialog to edit a user's name, password and avatar.
@@ -22,19 +23,25 @@ export default function EditProfileDialog({
 }) {
   const [name, setName] = useState(initialName);
   const [password, setPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [saveState, setSaveState] = useState("idle"); // "idle" | "saving" | "saved"
   const [avatarChanged, setAvatarChanged] = useState(false);
+
+  const submitting = saveState === "saving";
 
   const submit = async (e) => {
     e.preventDefault();
+    if (saveState !== "idle") return;
     const payload = {};
     if (name.trim() && name.trim() !== initialName) payload.name = name.trim();
     if (password.trim()) payload.password = password.trim();
 
     if (Object.keys(payload).length === 0) {
       if (avatarChanged) {
+        setSaveState("saved");
         toast.success("Perfil atualizado!");
-        onSaved?.();
+        setTimeout(() => {
+          onSaved?.();
+        }, 320);
       } else {
         toast("Nenhuma alteração de texto");
         onClose();
@@ -42,26 +49,33 @@ export default function EditProfileDialog({
       return;
     }
 
-    setSubmitting(true);
+    setSaveState("saving");
     try {
       await api.patch(path, payload);
+      setSaveState("saved");
       toast.success("Perfil atualizado!");
-      onSaved?.();
+      setTimeout(() => {
+        onSaved?.();
+      }, 360);
     } catch (err) {
+      setSaveState("idle");
       toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao atualizar");
-    } finally {
-      setSubmitting(false);
     }
   };
 
   const title = label ? `Editar ${label}` : "Editar meu perfil";
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-3 sm:p-4" data-testid="edit-profile-dialog">
-      <div className="nb-card bg-white w-full max-w-md p-5 sm:p-7">
+    <ModalPortal>
+      <div
+        className="fixed inset-0 z-[60] bg-black/40 flex items-end sm:items-stretch sm:justify-end p-0"
+      data-testid="edit-profile-dialog"
+      onClick={(e) => { if (e.target === e.currentTarget && !submitting) onClose(); }}
+    >
+      <div className="panel-drawer drawer-panel nb-card bg-white w-full sm:max-w-md max-h-[92vh] sm:max-h-full sm:h-full rounded-t-2xl sm:rounded-none sm:rounded-l-2xl overflow-auto p-5 sm:p-7 border-b-0 sm:border-y-0 sm:border-r-0 shadow-[-6px_0_0_0_#000]">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-heading font-black text-xl sm:text-2xl">{title}</h3>
-          <button onClick={onClose} className="nb-btn bg-white px-2 py-2" aria-label="Fechar">
+          <button onClick={onClose} disabled={submitting} className="nb-btn bg-white px-2 py-2" aria-label="Fechar">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -112,13 +126,31 @@ export default function EditProfileDialog({
             </div>
           )}
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="nb-btn bg-white px-5 py-2.5">Cancelar</button>
-            <button type="submit" disabled={submitting} className="nb-btn bg-sky-400 px-5 py-2.5 font-bold" data-testid="submit-edit-profile">
-              {submitting ? "Salvando..." : "Salvar alterações"}
+            <button type="button" onClick={onClose} disabled={submitting} className="nb-btn bg-white px-5 py-2.5">Cancelar</button>
+            <button
+              type="submit"
+              disabled={saveState !== "idle"}
+              className={`nb-btn px-5 py-2.5 font-bold flex items-center gap-2 transition-colors duration-200 ${saveState === "saved" ? "bg-emerald-300" : "bg-sky-400"}`}
+              data-testid="submit-edit-profile"
+            >
+              {saveState === "saving" ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Salvando...</span>
+                </>
+              ) : saveState === "saved" ? (
+                <>
+                  <Check className="w-4 h-4 animate-check-pop" strokeWidth={3} />
+                  <span>Salvo!</span>
+                </>
+              ) : (
+                <span>Salvar alterações</span>
+              )}
             </button>
           </div>
         </form>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }

@@ -44,7 +44,7 @@ export default function AIEnhanceButton({
     try {
       const { data } = await api.post(endpoint, payload);
       onResult(data);
-      toast.success("Sugestão pronta! ✨");
+      toast.success("Sugestão pronta!");
     } catch (e) {
       toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao chamar a IA");
     } finally {

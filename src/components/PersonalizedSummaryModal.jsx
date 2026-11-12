@@ -15,6 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 import MarkdownSummaryViewer from "@/components/MarkdownSummaryViewer";
+import ModalPortal from "@/components/ModalPortal";
 
 export default function PersonalizedSummaryModal({ isOpen, onClose, initialSubject = "" }) {
   const [subjects, setSubjects] = useState([]);
@@ -28,6 +29,8 @@ export default function PersonalizedSummaryModal({ isOpen, onClose, initialSubje
   const [generating, setGenerating] = useState(false);
   const [generatedResult, setGeneratedResult] = useState(null);
 
+  const [loadingSubjects, setLoadingSubjects] = useState(true);
+
   useEffect(() => {
     if (isOpen) {
       loadData();
@@ -35,6 +38,7 @@ export default function PersonalizedSummaryModal({ isOpen, onClose, initialSubje
   }, [isOpen]);
 
   const loadData = async () => {
+    setLoadingSubjects(true);
     try {
       const [subjRes, sumRes] = await Promise.all([
         api.get("/subjects"),
@@ -50,6 +54,8 @@ export default function PersonalizedSummaryModal({ isOpen, onClose, initialSubje
       }
     } catch (err) {
       toast.error(formatApiError(err));
+    } finally {
+      setLoadingSubjects(false);
     }
   };
 
@@ -118,7 +124,8 @@ export default function PersonalizedSummaryModal({ isOpen, onClose, initialSubje
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto backdrop-blur-sm print:p-0 print:bg-white print:static print:inset-auto font-body">
+    <ModalPortal>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto backdrop-blur-sm print:p-0 print:bg-white print:static print:inset-auto font-body">
       <div className="nb-card relative w-full max-w-4xl my-8 bg-white rounded-2xl border-3 border-black shadow-[8px_8px_0_0_#000] overflow-hidden flex flex-col max-h-[90vh] print:max-h-none print:shadow-none print:border-none print:bg-white print:w-full">
         {/* Modal Header */}
         <div className="bg-amber-300 p-5 border-b-3 border-black flex items-center justify-between no-print">
@@ -157,7 +164,12 @@ export default function PersonalizedSummaryModal({ isOpen, onClose, initialSubje
                   <span>Selecione as Matérias para o Resumo:</span>
                 </h3>
 
-                {subjects.length === 0 ? (
+                {loadingSubjects ? (
+                  <p className="text-xs sm:text-sm font-bold text-neutral-600 font-body flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+                    <span>Carregando matérias disponíveis...</span>
+                  </p>
+                ) : subjects.length === 0 ? (
                   <p className="text-xs sm:text-sm font-bold text-neutral-500 font-body">Nenhuma matéria cadastrada.</p>
                 ) : (
                   <div className="flex flex-wrap gap-2.5">
@@ -326,6 +338,7 @@ export default function PersonalizedSummaryModal({ isOpen, onClose, initialSubje
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }

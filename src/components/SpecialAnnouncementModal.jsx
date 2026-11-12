@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Sparkles, Star, Megaphone, X, CheckCircle2, Bell, Calendar, Pin } from "lucide-react";
 import { formatDateBR } from "@/lib/priority";
+import ModalPortal from "@/components/ModalPortal";
 
 /**
  * SpecialAnnouncementModal
@@ -24,18 +25,19 @@ export default function SpecialAnnouncementModal({
   if (!isOpen || !announcement) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-6 bg-black/65 backdrop-blur-xs animate-in fade-in duration-200"
-      data-testid="special-announcement-popup"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="special-announcement-title"
-      onClick={onClose}
-    >
+    <ModalPortal>
       <div
-        className="relative w-full max-w-xl bg-white rounded-2xl border-3 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-6 bg-black/65 backdrop-blur-xs modal-backdrop"
+        data-testid="special-announcement-popup"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="special-announcement-title"
+        onClick={onClose}
       >
+        <div
+          className="relative w-full max-w-xl bg-white rounded-2xl border-3 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden modal-window flex flex-col max-h-[90vh]"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Top Accent Gradient Header */}
         <div className="relative bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-5 sm:px-6 py-4 border-b-2 border-black flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -112,6 +114,7 @@ export default function SpecialAnnouncementModal({
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }

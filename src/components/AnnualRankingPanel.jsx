@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
+import ModalPortal from "@/components/ModalPortal";
 import { Trophy, Calendar, Lock, Play, RefreshCw, CheckCircle2, Clock, AlertTriangle, ShieldCheck, User, Sparkles, History, ChevronDown, ChevronUp, Coins, Crown, Medal, Award } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import Avatar from "@/components/Avatar";
@@ -91,8 +92,18 @@ export default function AnnualRankingPanel() {
                 <Trophy className="w-3.5 h-3.5 text-amber-300 inline mr-1" />
                 <span className="text-white font-black">ANO LETIVO {cycle.active_year}</span>
               </span>
-              <span className={`nb-badge font-black text-xs px-3 py-1 ${cycle.is_closed ? "bg-red-500 text-white" : "bg-emerald-400 text-black"} border-black`}>
-                {cycle.is_closed ? "🔒 Encerrado / App Desativado para Alunos" : "🟢 Ano Ativo / Alunos Liberados"}
+              <span className={`nb-badge font-black text-xs px-3 py-1 inline-flex items-center gap-1.5 ${cycle.is_closed ? "bg-red-500 text-white" : "bg-emerald-400 text-black"} border-black`}>
+                {cycle.is_closed ? (
+                  <>
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Encerrado / App Desativado para Alunos</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Ano Ativo / Alunos Liberados</span>
+                  </>
+                )}
               </span>
             </div>
             <h2 className="font-heading font-black text-3xl text-black leading-tight drop-shadow-[1px_1px_0_#fff]">
@@ -140,7 +151,8 @@ export default function AnnualRankingPanel() {
 
       {/* Confirmation Modal: Close Annual Cycle with Double Protection */}
       {confirmCloseOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="max-w-md w-full nb-card bg-white p-6 border-4 border-black shadow-[8px_8px_0_0_#000] space-y-4">
             <div className="flex items-center gap-3 text-red-600">
               <AlertTriangle className="w-8 h-8 flex-shrink-0" />
@@ -150,9 +162,18 @@ export default function AnnualRankingPanel() {
               Ao encerrar o Ranking Anual do ano <strong>{cycle.active_year}</strong>:
             </p>
             <ul className="text-xs text-neutral-800 space-y-2 bg-amber-50 p-3 rounded-lg border-2 border-black font-semibold">
-              <li>⚠️ O aplicativo ficará <strong>desativado para todos os alunos</strong>.</li>
-              <li>⚠️ Alunos verão a tela informativa de encerramento do ano letivo ao tentar acessar.</li>
-              <li>✔️ O administrador continuará com acesso livre para consultar o ranking e iniciar o próximo ano quando desejar.</li>
+              <li className="flex items-start gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-700 flex-shrink-0 mt-0.5" />
+                <span>O aplicativo ficará <strong>desativado para todos os alunos</strong>.</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-700 flex-shrink-0 mt-0.5" />
+                <span>Alunos verão a tela informativa de encerramento do ano letivo ao tentar acessar.</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0 mt-0.5" />
+                <span>O administrador continuará com acesso livre para consultar o ranking e iniciar o próximo ano quando desejar.</span>
+              </li>
             </ul>
 
             <div className="space-y-1.5 pt-1">
@@ -195,12 +216,14 @@ export default function AnnualRankingPanel() {
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Confirmation Modal: Start Next Year */}
       {confirmNextYearOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="max-w-md w-full nb-card bg-white p-6 border-4 border-black shadow-[8px_8px_0_0_#000] space-y-4">
             <div className="flex items-center gap-3 text-emerald-600">
               <Sparkles className="w-8 h-8 flex-shrink-0 text-emerald-500" />
@@ -210,9 +233,18 @@ export default function AnnualRankingPanel() {
               Você está prestes a iniciar o ciclo escolar do ano <strong>{cycle.active_year + 1}</strong>:
             </p>
             <ul className="text-xs text-neutral-800 space-y-2 bg-emerald-50 p-3 rounded-lg border-2 border-black font-semibold">
-              <li>🏆 Os resultados finais do ano <strong>{cycle.active_year}</strong> serão salvos no histórico permanente.</li>
-              <li>🚀 O acesso do aplicativo para alunos será <strong>reativado imediatamente</strong>.</li>
-              <li>📅 O ano letivo ativo passará a ser <strong>{cycle.active_year + 1}</strong>.</li>
+              <li className="flex items-start gap-1.5">
+                <Trophy className="w-3.5 h-3.5 text-amber-700 flex-shrink-0 mt-0.5" />
+                <span>Os resultados finais do ano <strong>{cycle.active_year}</strong> serão salvos no histórico permanente.</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0 mt-0.5" />
+                <span>O acesso do aplicativo para alunos será <strong>reativado imediatamente</strong>.</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-sky-700 flex-shrink-0 mt-0.5" />
+                <span>O ano letivo ativo passará a ser <strong>{cycle.active_year + 1}</strong>.</span>
+              </li>
             </ul>
             <div className="flex gap-3 pt-2">
               <button
@@ -231,7 +263,8 @@ export default function AnnualRankingPanel() {
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Leaderboard Table */}

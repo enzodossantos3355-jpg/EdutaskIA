@@ -5,8 +5,7 @@ import { getPriority } from "@/lib/priority";
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-const subjectColors = ["bg-sky-200", "bg-amber-200", "bg-red-200", "bg-emerald-200", "bg-violet-200", "bg-rose-200"];
-const colorFor = (s) => subjectColors[(s || "").length % subjectColors.length];
+import { colorFor } from "@/lib/subjectColors";
 
 export default function TaskCalendar({ tasks }) {
   const today = new Date();

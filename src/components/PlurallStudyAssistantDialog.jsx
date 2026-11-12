@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
+import ModalPortal from "@/components/ModalPortal";
 import {
   Sparkles,
   BookOpen,
@@ -25,18 +26,27 @@ import {
   Bot,
   HelpCircle,
   ExternalLink,
+  Calculator,
+  FlaskConical,
+  Landmark,
+  Globe,
+  Languages,
+  Palette,
+  PenTool,
+  Pencil,
+  Pin,
 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 
 export const COMMON_SUBJECTS = [
-  { id: "Matemática", label: "Matemática", icon: "📐", color: "bg-sky-100 text-sky-950 border-sky-400" },
-  { id: "Ciências", label: "Ciências", icon: "🔬", color: "bg-emerald-100 text-emerald-950 border-emerald-400" },
-  { id: "Língua Portuguesa", label: "Português", icon: "📖", color: "bg-amber-100 text-amber-950 border-amber-400" },
-  { id: "História", label: "História", icon: "🏛️", color: "bg-red-100 text-red-950 border-red-400" },
-  { id: "Geografia", label: "Geografia", icon: "🌎", color: "bg-indigo-100 text-indigo-950 border-indigo-400" },
-  { id: "Inglês", label: "Inglês", icon: "🇬🇧", color: "bg-violet-100 text-violet-950 border-violet-400" },
-  { id: "Arte", label: "Arte", icon: "🎨", color: "bg-pink-100 text-pink-950 border-pink-400" },
-  { id: "Filosofia / Redação", label: "Filosofia / Redação", icon: "✍️", color: "bg-teal-100 text-teal-950 border-teal-400" },
+  { id: "Matemática", label: "Matemática", Icon: Calculator, color: "bg-sky-100 text-sky-950 border-sky-400" },
+  { id: "Ciências", label: "Ciências", Icon: FlaskConical, color: "bg-emerald-100 text-emerald-950 border-emerald-400" },
+  { id: "Língua Portuguesa", label: "Português", Icon: BookOpen, color: "bg-amber-100 text-amber-950 border-amber-400" },
+  { id: "História", label: "História", Icon: Landmark, color: "bg-red-100 text-red-950 border-red-400" },
+  { id: "Geografia", label: "Geografia", Icon: Globe, color: "bg-indigo-100 text-indigo-950 border-indigo-400" },
+  { id: "Inglês", label: "Inglês", Icon: Languages, color: "bg-violet-100 text-violet-950 border-violet-400" },
+  { id: "Arte", label: "Arte", Icon: Palette, color: "bg-pink-100 text-pink-950 border-pink-400" },
+  { id: "Filosofia / Redação", label: "Filosofia / Redação", Icon: PenTool, color: "bg-teal-100 text-teal-950 border-teal-400" },
 ];
 
 export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubject = "Matemática", defaultImage = null }) {
@@ -103,7 +113,7 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
           const file = items[i].getAsFile();
           if (file) {
             addImageFile(file);
-            toast.success("Print colado da área de transferência com sucesso! 📋");
+            toast.success("Print colado da área de transferência com sucesso!");
             e.preventDefault();
             break;
           }
@@ -200,7 +210,7 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
       });
 
       setResult(data);
-      toast.success("Explicação didática concluída com sucesso! ✨");
+      toast.success("Explicação didática concluída com sucesso!");
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao analisar a questão.");
     } finally {
@@ -317,10 +327,11 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-2 sm:p-4 nb-fade-in backdrop-blur-xs overflow-y-auto"
-      data-testid="plurall-study-assistant-dialog"
-    >
+    <ModalPortal>
+      <div
+        className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-2 sm:p-4 backdrop-blur-xs overflow-y-auto"
+        data-testid="plurall-study-assistant-dialog"
+      >
       <div className="nb-card bg-white w-full max-w-4xl max-h-[94vh] flex flex-col rounded-2xl shadow-2xl border-2 border-black overflow-hidden my-auto">
         {/* Header */}
         <div className="bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-600 text-white p-4 sm:p-5 flex items-center justify-between border-b-2 border-black flex-shrink-0">
@@ -452,8 +463,9 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
                             })}
                           </span>
                         </div>
-                        <div className="text-xs font-bold text-neutral-900 line-clamp-2">
-                          📌 {item.understanding || "Questão resolvida"}
+                        <div className="text-xs font-bold text-neutral-900 line-clamp-2 flex items-start gap-1">
+                          <Pin className="w-3.5 h-3.5 text-amber-700 flex-shrink-0 mt-0.5" />
+                          <span>{item.understanding || "Questão resolvida"}</span>
                         </div>
                         <div className="text-[11px] text-neutral-600 line-clamp-1 italic">
                           Material: {item.material_type || "Livro Individual"}
@@ -490,8 +502,8 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
                     <span>Envie a Imagem (Plurall, Apostila ou Caderno)</span>
                     <span className="text-red-500">*</span>
                   </label>
-                  <span className="text-[11px] font-bold text-violet-700 bg-violet-100 px-2 py-0.5 rounded border border-violet-300">
-                    💡 Dica: Pode colar com Ctrl+V!
+                  <span className="text-[11px] font-bold text-violet-700 bg-violet-100 px-2 py-0.5 rounded border border-violet-300 inline-flex items-center gap-1">
+                    <Lightbulb className="w-3 h-3 text-amber-600" /> Dica: Pode colar com Ctrl+V!
                   </span>
                 </div>
 
@@ -610,24 +622,27 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
                 </p>
 
                 <div className="flex flex-wrap gap-2">
-                  {COMMON_SUBJECTS.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => {
-                        setSubject(s.id);
-                        setIsCustomSubject(false);
-                      }}
-                      className={`nb-btn px-3 py-1.5 text-xs font-heading font-black rounded-xl border-2 flex items-center gap-1.5 transition-all ${
-                        !isCustomSubject && subject === s.id
-                          ? "bg-violet-300 text-violet-950 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] scale-105"
-                          : "bg-white hover:bg-neutral-100 border-neutral-300 text-neutral-800"
-                      }`}
-                    >
-                      <span>{s.icon}</span>
-                      <span>{s.label}</span>
-                    </button>
-                  ))}
+                  {COMMON_SUBJECTS.map((s) => {
+                    const SubjectIcon = s.Icon;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          setSubject(s.id);
+                          setIsCustomSubject(false);
+                        }}
+                        className={`nb-btn px-3 py-1.5 text-xs font-heading font-black rounded-xl border-2 flex items-center gap-1.5 transition-all ${
+                          !isCustomSubject && subject === s.id
+                            ? "bg-violet-300 text-violet-950 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] scale-105"
+                            : "bg-white hover:bg-neutral-100 border-neutral-300 text-neutral-800"
+                        }`}
+                      >
+                        <SubjectIcon className="w-3.5 h-3.5" />
+                        <span>{s.label}</span>
+                      </button>
+                    );
+                  })}
                   <button
                     type="button"
                     onClick={() => setIsCustomSubject(true)}
@@ -637,7 +652,7 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
                         : "bg-white hover:bg-neutral-100 border-neutral-300 text-neutral-800"
                     }`}
                   >
-                    <span>✏️</span>
+                    <Pencil className="w-3.5 h-3.5" />
                     <span>Outra Matéria</span>
                   </button>
                 </div>
@@ -679,8 +694,8 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
                         : "bg-white hover:bg-neutral-50 border-neutral-300 opacity-75"
                     }`}
                   >
-                    <div className="w-9 h-9 rounded-xl bg-sky-200 border-2 border-black flex items-center justify-center text-lg flex-shrink-0">
-                      📘
+                    <div className="w-9 h-9 rounded-xl bg-sky-200 border-2 border-black flex items-center justify-center flex-shrink-0">
+                      <BookOpen className="w-5 h-5 text-sky-950" />
                     </div>
                     <div>
                       <div className="font-heading font-black text-sm text-neutral-900 flex items-center gap-1.5">
@@ -703,8 +718,8 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
                         : "bg-white hover:bg-neutral-50 border-neutral-300 opacity-75"
                     }`}
                   >
-                    <div className="w-9 h-9 rounded-xl bg-violet-200 border-2 border-black flex items-center justify-center text-lg flex-shrink-0">
-                      📚
+                    <div className="w-9 h-9 rounded-xl bg-violet-200 border-2 border-black flex items-center justify-center flex-shrink-0">
+                      <Layers className="w-5 h-5 text-violet-950" />
                     </div>
                     <div>
                       <div className="font-heading font-black text-sm text-neutral-900 flex items-center gap-1.5">
@@ -757,7 +772,7 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
                   ) : (
                     <>
                       <Sparkles className="w-5 h-5" />
-                      <span>Explicar & Resolver Questão do {effectiveSubject} 🚀</span>
+                      <span>Explicar & Resolver Questão do {effectiveSubject}</span>
                     </>
                   )}
                 </button>
@@ -776,8 +791,8 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
                     <span className="nb-badge bg-black text-white text-xs font-black">
                       {result.subject}
                     </span>
-                    <span className="nb-badge bg-white text-neutral-800 text-xs font-bold border border-black/20">
-                      📖 {result.material_type || "Livro Individual"}
+                    <span className="nb-badge bg-white text-neutral-800 text-xs font-bold border border-black/20 inline-flex items-center gap-1">
+                      <BookOpen className="w-3.5 h-3.5 text-sky-700" /> {result.material_type || "Livro Individual"}
                     </span>
                     {result.specific_doubt && (
                       <span className="nb-badge bg-amber-200 text-amber-950 text-xs font-bold">
@@ -828,12 +843,12 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
 
               {/* Three Structured Cards */}
               <div className="space-y-4">
-                {/* 1. 📌 Entendendo a Questão */}
+                {/* 1. Entendendo a Questão */}
                 <div className="nb-card bg-amber-50/80 border-2 border-black rounded-2xl p-4 sm:p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                   <div className="flex items-center justify-between border-b border-black/15 pb-2.5 mb-3">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-lg bg-amber-300 text-amber-950 border-2 border-black flex items-center justify-center font-bold">
-                        📌
+                        <Pin className="w-4 h-4" />
                       </div>
                       <h3 className="font-heading font-black text-base sm:text-lg text-amber-950">
                         Entendendo a Questão
@@ -851,12 +866,12 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
                   </div>
                 </div>
 
-                {/* 2. 💡 Passo a Passo / Explicação */}
+                {/* 2. Passo a Passo / Explicação */}
                 <div className="nb-card bg-violet-50/80 border-2 border-black rounded-2xl p-4 sm:p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                   <div className="flex items-center justify-between border-b border-black/15 pb-2.5 mb-3">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-lg bg-violet-300 text-violet-950 border-2 border-black flex items-center justify-center font-bold">
-                        💡
+                        <Lightbulb className="w-4 h-4" />
                       </div>
                       <h3 className="font-heading font-black text-base sm:text-lg text-violet-950">
                         Passo a Passo / Explicação
@@ -874,12 +889,12 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
                   </div>
                 </div>
 
-                {/* 3. ✅ Resposta Final */}
+                {/* 3. Resposta Final */}
                 <div className="nb-card bg-emerald-50 border-2 border-black rounded-2xl p-4 sm:p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ring-2 ring-emerald-500/30">
                   <div className="flex items-center justify-between border-b border-black/15 pb-2.5 mb-3">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-lg bg-emerald-300 text-emerald-950 border-2 border-black flex items-center justify-center font-bold">
-                        ✅
+                        <CheckCircle2 className="w-4 h-4" />
                       </div>
                       <h3 className="font-heading font-black text-base sm:text-lg text-emerald-950">
                         Resposta Final
@@ -1005,25 +1020,29 @@ export default function PlurallStudyAssistantDialog({ open, onClose, defaultSubj
 
       {/* Lightbox / Zoom Dialog */}
       {zoomImage && (
-        <div
-          onClick={() => setZoomImage(null)}
-          className="fixed inset-0 z-60 bg-black/80 flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div className="relative max-w-4xl max-h-[90vh]">
-            <img
-              src={zoomImage}
-              alt="Ampliação"
-              className="max-w-full max-h-[85vh] object-contain rounded-xl border-2 border-white shadow-2xl"
-            />
-            <button
-              onClick={() => setZoomImage(null)}
-              className="absolute -top-3 -right-3 nb-btn bg-white text-black p-1.5 rounded-full"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <ModalPortal>
+          <div
+            onClick={() => setZoomImage(null)}
+            className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 cursor-pointer"
+          >
+            <div className="relative max-w-4xl max-h-[90vh]">
+              <img
+                src={zoomImage}
+                alt="Ampliação"
+                className="max-w-full max-h-[85vh] object-contain rounded-xl border-2 border-white shadow-2xl"
+              />
+              <button
+                type="button"
+                onClick={() => setZoomImage(null)}
+                className="absolute -top-3 -right-3 nb-btn bg-white text-black p-1.5 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
-    </div>
+      </div>
+    </ModalPortal>
   );
 }

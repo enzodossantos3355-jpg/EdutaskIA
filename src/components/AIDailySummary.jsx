@@ -23,7 +23,9 @@ export default function AIDailySummary() {
       className="nb-card p-4 sm:p-5 mb-6 bg-gradient-to-br from-violet-200 via-pink-100 to-amber-100 relative overflow-hidden"
       data-testid="ai-daily-summary"
     >
-      <div className="absolute -top-4 -right-4 text-[100px] opacity-15 select-none">✨</div>
+      <div className="absolute -top-2 -right-2 opacity-15 select-none pointer-events-none">
+        <Sparkles className="w-24 h-24 text-violet-700" />
+      </div>
       <div className="relative z-10 flex items-start gap-3">
         <div className="w-10 h-10 nb-card flex items-center justify-center bg-white flex-shrink-0">
           <Sparkles className="w-5 h-5 text-violet-600" strokeWidth={2.5} />

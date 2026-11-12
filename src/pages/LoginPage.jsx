@@ -125,7 +125,7 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen w-full flex flex-col lg:flex-row bg-[#FAFAFA]"
+      className="min-h-screen w-full flex flex-col lg:flex-row bg-[#FAFAFA] page-enter"
       data-testid="login-page"
     >
       {/* Left brand panel */}
@@ -194,8 +194,8 @@ export default function LoginPage() {
                       <button
                         key={p.id}
                         onClick={() => handleProfileClick(p)}
-                        className={`nb-card nb-card-hover p-4 text-center group nb-fade-in relative overflow-hidden transition-all duration-300 ${cardCls} ${meta.dim ? "opacity-60" : ""}`}
-                        style={{ animationDelay: `${i * 50}ms` }}
+                        className={`nb-card nb-card-hover p-4 text-center group nb-fade-in relative overflow-hidden transition-all duration-200 ${cardCls} ${meta.dim ? "opacity-60" : ""}`}
+                        style={{ animationDelay: `${Math.min(i, 7) * 30}ms` }}
                         data-testid={`profile-${p.id}`}
                       >
                         {/* Central Moldura Artwork (Bob Esponja, Mentalista) */}

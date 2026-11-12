@@ -12,6 +12,7 @@ import AdmZip from 'adm-zip';
 import sharp from 'sharp';
 import { whatsappService } from './whatsapp-service';
 import { firebaseService } from './src/lib/firebaseService';
+import * as webpush from 'web-push';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -349,6 +350,7 @@ interface User {
 interface Subject {
   id: string;
   name: string;
+  color?: string;
 }
 
 interface GeneratedTaskAnswer {
@@ -386,6 +388,9 @@ interface TaskItem {
   whatsapp_caption?: string; // Enunciado / legenda específica para o Grupo 2
   created_by: string;
   created_at: string;
+  last_updated_at?: string;
+  update_changes?: string[];
+  update_read_by?: string[];
 }
 
 interface Completion {
@@ -655,6 +660,17 @@ class Database {
   webhook_logs: any[] = [];
   task_student_answers: Map<string, GeneratedTaskAnswer> = new Map();
   summary_generations: Map<string, any> = new Map();
+  push_vapid_keys: { publicKey: string; privateKey: string } | null = null;
+  push_subscriptions: Array<{
+    id: string;
+    user_id: string;
+    role: string;
+    endpoint: string;
+    subscription: any;
+    user_agent?: string;
+    created_at: string;
+    updated_at: string;
+  }> = [];
 
   private firebaseSynced: boolean = false;
   private syncPromise: Promise<void> | null = null;
@@ -718,10 +734,6 @@ class Database {
             created_at: t.created_at || new Date().toISOString(),
           });
         });
-      } else if (this.tasks.size > 0) {
-        for (const task of this.tasks.values()) {
-          await firebaseService.saveTask(task);
-        }
       }
 
       if (users && users.length > 0) {
@@ -729,31 +741,17 @@ class Database {
           if (u.id) this.users.set(u.id, u);
         });
       }
-      // Ensure seed users exist in Firestore
-      for (const [id, seedUser] of this.users.entries()) {
-        if (!users || !users.some((u) => u.id === id)) {
-          await firebaseService.saveUser(seedUser);
-        }
-      }
 
       if (subjects && subjects.length > 0) {
         subjects.forEach((s) => {
           if (s.id) this.subjects.set(s.id, s);
         });
-      } else if (this.subjects.size > 0) {
-        for (const subj of this.subjects.values()) {
-          await firebaseService.saveSubject(subj);
-        }
       }
 
       if (announcements && announcements.length > 0) {
         announcements.forEach((a) => {
           if (a.id) this.announcements.set(a.id, a);
         });
-      } else if (this.announcements.size > 0) {
-        for (const a of this.announcements.values()) {
-          await firebaseService.saveAnnouncement(a);
-        }
       }
 
       if (completions && completions.length > 0) {
@@ -808,21 +806,19 @@ class Database {
         if (settings.frames_disabled !== undefined) this.frames_disabled = settings.frames_disabled;
         if (settings.annual_cycle) this.annual_cycle = settings.annual_cycle;
         if (settings.annual_history) this.annual_history = settings.annual_history;
-      } else {
-        await firebaseService.saveSettings('system', {
-          monthly_prize: this.monthly_prize,
-          task_cleanup_config: this.task_cleanup_config,
-          whatsapp_config: this.whatsapp_config,
-          app_info: this.app_info,
-          effect_overrides: this.effect_overrides,
-          ai_enabled: this.ai_enabled,
-          ai_hidden: this.ai_hidden,
-          frames_disabled: this.frames_disabled,
-          annual_cycle: this.annual_cycle,
-          annual_history: this.annual_history,
-          ai_model: this.ai_model,
-          summary_ai_model: this.summary_ai_model,
-        });
+        if (settings.push_vapid_keys?.publicKey && settings.push_vapid_keys?.privateKey) {
+          this.push_vapid_keys = settings.push_vapid_keys;
+        }
+        if (Array.isArray(settings.push_subscriptions)) {
+          const mergedMap = new Map<string, any>();
+          for (const sub of this.push_subscriptions || []) {
+            if (sub?.endpoint) mergedMap.set(sub.endpoint, sub);
+          }
+          for (const sub of settings.push_subscriptions) {
+            if (sub?.endpoint) mergedMap.set(sub.endpoint, sub);
+          }
+          this.push_subscriptions = Array.from(mergedMap.values());
+        }
       }
 
       if (studentAnswers && studentAnswers.length > 0) {
@@ -851,20 +847,12 @@ class Database {
         remoteSummaries.forEach((s) => {
           if (s.id) this.summaries.set(s.id, s);
         });
-      } else if (this.summaries.size > 0) {
-        for (const summary of this.summaries.values()) {
-          await firebaseService.saveSummary(summary);
-        }
       }
 
       if (remoteSummaryGens && remoteSummaryGens.length > 0) {
         remoteSummaryGens.forEach((g) => {
           if (g.id) this.summary_generations.set(g.id, g);
         });
-      } else if (this.summary_generations.size > 0) {
-        for (const gen of this.summary_generations.values()) {
-          await firebaseService.saveSummaryGeneration(gen);
-        }
       }
 
       this.saveToDisk();
@@ -904,6 +892,8 @@ class Database {
         task_student_answers: Array.from(this.task_student_answers.entries()),
         summaries: Array.from(this.summaries.entries()),
         summary_generations: Array.from(this.summary_generations.entries()),
+        push_vapid_keys: this.push_vapid_keys,
+        push_subscriptions: this.push_subscriptions,
       };
       fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
     } catch (e) {
@@ -940,6 +930,12 @@ class Database {
         if (data.task_student_answers) this.task_student_answers = new Map(data.task_student_answers);
         if (data.summaries) this.summaries = new Map(data.summaries);
         if (data.summary_generations) this.summary_generations = new Map(data.summary_generations);
+        if (data.push_vapid_keys?.publicKey && data.push_vapid_keys?.privateKey) {
+          this.push_vapid_keys = data.push_vapid_keys;
+        }
+        if (Array.isArray(data.push_subscriptions)) {
+          this.push_subscriptions = data.push_subscriptions;
+        }
         // Ensure admin does not have a trivial '123' password
         for (const u of this.users.values()) {
           if (u.equipped_effect === 'minecraft') {
@@ -1000,11 +996,20 @@ class Database {
       });
     }
 
-    // Default subjects
-    const subjects = ['Matemática', 'Português', 'Ciências', 'História', 'Geografia', 'Inglês', 'Artes', 'Educação Física'];
-    subjects.forEach((name, i) => {
+    // Default subjects with vibrant colors
+    const defaultSubjectsList = [
+      { name: 'Matemática', color: 'sky' },
+      { name: 'Português', color: 'amber' },
+      { name: 'Ciências', color: 'emerald' },
+      { name: 'História', color: 'orange' },
+      { name: 'Geografia', color: 'lime' },
+      { name: 'Inglês', color: 'violet' },
+      { name: 'Artes', color: 'pink' },
+      { name: 'Educação Física', color: 'cyan' },
+    ];
+    defaultSubjectsList.forEach((item, i) => {
       const id = `subj-${i + 1}`;
-      this.subjects.set(id, { id, name });
+      this.subjects.set(id, { id, name: item.name, color: item.color });
     });
 
     // Seed default student buttons if empty
@@ -1615,15 +1620,39 @@ api.post('/subjects', requireAdmin, async (req, res) => {
   if (db.annual_cycle?.is_closed) {
     return res.status(403).json({ detail: "O Ano Letivo / Ranking Anual está encerrado. Não é possível cadastrar matérias até que o novo ano seja iniciado na aba Ranking Anual." });
   }
-  const { name } = req.body || {};
+  const { name, color } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ detail: 'Nome obrigatório' });
   const id = `subj-${Date.now()}`;
-  const subj = { id, name: name.trim() };
+  const subj: Subject = {
+    id,
+    name: name.trim(),
+    color: color && typeof color === 'string' ? color.trim() : 'sky',
+  };
   db.subjects.set(id, subj);
   db.saveToDisk();
   await firebaseService.saveSubject(subj).catch(console.warn);
 
   res.json(subj);
+});
+
+api.put('/subjects/:subject_id', requireAdmin, async (req, res) => {
+  const { subject_id } = req.params;
+  const existing = db.subjects.get(subject_id);
+  if (!existing) {
+    return res.status(404).json({ detail: 'Matéria não encontrada' });
+  }
+  const { name, color } = req.body || {};
+  if (name && typeof name === 'string' && name.trim()) {
+    existing.name = name.trim();
+  }
+  if (color && typeof color === 'string' && color.trim()) {
+    existing.color = color.trim();
+  }
+  db.subjects.set(subject_id, existing);
+  db.saveToDisk();
+  await firebaseService.saveSubject(existing).catch(console.warn);
+
+  res.json(existing);
 });
 
 api.delete('/subjects/:subject_id', requireAdmin, async (req, res) => {
@@ -2354,8 +2383,11 @@ api.get('/files/:file_id/download', async (req, res) => {
         };
         db.files.set(file_id, file);
       }
-    } catch (err) {
-      console.warn('[Firebase] Erro ao buscar arquivo remoto:', err);
+    } catch (err: any) {
+      const msg = String(err?.message || '');
+      if (!msg.toLowerCase().includes('quota') && !msg.toLowerCase().includes('resource_exhausted')) {
+        console.warn('[Firebase] Erro ao buscar arquivo remoto:', err);
+      }
     }
   }
 
@@ -2428,8 +2460,11 @@ export async function resolveFileRecordAsync(fileId: string | null | undefined):
       db.files.set(fileId, record);
       return record;
     }
-  } catch (err) {
-    console.warn(`[Firebase] Erro ao carregar arquivo remoto ${fileId}:`, err);
+  } catch (err: any) {
+    const msg = String(err?.message || '');
+    if (!msg.toLowerCase().includes('quota') && !msg.toLowerCase().includes('resource_exhausted')) {
+      console.warn(`[Firebase] Erro ao carregar arquivo remoto ${fileId}:`, err);
+    }
   }
   return null;
 }
@@ -2513,6 +2548,13 @@ function buildTaskResponseForStudent(task: TaskItem, userId: string) {
     completed: Boolean(myCompletion),
     completed_at: myCompletion?.completed_at || null,
     created_at: task.created_at,
+    last_updated_at: task.last_updated_at || null,
+    update_changes: task.update_changes || [],
+    has_unread_update: Boolean(
+      Array.isArray(task.update_changes) &&
+      task.update_changes.length > 0 &&
+      (!Array.isArray(task.update_read_by) || !task.update_read_by.includes(userId))
+    ),
   };
 }
 
@@ -2574,6 +2616,17 @@ api.post('/tasks', requireAdmin, async (req, res) => {
   // Disparo automático e independente para os 2 grupos do WhatsApp configurados (não bloqueante)
   dispatchTaskWhatsAppNotifications(newTask).catch((err) => {
     console.error('[WhatsApp] Erro no disparo de tarefa:', err);
+  });
+
+  // Disparo de Web Push pelo site para os alunos destinatários (não bloqueante)
+  dispatchWebPushNotifications({
+    targetUserIds: newTask.assigned_to,
+    title: `Nova tarefa: ${newTask.title}`,
+    body: `${newTask.subject} • Entrega: ${formatDateForPush(newTask.due_date)} (${newTask.points} pts)`,
+    url: '/aluno',
+    tag: `task-create-${newTask.id}`,
+  }).catch((err) => {
+    console.warn('[WebPush] Erro ao notificar nova tarefa:', err);
   });
 
   res.json(buildTaskResponseForAdmin(newTask));
@@ -2744,20 +2797,67 @@ api.put('/tasks/:task_id', requireAdmin, async (req, res) => {
   if (!task) return res.status(404).json({ detail: 'Tarefa não encontrada' });
 
   const { title, description, subject, due_date, points, assigned_to, attachments, admin_photos, answer, answer_source } = req.body || {};
+
+  // Detect real modifications for student update notifications
+  const changes: string[] = [];
+
+  if (due_date !== undefined && due_date !== task.due_date) {
+    changes.push('Prazo alterado');
+  }
+
+  if (description !== undefined && description.trim() !== (task.description || '').trim()) {
+    changes.push('Descrição atualizada');
+  }
+
+  const oldAttachments = Array.isArray(task.attachments) ? task.attachments : [];
+  const newAttachments = Array.isArray(attachments) ? attachments : oldAttachments;
+  const oldPhotos = Array.isArray(task.admin_photos) ? task.admin_photos : [];
+  const newPhotos = Array.isArray(admin_photos) ? admin_photos : oldPhotos;
+
+  const attachmentsChanged = newAttachments.length !== oldAttachments.length ||
+    newAttachments.some((id, idx) => id !== oldAttachments[idx]);
+  const photosChanged = newPhotos.length !== oldPhotos.length ||
+    newPhotos.some((id, idx) => id !== oldPhotos[idx]);
+
+  if (attachmentsChanged || photosChanged) {
+    changes.push('Material adicionado');
+  }
+
+  if ((title !== undefined && title.trim() !== (task.title || '').trim()) || (subject !== undefined && subject.trim() !== (task.subject || '').trim())) {
+    changes.push('Conteúdo atualizado');
+  }
+
+  const pointsChanged = points !== undefined && Math.max(0, parseInt(points) || 0) !== (task.points ?? 0);
+  const nextAssigned = Array.isArray(assigned_to)
+    ? assigned_to
+        .map((id) => (typeof id === 'string' ? id.trim() : id))
+        .filter((id): id is string => Boolean(id) && typeof id === 'string' && id.length > 0)
+    : null;
+  const oldAssigned = Array.isArray(task.assigned_to) ? task.assigned_to : [];
+  const assignedChanged =
+    nextAssigned !== null &&
+    (nextAssigned.length !== oldAssigned.length || nextAssigned.some((id, idx) => id !== oldAssigned[idx]));
+
+  // Apply changes
   if (title) task.title = title.trim();
   if (description) task.description = description.trim();
   if (subject) task.subject = subject.trim();
   if (due_date) task.due_date = due_date;
   if (points !== undefined) task.points = Math.max(0, parseInt(points) || 0);
-  if (Array.isArray(assigned_to)) {
-    task.assigned_to = assigned_to
-      .map((id) => (typeof id === 'string' ? id.trim() : id))
-      .filter((id): id is string => Boolean(id) && typeof id === 'string' && id.length > 0);
+  if (nextAssigned !== null) {
+    task.assigned_to = nextAssigned;
   }
   if (Array.isArray(attachments)) task.attachments = attachments;
   if (Array.isArray(admin_photos)) task.admin_photos = admin_photos;
   if (answer !== undefined) task.answer = answer.trim();
   if (answer_source !== undefined) task.answer_source = answer_source.trim();
+
+  // ONLY mark task as updated if there were actual changes made
+  if (changes.length > 0) {
+    task.last_updated_at = new Date().toISOString();
+    task.update_changes = Array.from(new Set(changes));
+    task.update_read_by = []; // reset read list so all assigned students receive highlight until viewed
+  }
 
   db.saveToDisk();
 
@@ -2766,7 +2866,38 @@ api.put('/tasks/:task_id', requireAdmin, async (req, res) => {
     console.warn(`[Firebase] Erro ao atualizar tarefa ${task_id} no Firestore:`, err);
   });
 
+  if (changes.length > 0 || pointsChanged || assignedChanged) {
+    const changeSummary = changes.length > 0 ? changes.join(', ') : 'Detalhes da tarefa atualizados';
+    dispatchWebPushNotifications({
+      targetUserIds: task.assigned_to,
+      title: `Tarefa editada: ${task.title}`,
+      body: `${task.subject} • ${changeSummary}`,
+      url: '/aluno',
+      tag: `task-edit-${task.id}`,
+    }).catch((err) => {
+      console.warn('[WebPush] Erro ao notificar edição de tarefa:', err);
+    });
+  }
+
   res.json(buildTaskResponseForAdmin(task));
+});
+
+api.post('/tasks/:task_id/mark-update-read', requireAuth, async (req, res) => {
+  const user = (req as any).user as User;
+  const { task_id } = req.params;
+  const task = db.tasks.get(task_id);
+  if (!task) return res.status(404).json({ detail: 'Tarefa não encontrada' });
+
+  if (!Array.isArray(task.update_read_by)) {
+    task.update_read_by = [];
+  }
+  if (!task.update_read_by.includes(user.id)) {
+    task.update_read_by.push(user.id);
+    db.saveToDisk();
+    await firebaseService.saveTask(task).catch(() => {});
+  }
+
+  res.json({ success: true, task_id, update_read_by: task.update_read_by });
 });
 
 // Student AI Task Answer Generation with selectable size & permanent persistence
@@ -2786,9 +2917,20 @@ api.post('/tasks/:task_id/generate-answer', requireAuth, async (req, res) => {
   const rawSource = (task.answer_source || task.answer || '').trim();
 
   const lengthRules: Record<'short' | 'medium' | 'detailed', string> = {
-    short: 'TAMANHO GABARITO CURTO: Forneça unicamente a numeração/identificação de cada questão e a resposta/alternativa direta. Proibido introduções, proibido explicações longas e proibido enrolação. Formato direto de folha de respostas rápida.',
-    medium: 'TAMANHO GABARITO MÉDIO: Para cada questão, apresente a identificação da questão, desenvolvimento dos passos essenciais de forma sucinta e a resposta final destacada.',
-    detailed: 'TAMANHO GABARITO DETALHADO: Para cada questão, apresente a identificação, a resolução completa passo a passo de todas as etapas e o gabarito final explicativo.'
+    short: `INSTRUÇÃO DE TAMANHO DO GABARITO: CURTO (APENAS RESPOSTA DIRETA)
+- Forneça SOMENTE a numeração/identificação de cada questão e a alternativa ou resposta final direta.
+- PROIBIDO incluir explicações, PROIBIDO passo a passo e PROIBIDO introduções.
+Exemplo de formato:
+Questão 1: Alternativa B
+Questão 2: x = 15`,
+
+    medium: `INSTRUÇÃO DE TAMANHO DO GABARITO: MÉDIO (EQUILIBRADO)
+- Para cada questão, apresente a identificação da questão, um resumo sucinto dos passos essenciais do raciocínio e a resposta final destacada.
+- Mantenha o texto objetivo e direto.`,
+
+    detailed: `INSTRUÇÃO DE TAMANHO DO GABARITO: DETALHADO (EXPLICATIVO PASSO A PASSO)
+- Para cada questão, forneça uma resolução didática completa.
+- Mostre o desenvolvimento detalhado de cada etapa, fórmulas utilizadas, justificativas lógicas e a conclusão final clara.`
   };
 
   // Collect all photos from admin_photos and image attachments
@@ -2825,23 +2967,21 @@ api.post('/tasks/:task_id/generate-answer', requireAuth, async (req, res) => {
         }
       }
 
-      // CRITICAL: If images exist, the AI MUST NOT receive or see the task description / enunciado.
-      // The AI is given ONLY the images and subject, and strictly forbidden from commenting on the task itself.
-      const prompt = `VOCÊ É UM PROFESSOR RESOLVEDOR DE TAREFAS ESCOLARES.
-SUA MISSÃO EXCLUSIVA: ENTREGAR SOMENTE A RESPOSTA DIRETA DE CADA QUESTÃO, SEM ENROLAÇÃO.
+      const prompt = `VOCÊ É UM RESOLVEDOR DE TAREFAS ESCOLARES.
+SUA MISSÃO EXCLUSIVA É EXIBIR A PÁGINA (SE VISÍVEL), O NÚMERO DA QUESTÃO/EXERCÍCIO (SE HOUVER) E A RESPOSTA DIRETA DA QUESTÃO.
 
-🚨 REGRAS CRÍTICAS E OBRIGATÓRIAS (ATENÇÃO MÁXIMA):
-1. SEM EXPLICAÇÃO: NÃO coloque explicação, NÃO coloque resolução passo a passo, NÃO coloque justificativas e NÃO coloque introdução. Isso deixa o texto muito cheio. Forneça SOMENTE a resposta direta de cada questão que for estritamente necessária.
-2. SEM ####: NUNCA use cerquilhas/hashtags (####, ###, ## ou #) em lugar nenhum. Proibido usar títulos markdown com #.
-3. SEM **: NUNCA use asteriscos (**) nem marcadores com asterisco (*). O texto deve ser 100% puro.
-4. ${imageFiles.length > 0 ? `FONTE EXCLUSIVA: Leia atentamente as fotos anexadas. Você NÃO tem o enunciado textual. Identifique cada questão ou item das imagens e entregue SOMENTE a resposta final necessária de cada uma.` : `DISCIPLINA: ${task.subject}`}
+🚨 REGRAS OBRIGATÓRIAS E CRÍTICAS:
+1. SEM ENROLAÇÃO E SEM RACIOCÍNIO: NÃO COLOQUE EXPLICAÇÕES, NÃO COLOQUE CÁLCULOS, NÃO COLOQUE PASSO A PASSO E NÃO COLOQUE INTRODUÇÃO. ENTREGUE SOMENTE A RESPOSTA DIRETA FINAL DE CADA ITEM.
+2. PÁGINA E IDENTIFICAÇÃO DO EXERCÍCIO:
+   - Se a página estiver visível nas imagens, coloque o número da página (ex: Página 45).
+   - Se o exercício tiver número/identificação (ex: Questão 3, Ex. 2, Item a), inclua essa identificação.
+   - SE NÃO HOUVER NÚMERO DE QUESTÃO IDENTIFICADO, NUNCA INVENTE "Questão 1". Coloque unicamente a resposta direta (ex: Alternativa B ou 42 m/s).
+3. SEM CERQUILHAS: NUNCA use # ou ####.
+4. SEM ASTERISCOS: NUNCA use ** ou *.
 
-${rawSource && imageFiles.length === 0 ? `GABARITO DE BASE FORNECIDO PELO PROFESSOR:\n${rawSource}\n` : ''}
-
-FORMATO EXATO OBRIGATÓRIO (DIRETO E LIMPO):
-Questão 1: [Apenas a resposta direta necessária]
-Questão 2: [Apenas a resposta direta necessária]
-Questão 3: [Apenas a resposta direta necessária]`;
+${imageFiles.length > 0 ? `FONTE DE DADOS: Analise as fotos anexadas. Identifique o número da página e do exercício se visíveis e forneça a resposta direta final.` : `DISCIPLINA: ${task.subject}`}
+${task.description && imageFiles.length === 0 ? `\nENUNCIADO DA TAREFA:\n${task.description}\n` : ''}
+${rawSource && imageFiles.length === 0 ? `\nGABARITO DE BASE FORNECIDO PELO PROFESSOR:\n${rawSource}\n` : ''}`;
 
       contentsParts.push({ text: prompt });
 
@@ -2857,7 +2997,6 @@ Questão 3: [Apenas a resposta direta necessária]`;
         .replace(/#+/g, '')
         .replace(/\*\*/g, '')
         .replace(/\*/g, '')
-        .replace(/^[ \t]*(?:Explicação|Resolução|Passo a passo|Justificativa):\s*/gim, '')
         .trim();
     } catch (e: any) {
       console.warn('Gemini generate-answer error:', e.message);
@@ -3294,6 +3433,17 @@ api.post('/announcements', requireAdmin, async (req, res) => {
     console.log(`[WhatsApp] Aviso "${doc.title}" é exclusivo para pessoas específicas (${doc.assigned_to.length}). Envio automático desativado.`);
   }
 
+  // Disparo de Web Push pelo site para os alunos destinatários (não bloqueante)
+  dispatchWebPushNotifications({
+    targetUserIds: doc.assigned_to,
+    title: `${doc.is_special ? 'Aviso especial' : 'Novo aviso'}: ${doc.title}`,
+    body: truncatePushText(doc.message, 120),
+    url: '/aluno?tab=announcements',
+    tag: `ann-create-${doc.id}`,
+  }).catch((err) => {
+    console.warn('[WebPush] Erro ao notificar novo aviso:', err);
+  });
+
   res.json(doc);
 });
 
@@ -3389,13 +3539,38 @@ api.put('/announcements/:ann_id', requireAdmin, async (req, res) => {
   if (!doc) return res.status(404).json({ detail: 'Aviso não encontrado' });
 
   const { title, message, assigned_to, is_special } = req.body || {};
+  const prevTitle = doc.title;
+  const prevMessage = doc.message;
+  const prevSpecial = Boolean(doc.is_special);
+  const prevAssigned = Array.isArray(doc.assigned_to) ? doc.assigned_to : [];
+
   if (title) doc.title = title.trim();
   if (message) doc.message = message.trim();
   if (Array.isArray(assigned_to)) doc.assigned_to = assigned_to;
   if (typeof is_special === 'boolean') doc.is_special = is_special;
 
+  const hasChanged =
+    doc.title !== prevTitle ||
+    doc.message !== prevMessage ||
+    Boolean(doc.is_special) !== prevSpecial ||
+    (Array.isArray(assigned_to) &&
+      (assigned_to.length !== prevAssigned.length || assigned_to.some((id, idx) => id !== prevAssigned[idx])));
+
   db.saveToDisk();
   await firebaseService.saveAnnouncement(doc);
+
+  if (hasChanged) {
+    dispatchWebPushNotifications({
+      targetUserIds: doc.assigned_to,
+      title: `Aviso editado: ${doc.title}`,
+      body: truncatePushText(doc.message, 120),
+      url: '/aluno?tab=announcements',
+      tag: `ann-edit-${doc.id}`,
+    }).catch((err) => {
+      console.warn('[WebPush] Erro ao notificar edição de aviso:', err);
+    });
+  }
+
   res.json(doc);
 });
 
@@ -4290,8 +4465,265 @@ function saveSystemSettingsToFirestore() {
     frames_disabled: db.frames_disabled,
     frame_rotation_disabled: db.frame_rotation_disabled,
     ai_model: db.ai_model,
+    push_vapid_keys: db.push_vapid_keys,
+    push_subscriptions: db.push_subscriptions,
   }).catch((err) => console.warn('[Firebase] Erro ao salvar configurações:', err));
 }
+
+// ---------------------------------------------------------------------------
+// Web Push Notifications (VAPID)
+// ---------------------------------------------------------------------------
+function ensureVapidKeys() {
+  const envPublic = process.env.VAPID_PUBLIC_KEY?.trim();
+  const envPrivate = process.env.VAPID_PRIVATE_KEY?.trim();
+  if (envPublic && envPrivate) {
+    webpush.setVapidDetails('mailto:suporte@edutask.app', envPublic, envPrivate);
+    return { publicKey: envPublic, privateKey: envPrivate };
+  }
+
+  if (!db.push_vapid_keys?.publicKey || !db.push_vapid_keys?.privateKey) {
+    const generated = webpush.generateVAPIDKeys();
+    db.push_vapid_keys = {
+      publicKey: generated.publicKey,
+      privateKey: generated.privateKey,
+    };
+    db.saveToDisk();
+    saveSystemSettingsToFirestore();
+  }
+
+  webpush.setVapidDetails(
+    'mailto:suporte@edutask.app',
+    db.push_vapid_keys.publicKey,
+    db.push_vapid_keys.privateKey
+  );
+  return db.push_vapid_keys;
+}
+
+function formatDateForPush(dateStr: string): string {
+  if (!dateStr) return 'Sem prazo';
+  const parts = String(dateStr).split('T')[0].split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+}
+
+function truncatePushText(text: string, maxLen = 120): string {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (clean.length <= maxLen) return clean;
+  return `${clean.slice(0, maxLen - 1).trim()}…`;
+}
+
+async function dispatchWebPushNotifications({
+  targetUserIds,
+  title,
+  body,
+  url = '/aluno',
+  tag = 'edutask-update',
+}: {
+  targetUserIds?: string[] | null;
+  title: string;
+  body: string;
+  url?: string;
+  tag?: string;
+}) {
+  try {
+    if (!db.push_subscriptions || db.push_subscriptions.length === 0) {
+      return { sent: 0, failed: 0 };
+    }
+
+    ensureVapidKeys();
+
+    const specificIds = Array.isArray(targetUserIds)
+      ? targetUserIds.map((id) => String(id).trim()).filter(Boolean)
+      : [];
+    const hasSpecificTargets = specificIds.length > 0;
+
+    const recipients = db.push_subscriptions.filter((sub) => {
+      if (!sub?.endpoint || !sub?.subscription) return false;
+      const u = db.users.get(sub.user_id);
+      if (!u || u.status === 'blocked') return false;
+      if (hasSpecificTargets) {
+        return specificIds.includes(String(sub.user_id).trim());
+      }
+      // Geral: notifica todos os alunos ativos (exclui contas bot de sandbox)
+      return u.role === 'aluno' && u.status !== 'bot';
+    });
+
+    if (recipients.length === 0) {
+      return { sent: 0, failed: 0 };
+    }
+
+    const payload = JSON.stringify({
+      title,
+      body,
+      url,
+      tag,
+      icon: '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+    });
+
+    let sent = 0;
+    let failed = 0;
+    const expiredEndpoints = new Set<string>();
+
+    await Promise.all(
+      recipients.map(async (item) => {
+        try {
+          await webpush.sendNotification(item.subscription, payload);
+          sent += 1;
+        } catch (err: any) {
+          failed += 1;
+          const status = err?.statusCode;
+          if (status === 404 || status === 410) {
+            expiredEndpoints.add(item.endpoint);
+          } else {
+            console.warn(`[WebPush] Falha ao enviar para ${item.user_id}:`, err?.message || status || err);
+          }
+        }
+      })
+    );
+
+    if (expiredEndpoints.size > 0) {
+      db.push_subscriptions = db.push_subscriptions.filter((s) => !expiredEndpoints.has(s.endpoint));
+      db.saveToDisk();
+      saveSystemSettingsToFirestore();
+    }
+
+    return { sent, failed };
+  } catch (err) {
+    console.warn('[WebPush] Erro geral no disparo:', err);
+    return { sent: 0, failed: 0 };
+  }
+}
+
+api.get('/push/public-key', requireAuth, (_req, res) => {
+  const keys = ensureVapidKeys();
+  res.json({ publicKey: keys.publicKey, supported: true });
+});
+
+api.get('/push/status', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  const keys = ensureVapidKeys();
+  const userSubs = (db.push_subscriptions || []).filter((s) => s.user_id === user.id);
+  const totalStudentDevices = (db.push_subscriptions || []).filter((s) => {
+    const u = db.users.get(s.user_id);
+    return u && u.role === 'aluno' && u.status === 'active';
+  }).length;
+  res.json({
+    subscribed: userSubs.length > 0,
+    device_count: userSubs.length,
+    total_student_devices: totalStudentDevices,
+    publicKey: keys.publicKey,
+  });
+});
+
+api.post('/push/subscribe', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  const { subscription, user_agent } = req.body || {};
+
+  if (
+    !subscription ||
+    typeof subscription.endpoint !== 'string' ||
+    !subscription.keys?.p256dh ||
+    !subscription.keys?.auth
+  ) {
+    return res.status(400).json({ detail: 'Inscrição push inválida' });
+  }
+
+  ensureVapidKeys();
+  const nowIso = new Date().toISOString();
+  const endpoint = subscription.endpoint.trim();
+
+  // Um mesmo navegador/aparelho aponta para o perfil ativo no momento
+  const existingIdx = db.push_subscriptions.findIndex((s) => s.endpoint === endpoint);
+  const record = {
+    id: existingIdx >= 0 ? db.push_subscriptions[existingIdx].id : `push-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    user_id: user.id,
+    role: user.role,
+    endpoint,
+    subscription,
+    user_agent: typeof user_agent === 'string' ? user_agent.slice(0, 200) : '',
+    created_at: existingIdx >= 0 ? db.push_subscriptions[existingIdx].created_at : nowIso,
+    updated_at: nowIso,
+  };
+
+  if (existingIdx >= 0) {
+    db.push_subscriptions[existingIdx] = record;
+  } else {
+    db.push_subscriptions.push(record);
+  }
+
+  db.saveToDisk();
+  saveSystemSettingsToFirestore();
+
+  res.json({ ok: true, subscribed: true });
+});
+
+api.post('/push/unsubscribe', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  const { endpoint } = req.body || {};
+  const before = db.push_subscriptions.length;
+
+  if (endpoint && typeof endpoint === 'string') {
+    db.push_subscriptions = db.push_subscriptions.filter((s) => s.endpoint !== endpoint.trim());
+  } else {
+    db.push_subscriptions = db.push_subscriptions.filter((s) => s.user_id !== user.id);
+  }
+
+  if (db.push_subscriptions.length !== before) {
+    db.saveToDisk();
+    saveSystemSettingsToFirestore();
+  }
+
+  res.json({ ok: true, subscribed: false });
+});
+
+api.post('/push/test', requireAuth, async (req, res) => {
+  const user = (req as any).user as User;
+  const userSubs = (db.push_subscriptions || []).filter((s) => s.user_id === user.id);
+  if (userSubs.length === 0) {
+    return res.status(400).json({ detail: 'Ative as notificações neste dispositivo antes de testar.' });
+  }
+
+  ensureVapidKeys();
+  const payload = JSON.stringify({
+    title: 'EduTask IA — Notificação ativa!',
+    body: 'Você receberá avisos aqui sempre que uma tarefa ou comunicado for criado ou editado.',
+    url: user.role === 'admin' ? '/admin' : '/aluno',
+    tag: `push-test-${user.id}`,
+    icon: '/pwa-192x192.png',
+    badge: '/pwa-192x192.png',
+  });
+
+  let sent = 0;
+  const expired = new Set<string>();
+
+  await Promise.all(
+    userSubs.map(async (item) => {
+      try {
+        await webpush.sendNotification(item.subscription, payload);
+        sent += 1;
+      } catch (err: any) {
+        if (err?.statusCode === 404 || err?.statusCode === 410) {
+          expired.add(item.endpoint);
+        }
+      }
+    })
+  );
+
+  if (expired.size > 0) {
+    db.push_subscriptions = db.push_subscriptions.filter((s) => !expired.has(s.endpoint));
+    db.saveToDisk();
+    saveSystemSettingsToFirestore();
+  }
+
+  if (sent === 0) {
+    return res.status(500).json({ detail: 'Não foi possível entregar a notificação neste aparelho. Tente reativar.' });
+  }
+
+  res.json({ ok: true, sent });
+});
 
 api.put('/monthly-prize', requireAdmin, (req, res) => {
   const { title, description, emoji, image_id } = req.body || {};

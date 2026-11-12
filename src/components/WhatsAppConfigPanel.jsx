@@ -26,6 +26,12 @@ import {
   Layers,
   HelpCircle,
   Link2,
+  Target,
+  Lightbulb,
+  Pin,
+  Megaphone,
+  BookOpen,
+  AlertTriangle,
 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import confetti from "canvas-confetti";
@@ -604,9 +610,9 @@ export default function WhatsAppConfigPanel() {
               {statusData?.isWindowActive ? (
                 <div className="bg-emerald-200/80 p-2.5 rounded-lg border border-emerald-500 text-emerald-950 font-bold space-y-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-ping inline-block" />
-                      🟢 Janela Ativa:
+                      <span>Janela Ativa:</span>
                     </span>
                     <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-600 text-[11px]">
                       ~{statusData.remainingMinutes || 20} min restantes
@@ -693,8 +699,9 @@ export default function WhatsAppConfigPanel() {
             {/* Exibição do QR Code */}
             {isQrReady && statusData?.qrImage && (
               <div className="nb-card bg-amber-50 p-4 text-center space-y-3 border-2 border-dashed border-amber-600">
-                <div className="text-xs font-bold text-amber-950">
-                  📱 Abra o WhatsApp &gt; Aparelhos Conectados &gt; Conectar Aparelho
+                <div className="text-xs font-bold text-amber-950 flex items-center justify-center gap-1.5">
+                  <Smartphone className="w-4 h-4 text-amber-900" />
+                  <span>Abra o WhatsApp &gt; Aparelhos Conectados &gt; Conectar Aparelho</span>
                 </div>
                 <div className="bg-white p-2 rounded-xl border-2 border-black inline-block shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
                   <img
@@ -839,8 +846,9 @@ export default function WhatsAppConfigPanel() {
                     <Link2 className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="font-heading font-black text-xs sm:text-sm text-neutral-900">
-                      🎯 Detectar Grupo por Link de Convite ou ID
+                    <h4 className="font-heading font-black text-xs sm:text-sm text-neutral-900 flex items-center gap-1.5">
+                      <Target className="w-4 h-4 text-sky-700" />
+                      <span>Detectar Grupo por Link de Convite ou ID</span>
                     </h4>
                     <p className="text-[11px] text-neutral-600">
                       Cole o link do grupo (ex: <i>chat.whatsapp.com/...</i>) ou o ID (<span className="font-mono">...@g.us</span>) para identificação instantânea.
@@ -875,8 +883,8 @@ export default function WhatsAppConfigPanel() {
                 <div className="nb-card bg-white p-3 border-2 border-emerald-600 shadow-[2px_2px_0px_0px_rgba(5,150,105,1)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="nb-badge bg-emerald-200 text-emerald-950 text-[10px] font-black">
-                        ✅ Grupo Detectado!
+                      <span className="nb-badge bg-emerald-200 text-emerald-950 text-[10px] font-black inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Grupo Detectado!
                       </span>
                       <span className="font-bold text-xs text-neutral-900 truncate">
                         {detectedResult.subject}
@@ -919,7 +927,7 @@ export default function WhatsAppConfigPanel() {
               {/* Guia informativo de 3 formas de detecção */}
               <div className="bg-white/80 rounded-lg p-2.5 border border-sky-200 text-[11px] text-neutral-700 space-y-1">
                 <div className="font-bold text-sky-950 flex items-center gap-1">
-                  💡 <b>3 Formas de Detectar Grupos no EduTask:</b>
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-600" /> <b>3 Formas de Detectar Grupos no EduTask:</b>
                 </div>
                 <ul className="list-disc list-inside space-y-0.5 pl-1 text-[10.5px]">
                   <li><b>1. Botão "Buscar Meus Grupos":</b> sincroniza diretamente via API do WhatsApp.</li>
@@ -1016,7 +1024,7 @@ export default function WhatsAppConfigPanel() {
             </div>
             <div>
               <h3 className="font-heading font-black text-xl text-neutral-900">
-                🖼️ Fotos Universais Pré-Definidas (Exclusivas do Grupo 2)
+                Fotos Universais Pré-Definidas (Exclusivas do Grupo 2)
               </h3>
               <p className="text-xs text-neutral-600">
                 As fotos programadas são enviadas exclusivamente para o <b>Grupo 2</b> com seus enunciados. O Grupo 1 sempre recebe os comunicados e tarefas em texto completo.
@@ -1325,7 +1333,7 @@ export default function WhatsAppConfigPanel() {
               className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 px-4 py-2 text-xs font-heading font-black flex items-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
             >
               <Zap className={`w-3.5 h-3.5 ${activatingTimer ? "animate-spin" : ""}`} />
-              {activatingTimer ? "Ativando..." : `Ativar Agora por ${Math.max(20, autoActivationDuration || 20)} Minutos 🚀`}
+              {activatingTimer ? "Ativando..." : `Ativar Agora por ${Math.max(20, autoActivationDuration || 20)} Minutos`}
             </button>
 
             {statusData?.isWindowActive && (
@@ -1419,7 +1427,8 @@ export default function WhatsAppConfigPanel() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <label className="block text-xs font-heading font-black text-amber-950 flex items-center gap-1.5">
-                <span>📌 Mensagem Extra para o Grupo 1 (Lembrete de Tarefas de Amanhã)</span>
+                <Pin className="w-3.5 h-3.5 text-amber-800" />
+                <span>Mensagem Extra para o Grupo 1 (Lembrete de Tarefas de Amanhã)</span>
               </label>
               <p className="text-[11px] text-amber-900 font-medium">
                 Esta mensagem é anexada ao final do lembrete oficial no <b>Grupo 1</b> sem interferir na mensagem pré-pronta original (que lista as tarefas, matérias, prazos e notas).
@@ -1450,7 +1459,9 @@ export default function WhatsAppConfigPanel() {
           {/* Prévia Grupo 1: Mostra o texto oficial pré-pronto intacto + mensagem extra */}
           <div className="bg-neutral-900 text-neutral-100 p-3.5 rounded-xl text-xs space-y-1.5 font-mono border-2 border-black">
             <div className="flex items-center justify-between text-[10px] font-black uppercase text-emerald-400">
-              <span>📱 Prévia do Lembrete no Grupo 1 (Texto Pré-Pronto + Sua Mensagem Extra):</span>
+              <span className="inline-flex items-center gap-1.5">
+                <Smartphone className="w-3.5 h-3.5" /> Prévia do Lembrete no Grupo 1 (Texto Pré-Pronto + Sua Mensagem Extra):
+              </span>
               <span className="text-[9px] bg-emerald-950/80 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30">Texto Base 100% Preservado</span>
             </div>
             <div className="whitespace-pre-wrap font-sans text-xs pt-1 leading-relaxed text-neutral-200">
@@ -1463,7 +1474,7 @@ export default function WhatsAppConfigPanel() {
             </div>
             {group1TomorrowExtra ? (
               <div className="mt-2 pt-2 border-t border-dashed border-emerald-500/40 text-emerald-300 font-sans text-xs whitespace-pre-wrap bg-emerald-950/40 p-2 rounded">
-                <span className="text-[9px] uppercase font-bold text-amber-300 block mb-1">⬇️ Sua Mensagem Extra Anexada:</span>
+                <span className="text-[9px] uppercase font-bold text-amber-300 block mb-1">Sua Mensagem Extra Anexada:</span>
                 {group1TomorrowExtra}
               </div>
             ) : (
@@ -1484,7 +1495,7 @@ export default function WhatsAppConfigPanel() {
             data-testid="test-tomorrow-reminder-btn"
           >
             <Sparkles className={`w-3.5 h-3.5 ${testingTomorrow ? "animate-spin" : ""}`} />
-            {testingTomorrow ? "Disparando Lembrete..." : "Testar Disparo de Lembrete de Amanhã Agora 🚀"}
+            {testingTomorrow ? "Disparando Lembrete..." : "Testar Disparo de Lembrete de Amanhã Agora"}
           </button>
           <span className="text-[11px] text-amber-900 font-medium">
             Envia para o Grupo 1 (Aviso Completo) e Grupo 2 (Foto Universal + Enunciado)
@@ -1501,7 +1512,7 @@ export default function WhatsAppConfigPanel() {
             </div>
             <div>
               <h3 className="font-heading font-black text-lg text-neutral-900">
-                📝 Modelos Pré-Prontos de Enunciados (Grupo 2)
+                Modelos Pré-Prontos de Enunciados (Grupo 2)
               </h3>
               <p className="text-xs text-neutral-600">
                 Estes modelos são usados como legenda e estrutura padrão enviada no Grupo 2 ao disparar tarefas e avisos.
@@ -1524,7 +1535,7 @@ export default function WhatsAppConfigPanel() {
           {/* Tarefas */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
-              <span>📝 Modelo de Enunciado para Tarefas</span>
+              <span className="inline-flex items-center gap-1"><FileText className="w-3.5 h-3.5 text-sky-700" /> Modelo de Enunciado para Tarefas</span>
               <button
                 type="button"
                 onClick={() =>
@@ -1566,7 +1577,7 @@ export default function WhatsAppConfigPanel() {
           {/* Avisos */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
-              <span>📣 Modelo de Enunciado para Avisos</span>
+              <span className="inline-flex items-center gap-1"><Megaphone className="w-3.5 h-3.5 text-violet-700" /> Modelo de Enunciado para Avisos</span>
               <button
                 type="button"
                 onClick={() => setAnnouncementCaption("📣 *{titulo}*\n\n{mensagem}")}
@@ -1602,7 +1613,7 @@ export default function WhatsAppConfigPanel() {
           {/* Lembrete de Amanhã */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
-              <span>🚨 Enunciado: Lembrete do Dia Seguinte</span>
+              <span className="inline-flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 text-amber-700" /> Enunciado: Lembrete do Dia Seguinte</span>
               <button
                 type="button"
                 onClick={() =>
@@ -1646,11 +1657,11 @@ export default function WhatsAppConfigPanel() {
         <div className="flex items-center justify-between flex-wrap gap-2 border-b-2 border-emerald-700/30 pb-3">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl bg-emerald-400 text-emerald-950 border-2 border-black flex items-center justify-center font-bold">
-              📌
+              <Pin className="w-5 h-5" />
             </div>
             <div>
               <h3 className="font-heading font-black text-lg text-emerald-950">
-                📌 Modelos Pré-Prontos de Texto Extra (Grupo 1)
+                Modelos Pré-Prontos de Texto Extra (Grupo 1)
               </h3>
               <p className="text-xs text-emerald-800">
                 <b>Regra do Sistema:</b> O texto base oficial do Grupo 1 é completo e <b>nunca modificado</b>. Você configura apenas a parte extra que é anexada à mensagem.
@@ -1673,7 +1684,7 @@ export default function WhatsAppConfigPanel() {
           {/* Tarefas - Parte Extra do Grupo 1 */}
           <div className="space-y-2 bg-white p-4 rounded-xl border-2 border-black">
             <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
-              <span>📚 Texto Extra: Tarefas (Grupo 1)</span>
+              <span className="inline-flex items-center gap-1"><BookOpen className="w-3.5 h-3.5 text-sky-700" /> Texto Extra: Tarefas (Grupo 1)</span>
               <button
                 type="button"
                 onClick={() =>
@@ -1719,7 +1730,7 @@ export default function WhatsAppConfigPanel() {
           {/* Avisos - Parte Extra do Grupo 1 */}
           <div className="space-y-2 bg-white p-4 rounded-xl border-2 border-black">
             <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
-              <span>📢 Texto Extra: Avisos (Grupo 1)</span>
+              <span className="inline-flex items-center gap-1"><Megaphone className="w-3.5 h-3.5 text-violet-700" /> Texto Extra: Avisos (Grupo 1)</span>
               <button
                 type="button"
                 onClick={() =>
@@ -1763,7 +1774,7 @@ export default function WhatsAppConfigPanel() {
           {/* Lembrete de Amanhã - Parte Extra do Grupo 1 */}
           <div className="space-y-2 bg-white p-4 rounded-xl border-2 border-black">
             <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
-              <span>🚨 Texto Extra: Lembrete Amanhã (Grupo 1)</span>
+              <span className="inline-flex items-center gap-1"><Bell className="w-3.5 h-3.5 text-amber-700" /> Texto Extra: Lembrete Amanhã (Grupo 1)</span>
               <button
                 type="button"
                 onClick={() =>

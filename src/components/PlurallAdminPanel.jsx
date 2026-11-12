@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
+import ModalPortal from "@/components/ModalPortal";
 import {
   BookOpen,
   Lock,
@@ -27,7 +28,8 @@ import {
   Zap,
   ArrowRight,
   Send,
-  BookMarked
+  BookMarked,
+  User,
 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import confetti from "canvas-confetti";
@@ -558,8 +560,8 @@ Gerado pelo Sistema Plurall Integrado EduTask`;
                       <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
                       Conexão Plurall Autenticada e Verificada
                     </span>
-                    <span className="text-sm font-heading font-black text-black block mt-0.5">
-                      👤 Usuário Logado: {config.account_owner || config.username || "Prof. Titular Plurall"}
+                    <span className="text-sm font-heading font-black text-black flex items-center gap-1.5 mt-0.5">
+                      <User className="w-4 h-4 text-emerald-800" /> Usuário Logado: {config.account_owner || config.username || "Prof. Titular Plurall"}
                     </span>
                   </div>
                 </div>
@@ -715,8 +717,8 @@ Gerado pelo Sistema Plurall Integrado EduTask`;
                   className="mt-0.5"
                 />
                 <div>
-                  <span className="font-heading font-black text-xs text-black block">
-                    📘 Livro Individual (Única Matéria)
+                  <span className="font-heading font-black text-xs text-black flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5 text-amber-800" /> Livro Individual (Única Matéria)
                   </span>
                   <p className="text-[11px] text-neutral-600 mt-0.5 leading-snug">
                     Apostila específica dedicada exclusivamente a {subject || "uma disciplina"}.
@@ -740,8 +742,8 @@ Gerado pelo Sistema Plurall Integrado EduTask`;
                   className="mt-0.5"
                 />
                 <div>
-                  <span className="font-heading font-black text-xs text-violet-950 block">
-                    📚 Livro Unificado (Várias Matérias)
+                  <span className="font-heading font-black text-xs text-violet-950 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-violet-800" /> Livro Unificado (Várias Matérias)
                   </span>
                   <p className="text-[11px] text-neutral-600 mt-0.5 leading-snug">
                     Contém várias matérias juntas no mesmo caderno.
@@ -903,8 +905,8 @@ Gerado pelo Sistema Plurall Integrado EduTask`;
                 <span className="bg-amber-300 text-amber-950 px-2 py-0.5 text-xs font-black border border-black">
                   8º Ano do Ensino Fundamental
                 </span>
-                <span className="bg-emerald-200 text-emerald-950 px-2 py-0.5 text-xs font-bold border border-black">
-                  👤 Dono do Login: {currentResult.account_owner || currentResult.owner_name || config.account_owner || config.username || "Prof. Titular Plurall"}
+                <span className="bg-emerald-200 text-emerald-950 px-2 py-0.5 text-xs font-bold border border-black inline-flex items-center gap-1">
+                  <User className="w-3.5 h-3.5" /> Dono do Login: {currentResult.account_owner || currentResult.owner_name || config.account_owner || config.username || "Prof. Titular Plurall"}
                 </span>
               </div>
               <h3 className="text-xl sm:text-2xl font-heading font-black text-black">
@@ -1024,8 +1026,9 @@ Gerado pelo Sistema Plurall Integrado EduTask`;
 
       {/* MODAL: CRIAR TAREFA NO EDUTASK A PARTIR DA RESOLUÇÃO */}
       {createTaskModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white border-4 border-black max-w-lg w-full p-6 shadow-[8px_8px_0_0_#000] max-h-[90vh] overflow-y-auto">
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <div className="nb-card bg-white border-4 border-black max-w-lg w-full p-6 shadow-[8px_8px_0_0_#000] max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b-2 border-black pb-3 mb-4">
               <div className="flex items-center gap-2">
                 <BookMarked className="w-5 h-5 text-amber-800" />
@@ -1131,7 +1134,8 @@ Gerado pelo Sistema Plurall Integrado EduTask`;
               </div>
             </form>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

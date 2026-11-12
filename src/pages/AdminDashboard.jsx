@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot, Rocket, Zap, BookOpen, FileText, Settings, Image as ImageIcon, Crown } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot, Rocket, Zap, BookOpen, FileText, Settings, Image as ImageIcon, Crown, Palette, Loader2, Check, Scissors, Target } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import AppHeader from "@/components/AppHeader";
+import ModalPortal from "@/components/ModalPortal";
 import RecipientSelector from "@/components/RecipientSelector";
 import MyProfileBanner from "@/components/MyProfileBanner";
 import AvatarUploader from "@/components/AvatarUploader";
@@ -25,7 +26,7 @@ import AdminResumosPanel from "@/components/AdminResumosPanel";
 import { useAIStatus } from "@/context/AIStatusContext";
 import { effectClass, pullScreenToStore } from "@/lib/effects";
 import { getPriority, formatDateBR } from "@/lib/priority";
-import { playWinnerFanfareSound } from "@/lib/soundEffects";
+import { SUBJECT_COLOR_OPTIONS, colorFor, getSubjectColorConfig, getSubjectCardClass, getSubjectBadgeClass, setCachedSubjects } from "@/lib/subjectColors";
 
 const STATUS_OPTS = [
   { key: "active", label: "Ativo", icon: CheckCircle, bg: "bg-emerald-200" },
@@ -35,9 +36,6 @@ const STATUS_OPTS = [
 ];
 
 import { useAuth } from "@/context/AuthContext";
-
-const subjectColors = ["bg-sky-200 text-sky-950 font-bold", "bg-amber-200 text-amber-950 font-bold", "bg-red-200 text-red-950 font-bold", "bg-emerald-200 text-emerald-950 font-bold", "bg-violet-200 text-violet-950 font-bold", "bg-rose-200 text-rose-950 font-bold"];
-const colorFor = (s) => subjectColors[(s || "").length % subjectColors.length];
 
 export default function AdminDashboard() {
   const { user, refresh } = useAuth();
@@ -83,7 +81,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
       <AppHeader title="Painel do Administrador" />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-8 pb-24 sm:pb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-8 pb-24 sm:pb-8 page-enter">
         <MyProfileBanner onOpenStore={!framesDisabled ? () => {
           setMainSection("estudos");
           setTab("store");
@@ -153,7 +151,7 @@ export default function AdminDashboard() {
             </div>
             {mainSection === "estudos" && (
               <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 bg-amber-400 text-black text-[10px] font-black uppercase rounded-lg border-2 border-black shrink-0">
-                ✓ Ativo
+                <Check className="w-3 h-3 stroke-[3]" /> Ativo
               </span>
             )}
           </button>
@@ -190,7 +188,7 @@ export default function AdminDashboard() {
             </div>
             {mainSection === "configuracoes" && (
               <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 bg-sky-400 text-black text-[10px] font-black uppercase rounded-lg border-2 border-black shrink-0">
-                ✓ Ativo
+                <Check className="w-3 h-3 stroke-[3]" /> Ativo
               </span>
             )}
 
@@ -540,7 +538,7 @@ function AdminTaskCard({ task, onDelete, onEdit, onCopy, onSendWhatsApp, isSendi
   const pct = task.total_students > 0 ? Math.round((task.completed_count / task.total_students) * 100) : 0;
   const priority = getPriority(task.due_date, false);
   return (
-    <div className="nb-card nb-card-hover p-6 nb-fade-in" style={{ animationDelay: `${index * 60}ms` }} data-testid={`admin-task-card-${task.id}`}>
+    <div className="nb-card nb-card-hover p-6 nb-fade-in" style={{ animationDelay: `${Math.min(index || 0, 7) * 30}ms` }} data-testid={`admin-task-card-${task.id}`}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`nb-badge ${colorFor(task.subject)}`}>{task.subject}</span>
@@ -653,6 +651,11 @@ function FileLink({ file }) {
 }
 
 function TaskDialog({ task, onClose, onSaved }) {
+  const { user } = useAuth();
+  const { hidden: aiHidden, aiHidden: aiHiddenAlt } = useAIStatus();
+  const adminId = user?.id || "admin";
+  const draftTaskKey = `edutask_draft_task_${adminId}`;
+
   const [currentTask, setCurrentTask] = useState(task);
   const isEdit = Boolean(currentTask);
   const [subject, setSubject] = useState(currentTask?.subject || "");
@@ -675,16 +678,89 @@ function TaskDialog({ task, onClose, onSaved }) {
   const [uploading, setUploading] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [generatingAnswer, setGeneratingAnswer] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [saveState, setSaveState] = useState("idle"); // "idle" | "saving" | "saved"
+  const [loadingSubjects, setLoadingSubjects] = useState(true);
+  const submitting = saveState === "saving";
+
+  const [hasDraft, setHasDraft] = useState(false);
+  const [draftData, setDraftData] = useState(null);
+  const [draftSavedStatus, setDraftSavedStatus] = useState(false);
 
   useEffect(() => {
+    setLoadingSubjects(true);
     api.get("/subjects").then(({ data }) => {
       setSubjects(data);
       if (!isEdit && data.length > 0 && !subject) setSubject(data[0].name);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setLoadingSubjects(false));
     api.get("/users").then(({ data }) => setStudents(data)).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Check for auto-saved task draft on creation form mount
+  useEffect(() => {
+    if (!isEdit) {
+      try {
+        const saved = localStorage.getItem(draftTaskKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && (parsed.title || parsed.description || parsed.answerSource || parsed.answer || parsed.dueDate)) {
+            setDraftData(parsed);
+            setHasDraft(true);
+          }
+        }
+      } catch {}
+    }
+  }, [isEdit, draftTaskKey]);
+
+  // Auto-save form fields to localStorage
+  useEffect(() => {
+    if (isEdit) return;
+    const timer = setTimeout(() => {
+      if (title.trim() || description.trim() || answerSource.trim() || answer.trim() || dueDate) {
+        const dataToSave = {
+          subject,
+          title,
+          description,
+          dueDate,
+          points,
+          assignedTo,
+          answerSource,
+          answer,
+          hadFiles: files.length > 0 || adminPhotos.length > 0,
+          updatedAt: Date.now(),
+        };
+        try {
+          localStorage.setItem(draftTaskKey, JSON.stringify(dataToSave));
+          setDraftSavedStatus(true);
+        } catch {}
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [isEdit, subject, title, description, dueDate, points, assignedTo, answerSource, answer, files.length, adminPhotos.length, draftTaskKey]);
+
+  const handleContinueTaskDraft = () => {
+    if (!draftData) return;
+    if (draftData.subject) setSubject(draftData.subject);
+    if (draftData.title) setTitle(draftData.title);
+    if (draftData.description) setDescription(draftData.description);
+    if (draftData.dueDate) setDueDate(draftData.dueDate);
+    if (draftData.points !== undefined) setPoints(draftData.points);
+    if (Array.isArray(draftData.assignedTo)) setAssignedTo(draftData.assignedTo);
+    if (draftData.answerSource) setAnswerSource(draftData.answerSource);
+    if (draftData.answer) setAnswer(draftData.answer);
+    setHasDraft(false);
+    if (draftData.hadFiles) {
+      toast.info("Anexos e fotos anteriores não foram armazenados no rascunho e precisam ser selecionados novamente.");
+    }
+  };
+
+  const handleDiscardTaskDraft = () => {
+    try {
+      localStorage.removeItem(draftTaskKey);
+    } catch {}
+    setHasDraft(false);
+    setDraftData(null);
+  };
 
   const handleUpload = async (e) => {
     const list = Array.from(e.target.files || []);
@@ -778,7 +854,7 @@ function TaskDialog({ task, onClose, onSaved }) {
         .trim();
       setAnswer(sanitized);
       const label = answerLength === "short" ? "Curto" : answerLength === "detailed" ? "Detalhado" : "Médio";
-      toast.success(`Gabarito (${label}) gerado com base nas fotos analisadas! (${gen.photos_used || adminPhotos.length} foto(s)) ✨`);
+      toast.success(`Gabarito (${label}) gerado com base nas fotos analisadas! (${gen.photos_used || adminPhotos.length} foto(s))`);
       // Dialog stays open so admin can review and click "Salvar alterações"
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao gerar resposta");
@@ -789,17 +865,18 @@ function TaskDialog({ task, onClose, onSaved }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
+    if (saveState !== "idle") return;
+    setSaveState("saving");
+    const payload = {
+      subject, title, description, due_date: dueDate,
+      attachments: files.map((f) => f.id),
+      admin_photos: adminPhotos.map((f) => f.id),
+      answer,
+      answer_source: answerSource,
+      points: Math.max(0, parseInt(points, 10) || 0),
+      assigned_to: assignedTo,
+    };
     try {
-      const payload = {
-        subject, title, description, due_date: dueDate,
-        attachments: files.map((f) => f.id),
-        admin_photos: adminPhotos.map((f) => f.id),
-        answer,
-        answer_source: answerSource,
-        points: Math.max(0, parseInt(points, 10) || 0),
-        assigned_to: assignedTo,
-      };
       if (currentTask?.id) {
         await api.put(`/tasks/${currentTask.id}`, payload);
         toast.success("Tarefa atualizada!");
@@ -807,7 +884,9 @@ function TaskDialog({ task, onClose, onSaved }) {
         await api.post("/tasks", payload);
         toast.success("Tarefa criada!");
       }
-      onSaved();
+      try { localStorage.removeItem(draftTaskKey); } catch {}
+      setSaveState("saved");
+      setTimeout(() => onSaved(), 360);
     } catch (err) {
       try {
         const taskId = currentTask?.id || `task-${Date.now()}`;
@@ -818,24 +897,75 @@ function TaskDialog({ task, onClose, onSaved }) {
         };
         await firebaseService.saveTask(taskDoc);
         toast.success(currentTask?.id ? "Tarefa atualizada!" : "Tarefa criada!");
-        onSaved();
+        try { localStorage.removeItem(draftTaskKey); } catch {}
+        setSaveState("saved");
+        setTimeout(() => onSaved(), 360);
       } catch (err2) {
+        setSaveState("idle");
         toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao salvar tarefa");
       }
-    } finally {
-      setSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-3 sm:p-4 nb-fade-in" data-testid="task-dialog">
-      <div className="nb-card bg-white w-full max-w-2xl max-h-[92vh] overflow-auto p-5 sm:p-7">
+    <ModalPortal>
+      <div
+        className={`fixed inset-0 z-50 bg-black/40 flex ${isEdit ? "items-end sm:items-stretch sm:justify-end p-0" : "items-center justify-center p-3 sm:p-4"}`}
+        data-testid="task-dialog"
+        onClick={(e) => { if (e.target === e.currentTarget && !submitting) onClose(); }}
+      >
+      <div
+        className={`nb-card bg-white w-full overflow-auto p-5 sm:p-7 ${
+          isEdit
+            ? "panel-drawer drawer-panel sm:max-w-2xl max-h-[92vh] sm:max-h-full sm:h-full rounded-t-2xl sm:rounded-none sm:rounded-l-2xl border-b-0 sm:border-y-0 sm:border-r-0 shadow-[-6px_0_0_0_#000]"
+            : "max-w-2xl max-h-[92vh]"
+        }`}
+      >
         <div className="flex items-center justify-between mb-5">
-          <h3 className="font-heading font-black text-xl sm:text-2xl">{isEdit ? "Editar tarefa" : "Nova tarefa"}</h3>
+          <div className="flex items-center gap-3">
+            <h3 className="font-heading font-black text-xl sm:text-2xl">{isEdit ? "Editar tarefa" : "Nova tarefa"}</h3>
+            {draftSavedStatus && !isEdit && (
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-600 inline-flex items-center gap-1" data-testid="task-draft-saved-indicator">
+                <Check className="w-3 h-3 stroke-[3]" /> Rascunho salvo
+              </span>
+            )}
+          </div>
           <button onClick={onClose} className="nb-btn bg-white px-2 py-2" data-testid="close-task-dialog">
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {hasDraft && (
+          <div className="mb-4 nb-card bg-amber-200 border-2 border-black p-3.5 shadow-[3px_3px_0_0_#000] flex flex-col sm:flex-row sm:items-center justify-between gap-3" data-testid="task-draft-banner">
+            <div>
+              <div className="font-heading font-black text-sm text-black flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-black flex-shrink-0" />
+                <span>Rascunho não publicado encontrado</span>
+              </div>
+              <p className="text-xs font-bold text-neutral-800 mt-0.5">
+                Há um rascunho salvo anteriormente deste formulário neste navegador.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleContinueTaskDraft}
+                className="nb-btn bg-sky-300 hover:bg-sky-400 text-xs font-black px-3 py-1.5 border-2 border-black shadow-[2px_2px_0_0_#000]"
+                data-testid="continue-task-draft-button"
+              >
+                Continuar rascunho
+              </button>
+              <button
+                type="button"
+                onClick={handleDiscardTaskDraft}
+                className="nb-btn bg-white hover:bg-neutral-100 text-xs font-bold px-2.5 py-1.5 border-2 border-black shadow-[2px_2px_0_0_#000]"
+                data-testid="discard-task-draft-button"
+              >
+                Descartar
+              </button>
+            </div>
+          </div>
+        )}
         <form onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -852,6 +982,11 @@ function TaskDialog({ task, onClose, onSaved }) {
                     <option key={s.id} value={s.name}>{s.name}</option>
                   ))}
                 </select>
+              ) : loadingSubjects ? (
+                <div className="nb-card bg-neutral-100 p-3 text-xs font-bold text-neutral-600 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-sky-600" />
+                  <span>Carregando matérias...</span>
+                </div>
               ) : (
                 <div className="nb-card bg-amber-50 p-3 text-sm">
                   <p className="font-bold mb-1">Nenhuma matéria cadastrada</p>
@@ -897,8 +1032,8 @@ function TaskDialog({ task, onClose, onSaved }) {
                 testId="ai-improve-task-button"
                 onResult={(data) => {
                   const parts = [data.description];
-                  if (data.objectives?.length) parts.push("\n\n🎯 Objetivos:\n" + data.objectives.map((o) => `• ${o}`).join("\n"));
-                  if (data.tips?.length) parts.push("\n\n💡 Dicas:\n" + data.tips.map((t) => `• ${t}`).join("\n"));
+                  if (data.objectives?.length) parts.push("\n\nObjetivos:\n" + data.objectives.map((o) => `• ${o}`).join("\n"));
+                  if (data.tips?.length) parts.push("\n\nDicas:\n" + data.tips.map((t) => `• ${t}`).join("\n"));
                   setDescription(parts.join(""));
                 }}
               />
@@ -1002,7 +1137,7 @@ function TaskDialog({ task, onClose, onSaved }) {
                         </button>
                       ))}
                     </div>
-                    {!useAIStatus().hidden && !useAIStatus().aiHidden && (
+                    {!aiHidden && !aiHiddenAlt && (
                       <button
                         type="button"
                         onClick={generateAnswer}
@@ -1064,22 +1199,40 @@ function TaskDialog({ task, onClose, onSaved }) {
                 data-testid="task-answer-input"
               />
               {answer && (
-                <p className="text-[10px] text-emerald-700 mt-0.5 font-bold">
-                  ✓ Resposta direta salva
+                <p className="text-[10px] text-emerald-700 mt-0.5 font-bold flex items-center gap-1">
+                  <Check className="w-3 h-3 stroke-[3]" /> Resposta direta salva
                 </p>
               )}
             </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="nb-btn bg-white px-5 py-2.5">Cancelar</button>
-            <button type="submit" disabled={submitting || subjects.length === 0} className="nb-btn bg-sky-400 px-5 py-2.5" data-testid="submit-task-button">
-              {submitting ? "Salvando..." : isEdit ? "Salvar alterações" : "Criar tarefa"}
+            <button type="button" onClick={onClose} disabled={submitting} className="nb-btn bg-white px-5 py-2.5">Cancelar</button>
+            <button
+              type="submit"
+              disabled={saveState !== "idle" || subjects.length === 0}
+              className={`nb-btn px-5 py-2.5 flex items-center gap-2 transition-colors duration-200 ${saveState === "saved" ? "bg-emerald-300" : "bg-sky-400"}`}
+              data-testid="submit-task-button"
+            >
+              {saveState === "saving" ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Salvando...</span>
+                </>
+              ) : saveState === "saved" ? (
+                <>
+                  <Check className="w-4 h-4 animate-check-pop" strokeWidth={3} />
+                  <span>Salvo!</span>
+                </>
+              ) : (
+                <span>{isEdit ? "Salvar alterações" : "Criar tarefa"}</span>
+              )}
             </button>
           </div>
         </form>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }
 
@@ -1181,7 +1334,7 @@ function StudentsPanel() {
             const statusOpt = STATUS_OPTS.find((o) => o.key === status) || STATUS_OPTS[0];
             const StatusIcon = statusOpt.icon;
             return (
-              <div key={s.id} className="nb-card nb-card-hover p-5 nb-fade-in" style={{ animationDelay: `${i * 50}ms` }} data-testid={`student-card-${s.id}`}>
+              <div key={s.id} className="nb-card nb-card-hover p-5 nb-fade-in" style={{ animationDelay: `${Math.min(i, 7) * 30}ms` }} data-testid={`student-card-${s.id}`}>
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <AvatarUploader
                     userId={s.id}
@@ -1270,9 +1423,9 @@ function StudentsPanel() {
                       <Bot className="w-3.5 h-3.5 text-cyan-800" /> Perfil de Teste • Sandbox Ativo
                     </div>
                     <div className="flex flex-col gap-1 text-[11px] text-neutral-700 font-semibold mt-1">
-                      <span>✂️ Fora do ranking oficial mensal</span>
-                      <span>✂️ Sem disparos de WhatsApp</span>
-                      <span>✂️ Não polui médias da escola</span>
+                      <span className="inline-flex items-center gap-1.5"><Scissors className="w-3 h-3 text-cyan-800 flex-shrink-0" /> Fora do ranking oficial mensal</span>
+                      <span className="inline-flex items-center gap-1.5"><Scissors className="w-3 h-3 text-cyan-800 flex-shrink-0" /> Sem disparos de WhatsApp</span>
+                      <span className="inline-flex items-center gap-1.5"><Scissors className="w-3 h-3 text-cyan-800 flex-shrink-0" /> Não polui médias da escola</span>
                     </div>
                   </div>
                 )}
@@ -1345,7 +1498,8 @@ function CreateStudentDialog({ initialIsBot = false, onClose, onCreated }) {
   const [isBot, setIsBot] = useState(initialIsBot);
   const [name, setName] = useState(initialIsBot ? "Bot Alfa (Teste)" : "");
   const [password, setPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [saveState, setSaveState] = useState("idle"); // "idle" | "saving" | "saved"
+  const submitting = saveState === "saving";
 
   const toggleBot = (checked) => {
     setIsBot(checked);
@@ -1356,12 +1510,14 @@ function CreateStudentDialog({ initialIsBot = false, onClose, onCreated }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
+    if (saveState !== "idle") return;
+    setSaveState("saving");
     const chosenStatus = isBot ? "bot" : "active";
     try {
       await api.post("/users", { name, password, status: chosenStatus });
       toast.success(isBot ? `Bot de teste ${name} criado!` : `Aluno ${name} criado!`);
-      onCreated();
+      setSaveState("saved");
+      setTimeout(() => onCreated(), 360);
     } catch (err) {
       try {
         const id = `${isBot ? "bot" : "aluno"}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -1377,17 +1533,22 @@ function CreateStudentDialog({ initialIsBot = false, onClose, onCreated }) {
           created_at: new Date().toISOString(),
         });
         toast.success(isBot ? `Bot de teste ${name} criado!` : `Aluno ${name} criado!`);
-        onCreated();
+        setSaveState("saved");
+        setTimeout(() => onCreated(), 360);
       } catch (err2) {
+        setSaveState("idle");
         toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao criar usuário");
       }
-    } finally {
-      setSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-3 sm:p-4" data-testid="create-student-dialog">
+    <ModalPortal>
+      <div
+        className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-3 sm:p-4"
+        data-testid="create-student-dialog"
+        onClick={(e) => { if (e.target === e.currentTarget && !submitting) onClose(); }}
+      >
       <div className="nb-card bg-white w-full max-w-md p-5 sm:p-7">
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-heading font-black text-xl sm:text-2xl flex items-center gap-2">
@@ -1448,34 +1609,49 @@ function CreateStudentDialog({ initialIsBot = false, onClose, onCreated }) {
             </p>
           </div>
           <div className="flex justify-end gap-3 pt-1">
-            <button type="button" onClick={onClose} className="nb-btn bg-white px-5 py-2.5">Cancelar</button>
+            <button type="button" onClick={onClose} disabled={submitting} className="nb-btn bg-white px-5 py-2.5">Cancelar</button>
             <button
               type="submit"
-              disabled={submitting}
-              className={`nb-btn px-5 py-2.5 font-bold ${isBot ? "bg-cyan-300 hover:bg-cyan-400" : "bg-amber-300 hover:bg-amber-400"}`}
+              disabled={saveState !== "idle"}
+              className={`nb-btn px-5 py-2.5 font-bold flex items-center gap-2 transition-colors duration-200 ${saveState === "saved" ? "bg-emerald-300" : isBot ? "bg-cyan-300 hover:bg-cyan-400" : "bg-amber-300 hover:bg-amber-400"}`}
               data-testid="submit-student-button"
             >
-              {submitting ? "Criando..." : isBot ? "Criar Bot de Teste" : "Criar aluno"}
+              {saveState === "saving" ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Salvando...</span>
+                </>
+              ) : saveState === "saved" ? (
+                <>
+                  <Check className="w-4 h-4 animate-check-pop" strokeWidth={3} />
+                  <span>Salvo!</span>
+                </>
+              ) : (
+                <span>{isBot ? "Criar Bot de Teste" : "Criar aluno"}</span>
+              )}
             </button>
           </div>
         </form>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }
 
 function ConfirmDialog({ title, message, confirmLabel, confirmClass = "bg-red-300", onCancel, onConfirm }) {
   return (
-    <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" data-testid="confirm-dialog">
-      <div className="nb-card bg-white w-full max-w-sm p-6">
-        <h3 className="font-heading font-black text-xl mb-2">{title}</h3>
-        <p className="text-sm text-neutral-700 mb-5">{message}</p>
-        <div className="flex justify-end gap-3">
-          <button onClick={onCancel} className="nb-btn bg-white px-4 py-2" data-testid="confirm-cancel">Cancelar</button>
-          <button onClick={onConfirm} className={`nb-btn ${confirmClass} px-4 py-2`} data-testid="confirm-ok">{confirmLabel}</button>
+    <ModalPortal>
+      <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" data-testid="confirm-dialog">
+        <div className="nb-card bg-white w-full max-w-sm p-6">
+          <h3 className="font-heading font-black text-xl mb-2">{title}</h3>
+          <p className="text-sm text-neutral-700 mb-5">{message}</p>
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={onCancel} className="nb-btn bg-white px-4 py-2" data-testid="confirm-cancel">Cancelar</button>
+            <button type="button" onClick={onConfirm} className={`nb-btn ${confirmClass} px-4 py-2`} data-testid="confirm-ok">{confirmLabel}</button>
+          </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -1484,19 +1660,23 @@ function SubjectsPanel({ annualCycle }) {
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
+  const [selectedColor, setSelectedColor] = useState("sky");
   const [adding, setAdding] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [editingColorSubject, setEditingColorSubject] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await api.get("/subjects");
       setSubjects(data);
+      setCachedSubjects(data);
     } catch (e) {
       try {
         const firestoreSubjects = await firebaseService.getAllSubjects();
         if (firestoreSubjects && firestoreSubjects.length > 0) {
           setSubjects(firestoreSubjects);
+          setCachedSubjects(firestoreSubjects);
         }
       } catch (e2) {
         toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao carregar matérias");
@@ -1513,22 +1693,51 @@ function SubjectsPanel({ annualCycle }) {
     if (!newName.trim()) return;
     setAdding(true);
     try {
-      await api.post("/subjects", { name: newName.trim() });
-      toast.success("Matéria adicionada");
+      await api.post("/subjects", { name: newName.trim(), color: selectedColor });
+      toast.success("Matéria adicionada com sucesso!");
       setNewName("");
       load();
+      window.dispatchEvent(new Event("subjects-updated"));
     } catch (err) {
       try {
         const id = `subj-${Date.now()}`;
-        await firebaseService.saveSubject({ id, name: newName.trim() });
-        toast.success("Matéria adicionada");
+        await firebaseService.saveSubject({ id, name: newName.trim(), color: selectedColor });
+        toast.success("Matéria adicionada com sucesso!");
         setNewName("");
         load();
+        window.dispatchEvent(new Event("subjects-updated"));
       } catch (err2) {
         toast.error(formatApiError(err?.response?.data?.detail) || "Erro ao adicionar matéria");
       }
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleUpdateColor = async (subjectId, newColor) => {
+    try {
+      await api.put(`/subjects/${subjectId}`, { color: newColor });
+      toast.success("Cor da matéria atualizada!");
+      const updated = subjects.map((s) => (s.id === subjectId ? { ...s, color: newColor } : s));
+      setSubjects(updated);
+      setCachedSubjects(updated);
+      window.dispatchEvent(new Event("subjects-updated"));
+      setEditingColorSubject(null);
+    } catch (err) {
+      try {
+        const sub = subjects.find((s) => s.id === subjectId);
+        if (sub) {
+          await firebaseService.saveSubject({ ...sub, color: newColor });
+          toast.success("Cor da matéria atualizada!");
+          const updated = subjects.map((s) => (s.id === subjectId ? { ...s, color: newColor } : s));
+          setSubjects(updated);
+          setCachedSubjects(updated);
+          window.dispatchEvent(new Event("subjects-updated"));
+          setEditingColorSubject(null);
+        }
+      } catch (err2) {
+        toast.error("Falha ao atualizar cor da matéria");
+      }
     }
   };
 
@@ -1539,12 +1748,14 @@ function SubjectsPanel({ annualCycle }) {
       toast.success("Matéria removida");
       setConfirmDelete(null);
       load();
+      window.dispatchEvent(new Event("subjects-updated"));
     } catch (e) {
       try {
         await firebaseService.deleteSubject(confirmDelete.id);
         toast.success("Matéria removida");
         setConfirmDelete(null);
         load();
+        window.dispatchEvent(new Event("subjects-updated"));
       } catch (e2) {
         toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao remover matéria");
       }
@@ -1555,48 +1766,179 @@ function SubjectsPanel({ annualCycle }) {
     <div>
       <div className="mb-6">
         <h1 className="font-heading font-black text-3xl sm:text-5xl tracking-tight">Matérias</h1>
-        <p className="text-neutral-600 mt-1">As matérias aparecem como opções ao criar uma tarefa.</p>
+        <p className="text-neutral-600 mt-1">
+          Personalize as matérias e suas cores. As cores selecionadas serão exibidas nos cards, prazos e resumos de todos os alunos.
+        </p>
       </div>
 
-      <form onSubmit={add} className="flex gap-3 mb-8 max-w-xl" data-testid="subject-form">
-        <input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="Ex.: Filosofia"
-          className="nb-input"
-          maxLength={50}
-          data-testid="subject-name-input"
-        />
-        <button type="submit" disabled={adding || !newName.trim()} className="nb-btn bg-red-300 px-5 py-3 flex items-center gap-2" data-testid="add-subject-button">
-          <Plus className="w-4 h-4" strokeWidth={3} /> Adicionar
-        </button>
+      <form onSubmit={add} className="nb-card bg-white p-5 mb-8 max-w-2xl border-3 border-black shadow-[4px_4px_0_0_#000]" data-testid="subject-form">
+        <div className="font-heading font-black text-sm uppercase tracking-wider text-neutral-800 mb-3 flex items-center gap-2">
+          <BookMarked className="w-4 h-4 text-amber-600" />
+          Cadastrar Nova Matéria
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Ex.: Filosofia, Química, Robótica..."
+            className="nb-input flex-1"
+            maxLength={50}
+            data-testid="subject-name-input"
+          />
+          <button
+            type="submit"
+            disabled={adding || !newName.trim()}
+            className="nb-btn bg-amber-300 hover:bg-amber-400 font-heading font-black text-sm px-6 py-3 flex items-center justify-center gap-2 shadow-[2px_2px_0_0_#000]"
+            data-testid="add-subject-button"
+          >
+            <Plus className="w-4 h-4" strokeWidth={3} /> Adicionar
+          </button>
+        </div>
+
+        {/* Seletor de Cores da Matéria */}
+        <div className="pt-2 border-t border-black/10">
+          <div className="text-xs font-heading font-bold text-neutral-700 uppercase tracking-wide mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Palette className="w-3.5 h-3.5 text-neutral-900" />
+              Escolha a cor da matéria:
+            </span>
+            <span className="text-[11px] font-bold text-neutral-500">
+              {SUBJECT_COLOR_OPTIONS.find((c) => c.id === selectedColor)?.name}
+            </span>
+          </div>
+          <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+            {SUBJECT_COLOR_OPTIONS.map((c) => {
+              const isSelected = selectedColor === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSelectedColor(c.id)}
+                  className={`h-9 rounded-lg border-2 border-black transition-transform flex items-center justify-center ${c.bgClass} ${
+                    isSelected
+                      ? "ring-2 ring-black scale-110 shadow-[2px_2px_0_0_#000] z-10"
+                      : "opacity-85 hover:opacity-100 hover:scale-105"
+                  }`}
+                  title={c.name}
+                  aria-label={c.name}
+                >
+                  {isSelected && <span className="w-2.5 h-2.5 rounded-full bg-black shadow-sm" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </form>
 
       {loading ? (
-        <p className="text-neutral-500">Carregando...</p>
+        <p className="text-neutral-500 font-bold">Carregando matérias...</p>
       ) : subjects.length === 0 ? (
         <EmptyState icon={BookMarked} title="Nenhuma matéria cadastrada" subtitle="Adicione matérias para usá-las em tarefas." />
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {subjects.map((s, i) => (
-            <div
-              key={s.id}
-              className={`nb-card p-4 flex items-center justify-between gap-2 nb-fade-in ${colorFor(s.name)}`}
-              style={{ animationDelay: `${i * 40}ms` }}
-              data-testid={`subject-item-${s.id}`}
-            >
-              <span className="font-heading font-bold truncate">{s.name}</span>
-              <button
-                onClick={() => setConfirmDelete({ id: s.id, label: s.name })}
-                className="nb-btn bg-white px-2 py-1.5 flex-shrink-0"
-                data-testid={`delete-subject-${s.id}`}
-                aria-label="Remover matéria"
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {subjects.map((s, i) => {
+            const colorCfg = getSubjectColorConfig(s, subjects);
+            return (
+              <div
+                key={s.id}
+                className={`nb-card p-4 flex items-center justify-between gap-3 nb-fade-in border-2 border-black shadow-[3px_3px_0_0_#000] ${colorCfg.cardClasses}`}
+                style={{ animationDelay: `${Math.min(i, 7) * 30}ms` }}
+                data-testid={`subject-item-${s.id}`}
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span
+                    className={`w-3.5 h-3.5 rounded-full border border-black flex-shrink-0 ${colorCfg.bgClass} shadow-sm`}
+                  />
+                  <span className="font-heading font-black text-sm truncate text-black">{s.name}</span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEditingColorSubject(s)}
+                    className="nb-btn bg-white hover:bg-neutral-100 px-2 py-1.5 border border-black"
+                    title={`Trocar cor de ${s.name}`}
+                    aria-label="Trocar cor"
+                  >
+                    <Palette className="w-3.5 h-3.5 text-neutral-800" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete({ id: s.id, label: s.name })}
+                    className="nb-btn bg-white hover:bg-rose-100 px-2 py-1.5 border border-black"
+                    data-testid={`delete-subject-${s.id}`}
+                    aria-label="Remover matéria"
+                    title="Excluir matéria"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-700" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal para Trocar a Cor de uma Matéria Existente */}
+      {editingColorSubject && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <div className="nb-card bg-white p-6 max-w-md w-full border-3 border-black shadow-[6px_6px_0_0_#000] modal-window">
+            <div className="flex items-center justify-between gap-2 pb-3 mb-4 border-b-2 border-black">
+              <div className="flex items-center gap-2">
+                <Palette className="w-5 h-5 text-amber-600" />
+                <h3 className="font-heading font-black text-lg text-black">
+                  Mudar Cor da Matéria
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingColorSubject(null)}
+                className="nb-btn bg-white hover:bg-neutral-100 p-1 border border-black"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
-          ))}
-        </div>
+
+            <p className="text-sm text-neutral-700 font-medium mb-4">
+              Escolha uma nova cor para <span className="font-heading font-black text-black">"{editingColorSubject.name}"</span>. Esta alteração será refletida em todas as tarefas, calendário e resumos.
+            </p>
+
+            <div className="grid grid-cols-2 gap-2.5 mb-6">
+              {SUBJECT_COLOR_OPTIONS.map((c) => {
+                const isCurrent = (editingColorSubject.color || "sky") === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => handleUpdateColor(editingColorSubject.id, c.id)}
+                    className={`p-2.5 rounded-lg border-2 border-black text-left flex items-center gap-2.5 transition-all ${c.bgClass} ${c.textClass} ${
+                      isCurrent
+                        ? "ring-2 ring-black font-black shadow-[2px_2px_0_0_#000]"
+                        : "opacity-85 hover:opacity-100 hover:scale-[1.02]"
+                    }`}
+                  >
+                    <span className="w-3.5 h-3.5 rounded-full border border-black bg-white flex items-center justify-center">
+                      {isCurrent && <span className="w-2 h-2 rounded-full bg-black" />}
+                    </span>
+                    <span className="text-xs font-heading font-bold">{c.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setEditingColorSubject(null)}
+                className="nb-btn bg-neutral-200 hover:bg-neutral-300 font-heading font-bold text-xs px-4 py-2 border-2 border-black"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+          </div>
+        </ModalPortal>
       )}
 
       {confirmDelete && (
@@ -1722,7 +2064,7 @@ function AnnouncementsPanel({ annualCycle }) {
                   ? "bg-gradient-to-br from-amber-100 via-amber-50 to-orange-100 border-2 border-amber-500 shadow-[5px_5px_0px_0px_rgba(245,158,11,0.7)]"
                   : "bg-white"
               }`}
-              style={{ animationDelay: `${i * 50}ms` }}
+              style={{ animationDelay: `${Math.min(i, 7) * 30}ms` }}
               data-testid={`announcement-card-${a.id}`}
             >
               <div className="flex items-start justify-between gap-3 mb-3">
@@ -1840,18 +2182,80 @@ function AnnouncementsPanel({ annualCycle }) {
 }
 
 function AnnouncementDialog({ announcement, students, onClose, onSaved }) {
+  const { user } = useAuth();
+  const adminId = user?.id || "admin";
+  const draftAnnKey = `edutask_draft_announcement_${adminId}`;
+
   const isEdit = Boolean(announcement);
   const [title, setTitle] = useState(announcement?.title || "");
   const [message, setMessage] = useState(announcement?.message || "");
   const [assignedTo, setAssignedTo] = useState(announcement?.assigned_to || []);
   const [isSpecial, setIsSpecial] = useState(Boolean(announcement?.is_special));
-  const [submitting, setSubmitting] = useState(false);
+  const [saveState, setSaveState] = useState("idle"); // "idle" | "saving" | "saved"
+  const submitting = saveState === "saving";
+
+  const [hasDraft, setHasDraft] = useState(false);
+  const [draftData, setDraftData] = useState(null);
+  const [draftSavedStatus, setDraftSavedStatus] = useState(false);
+
+  // Check for auto-saved announcement draft on creation form mount
+  useEffect(() => {
+    if (!isEdit) {
+      try {
+        const saved = localStorage.getItem(draftAnnKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && (parsed.title || parsed.message)) {
+            setDraftData(parsed);
+            setHasDraft(true);
+          }
+        }
+      } catch {}
+    }
+  }, [isEdit, draftAnnKey]);
+
+  // Auto-save form fields to localStorage
+  useEffect(() => {
+    if (isEdit) return;
+    const timer = setTimeout(() => {
+      if (title.trim() || message.trim()) {
+        const dataToSave = {
+          title,
+          message,
+          assignedTo,
+          isSpecial,
+          updatedAt: Date.now(),
+        };
+        try {
+          localStorage.setItem(draftAnnKey, JSON.stringify(dataToSave));
+          setDraftSavedStatus(true);
+        } catch {}
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [isEdit, title, message, assignedTo, isSpecial, draftAnnKey]);
+
+  const handleContinueAnnDraft = () => {
+    if (!draftData) return;
+    if (draftData.title) setTitle(draftData.title);
+    if (draftData.message) setMessage(draftData.message);
+    if (Array.isArray(draftData.assignedTo)) setAssignedTo(draftData.assignedTo);
+    if (draftData.isSpecial !== undefined) setIsSpecial(Boolean(draftData.isSpecial));
+    setHasDraft(false);
+  };
+
+  const handleDiscardAnnDraft = () => {
+    try { localStorage.removeItem(draftAnnKey); } catch {}
+    setHasDraft(false);
+    setDraftData(null);
+  };
 
   const submit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
+    if (saveState !== "idle") return;
+    setSaveState("saving");
+    const payload = { title, message, assigned_to: assignedTo, is_special: isSpecial };
     try {
-      const payload = { title, message, assigned_to: assignedTo, is_special: isSpecial };
       if (isEdit) {
         await api.put(`/announcements/${announcement.id}`, payload);
         toast.success("Aviso atualizado!");
@@ -1859,7 +2263,9 @@ function AnnouncementDialog({ announcement, students, onClose, onSaved }) {
         await api.post("/announcements", payload);
         toast.success("Aviso publicado!");
       }
-      onSaved();
+      try { localStorage.removeItem(draftAnnKey); } catch {}
+      setSaveState("saved");
+      setTimeout(() => onSaved(), 360);
     } catch (err) {
       try {
         const annId = announcement?.id || `ann-${Date.now()}`;
@@ -1872,22 +2278,73 @@ function AnnouncementDialog({ announcement, students, onClose, onSaved }) {
           created_at: announcement?.created_at || new Date().toISOString(),
         });
         toast.success(isEdit ? "Aviso atualizado!" : "Aviso publicado!");
-        onSaved();
+        try { localStorage.removeItem(draftAnnKey); } catch {}
+        setSaveState("saved");
+        setTimeout(() => onSaved(), 360);
       } catch (err2) {
+        setSaveState("idle");
         toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao salvar aviso");
       }
-    } finally {
-      setSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-3 sm:p-4" data-testid="announcement-dialog">
-      <div className="nb-card bg-white w-full max-w-xl max-h-[92vh] overflow-auto p-5 sm:p-7">
+    <ModalPortal>
+      <div
+        className={`fixed inset-0 z-50 bg-black/40 flex ${isEdit ? "items-end sm:items-stretch sm:justify-end p-0" : "items-center justify-center p-3 sm:p-4"}`}
+        data-testid="announcement-dialog"
+        onClick={(e) => { if (e.target === e.currentTarget && !submitting) onClose(); }}
+      >
+      <div
+        className={`nb-card bg-white w-full overflow-auto p-5 sm:p-7 ${
+          isEdit
+            ? "panel-drawer drawer-panel sm:max-w-xl max-h-[92vh] sm:max-h-full sm:h-full rounded-t-2xl sm:rounded-none sm:rounded-l-2xl border-b-0 sm:border-y-0 sm:border-r-0 shadow-[-6px_0_0_0_#000]"
+            : "max-w-xl max-h-[92vh]"
+        }`}
+      >
         <div className="flex items-center justify-between mb-5">
-          <h3 className="font-heading font-black text-xl sm:text-2xl">{isEdit ? "Editar aviso" : "Novo aviso"}</h3>
+          <div className="flex items-center gap-3">
+            <h3 className="font-heading font-black text-xl sm:text-2xl">{isEdit ? "Editar aviso" : "Novo aviso"}</h3>
+            {draftSavedStatus && !isEdit && (
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-600 inline-flex items-center gap-1" data-testid="announcement-draft-saved-indicator">
+                <Check className="w-3 h-3 stroke-[3]" /> Rascunho salvo
+              </span>
+            )}
+          </div>
           <button onClick={onClose} className="nb-btn bg-white px-2 py-2"><X className="w-4 h-4" /></button>
         </div>
+
+        {hasDraft && (
+          <div className="mb-4 nb-card bg-amber-200 border-2 border-black p-3.5 shadow-[3px_3px_0_0_#000] flex flex-col sm:flex-row sm:items-center justify-between gap-3" data-testid="announcement-draft-banner">
+            <div>
+              <div className="font-heading font-black text-sm text-black flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-black flex-shrink-0" />
+                <span>Rascunho não publicado encontrado</span>
+              </div>
+              <p className="text-xs font-bold text-neutral-800 mt-0.5">
+                Há um rascunho de aviso salvo anteriormente neste navegador.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleContinueAnnDraft}
+                className="nb-btn bg-sky-300 hover:bg-sky-400 text-xs font-black px-3 py-1.5 border-2 border-black shadow-[2px_2px_0_0_#000]"
+                data-testid="continue-announcement-draft-button"
+              >
+                Continuar rascunho
+              </button>
+              <button
+                type="button"
+                onClick={handleDiscardAnnDraft}
+                className="nb-btn bg-white hover:bg-neutral-100 text-xs font-bold px-2.5 py-1.5 border-2 border-black shadow-[2px_2px_0_0_#000]"
+                data-testid="discard-announcement-draft-button"
+              >
+                Descartar
+              </button>
+            </div>
+          </div>
+        )}
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label className="block text-sm font-bold mb-1.5">Título</label>
@@ -1941,14 +2398,32 @@ function AnnouncementDialog({ announcement, students, onClose, onSaved }) {
           </div>
 
           <div className="flex justify-end gap-3 pt-1">
-            <button type="button" onClick={onClose} className="nb-btn bg-white px-5 py-2.5">Cancelar</button>
-            <button type="submit" disabled={submitting} className="nb-btn bg-violet-300 px-5 py-2.5" data-testid="submit-announcement-button">
-              {submitting ? "Salvando..." : isEdit ? "Salvar alterações" : "Publicar aviso"}
+            <button type="button" onClick={onClose} disabled={submitting} className="nb-btn bg-white px-5 py-2.5">Cancelar</button>
+            <button
+              type="submit"
+              disabled={saveState !== "idle"}
+              className={`nb-btn px-5 py-2.5 flex items-center gap-2 transition-colors duration-200 ${saveState === "saved" ? "bg-emerald-300" : "bg-violet-300"}`}
+              data-testid="submit-announcement-button"
+            >
+              {saveState === "saving" ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Salvando...</span>
+                </>
+              ) : saveState === "saved" ? (
+                <>
+                  <Check className="w-4 h-4 animate-check-pop" strokeWidth={3} />
+                  <span>Salvo!</span>
+                </>
+              ) : (
+                <span>{isEdit ? "Salvar alterações" : "Publicar aviso"}</span>
+              )}
             </button>
           </div>
         </form>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }
 
@@ -2114,8 +2589,7 @@ function StatsPanel() {
           "Decisão administrativa de desempate"
         ]
       });
-      toast.success(`🎉 ${chosen.name} foi escolhido(a) como vencedor(a) do prêmio!`);
-      playWinnerFanfareSound();
+      toast.success(`${chosen.name} foi escolhido(a) como vencedor(a) do prêmio!`);
       window.dispatchEvent(new CustomEvent("prize-updated"));
       fetchStats();
     } catch (err) {
@@ -2145,8 +2619,7 @@ function StatsPanel() {
           "Ambos reconhecidos como vencedores conjuntos"
         ]
       });
-      toast.success("👑 Empate conjunto oficializado como vencedores do mês!");
-      playWinnerFanfareSound();
+      toast.success("Empate conjunto oficializado como vencedores do mês!");
       window.dispatchEvent(new CustomEvent("prize-updated"));
       fetchStats();
     } catch (err) {
@@ -2370,8 +2843,8 @@ function StatsPanel() {
                       <Clock className="w-3.5 h-3.5 text-amber-600" />
                       {stats.ai_monthly.leader.uncompleted_count === 0 ? "Zero pendências" : `${stats.ai_monthly.leader.uncompleted_count} pendência(s)`}
                     </span>
-                    <span className="nb-badge bg-white text-violet-950 text-xs font-bold">
-                      🛍️ {stats.ai_monthly.leader?.points || 0} pts (p/ molduras)
+                    <span className="nb-badge bg-white text-violet-950 text-xs font-bold inline-flex items-center gap-1">
+                      <ShoppingBag className="w-3.5 h-3.5 text-violet-700" /> {stats.ai_monthly.leader?.points || 0} pts (p/ molduras)
                     </span>
                   </div>
                 </div>
@@ -2443,17 +2916,17 @@ function StatsPanel() {
                     <div className="font-heading font-bold truncate flex items-center gap-1.5">
                       <span>{s.name}</span>
                       {isTiedWithTop && (
-                        <span className="nb-badge bg-amber-100 text-amber-900 text-[9px] font-bold">
-                          👑 Top 1
+                        <span className="nb-badge bg-amber-100 text-amber-900 text-[9px] font-bold inline-flex items-center gap-1">
+                          <Crown className="w-3 h-3 text-amber-700" /> Top 1
                         </span>
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                      <span className="nb-badge bg-emerald-100 text-emerald-900 text-[10px] font-bold">
-                        🎯 {s.on_time_completions || 0} no prazo
+                      <span className="nb-badge bg-emerald-100 text-emerald-900 text-[10px] font-bold inline-flex items-center gap-1">
+                        <Target className="w-3 h-3 text-emerald-700" /> {s.on_time_completions || 0} no prazo
                       </span>
-                      <span className="nb-badge bg-amber-100 text-amber-900 text-[10px] font-bold">
-                        🛍️ {s.points || 0} pts
+                      <span className="nb-badge bg-amber-100 text-amber-900 text-[10px] font-bold inline-flex items-center gap-1">
+                        <ShoppingBag className="w-3 h-3 text-amber-800" /> {s.points || 0} pts
                       </span>
                       {s.uncompleted_tasks != null && (
                         <span className="nb-badge bg-neutral-100 text-neutral-700 text-[10px] font-bold">
@@ -2530,29 +3003,35 @@ function StatTile({ label, value, bg }) {
 function AdjustPointsDialog({ student, sign, onClose, onSaved }) {
   const [amount, setAmount] = useState(5);
   const [reason, setReason] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [saveState, setSaveState] = useState("idle");
+  const submitting = saveState === "saving";
   const isAdd = sign > 0;
 
   const submit = async (e) => {
     e.preventDefault();
-    if (amount <= 0) return;
-    setSubmitting(true);
+    if (amount <= 0 || saveState !== "idle") return;
+    setSaveState("saving");
     try {
       const { data } = await api.post(`/users/${student.id}/points`, {
         delta: isAdd ? amount : -amount,
         reason: reason.trim(),
       });
       toast.success(`${isAdd ? "+" : "-"}${amount} pts → ${data.total_points} pts totais`);
-      onSaved();
+      setSaveState("saved");
+      setTimeout(() => onSaved(), 360);
     } catch (err) {
-      toast.error(formatApiError(err?.response?.data?.detail));
-    } finally {
-      setSubmitting(false);
+      setSaveState("idle");
+      toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao ajustar pontos");
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-3 sm:p-4" data-testid="adjust-points-dialog">
+    <ModalPortal>
+      <div
+        className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-3 sm:p-4"
+        data-testid="adjust-points-dialog"
+        onClick={(e) => { if (e.target === e.currentTarget && !submitting) onClose(); }}
+      >
       <div className="nb-card bg-white w-full max-w-md p-5 sm:p-7">
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-heading font-black text-xl sm:text-2xl">
@@ -2587,19 +3066,32 @@ function AdjustPointsDialog({ student, sign, onClose, onSaved }) {
             />
           </div>
           <div className="flex justify-end gap-3 pt-1">
-            <button type="button" onClick={onClose} className="nb-btn bg-white px-5 py-2.5">Cancelar</button>
+            <button type="button" onClick={onClose} disabled={submitting} className="nb-btn bg-white px-5 py-2.5">Cancelar</button>
             <button
               type="submit"
-              disabled={submitting}
-              className={`nb-btn px-5 py-2.5 ${isAdd ? "bg-emerald-300" : "bg-red-300"}`}
+              disabled={saveState !== "idle"}
+              className={`nb-btn px-5 py-2.5 flex items-center gap-2 transition-colors duration-200 ${saveState === "saved" ? "bg-emerald-300" : isAdd ? "bg-emerald-300" : "bg-red-300"}`}
               data-testid="submit-adjust-points"
             >
-              {submitting ? "..." : isAdd ? `+${amount} pts` : `-${amount} pts`}
+              {saveState === "saving" ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Salvando...</span>
+                </>
+              ) : saveState === "saved" ? (
+                <>
+                  <Check className="w-4 h-4 animate-check-pop" strokeWidth={3} />
+                  <span>Salvo!</span>
+                </>
+              ) : (
+                <span>{isAdd ? `+${amount} pts` : `-${amount} pts`}</span>
+              )}
             </button>
           </div>
         </form>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }
 
@@ -2668,7 +3160,13 @@ function PrizeEditor() {
         {!editing && data.prize ? (
           <div className="space-y-3">
             <div className="flex items-start gap-3">
-              <div className="w-12 h-12 nb-card flex items-center justify-center bg-amber-300 text-2xl">{data.prize.emoji}</div>
+              <div className="w-12 h-12 nb-card flex items-center justify-center bg-amber-300 text-2xl">
+                {data.prize.emoji && data.prize.emoji !== "🏆" ? (
+                  data.prize.emoji
+                ) : (
+                  <Trophy className="w-6 h-6 text-amber-950" />
+                )}
+              </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-heading font-black text-xl">{data.prize.title}</h3>
                 {data.prize.description && <p className="text-sm text-neutral-700 mt-1">{data.prize.description}</p>}
@@ -2676,7 +3174,7 @@ function PrizeEditor() {
                   Restam {data.days_remaining} dia{data.days_remaining === 1 ? "" : "s"}
                   {data.is_tie_top1 && data.leaders?.length > 1 ? (
                     <span>
-                      {" "}• 👑 <span className="font-bold text-amber-950">Empate no 1º lugar:</span>{" "}
+                      {" "}• <Crown className="w-3.5 h-3.5 text-amber-800 inline -mt-0.5 mr-1" /><span className="font-bold text-amber-950">Empate no 1º lugar:</span>{" "}
                       {data.leaders.map((l) => l.name).join(" e ")} ({(data.leaders[0]?.on_time_month ?? data.leaders[0]?.on_time ?? 0)} no prazo)
                       {data.ai_winner && (
                         <span className="ml-1">

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { X, Sparkles, BookOpen, Lightbulb, Flag, MessageCircle } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import AIChatDialog from "@/components/AIChatDialog";
+import ModalPortal from "@/components/ModalPortal";
 
 /**
  * Student dialog: explains a task using AI (no answers given), then offers a
@@ -26,7 +27,8 @@ export default function ExplainTaskDialog({ open, onClose, task }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4" data-testid="explain-task-dialog">
+      <ModalPortal>
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4" data-testid="explain-task-dialog">
         <div className="nb-card bg-white w-full max-w-2xl max-h-[92vh] overflow-auto p-5 sm:p-6 rounded-t-2xl sm:rounded-2xl">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 min-w-0">
@@ -103,11 +105,12 @@ export default function ExplainTaskDialog({ open, onClose, task }) {
                 <MessageCircle className="w-4 h-4" strokeWidth={2.5} />
                 Tenho dúvidas — abrir chat com a IA
               </button>
-              <p className="text-[10px] text-neutral-500 text-center">A IA vai te guiar, mas não vai entregar a resposta pronta 😉</p>
+              <p className="text-[10px] text-neutral-500 text-center">A IA vai te guiar, mas não vai entregar a resposta pronta.</p>
             </div>
           )}
         </div>
-      </div>
+        </div>
+      </ModalPortal>
 
       <AIChatDialog
         open={chatOpen}

@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAIStatus } from "@/context/AIStatusContext";
 import Avatar from "./Avatar";
 import MolduraArtCenter from "./MolduraArtCenter";
+import ModalPortal from "@/components/ModalPortal";
 import {
   Sparkles,
   Lock,
@@ -678,8 +679,9 @@ function EditFrameModal({ effect, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 nb-fade-in">
-      <div className="bg-white border-3 border-black p-6 sm:p-7 rounded-2xl shadow-[8px_8px_0px_0px_#000] max-w-md w-full space-y-5 relative">
+    <ModalPortal>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="nb-card bg-white border-3 border-black p-6 sm:p-7 rounded-2xl shadow-[8px_8px_0px_0px_#000] max-w-md w-full space-y-5 relative">
         <div className="flex items-center justify-between border-b-2 border-black/10 pb-4">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl bg-amber-300 border-2 border-black flex items-center justify-center text-xl shadow-[2px_2px_0_0_#000]">
@@ -795,7 +797,8 @@ function EditFrameModal({ effect, onClose, onSaved }) {
           </div>
         </form>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }
 
@@ -872,13 +875,14 @@ function CreateFrameModal({ onClose, onSaved }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs nb-fade-in"
-      onClick={onClose}
-      data-testid="create-frame-modal"
-    >
+    <ModalPortal>
       <div
-        className="bg-white border-4 border-black rounded-2xl p-5 sm:p-6 w-full max-w-lg shadow-[8px_8px_0px_0px_#000] max-h-[90vh] overflow-y-auto space-y-4"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs"
+        onClick={onClose}
+        data-testid="create-frame-modal"
+      >
+        <div
+          className="nb-card bg-white border-4 border-black rounded-2xl p-5 sm:p-6 w-full max-w-lg shadow-[8px_8px_0px_0px_#000] max-h-[90vh] overflow-y-auto space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between border-b-2 border-black/10 pb-3">
@@ -1030,6 +1034,7 @@ function CreateFrameModal({ onClose, onSaved }) {
           </div>
         </form>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }

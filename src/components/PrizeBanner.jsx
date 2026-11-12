@@ -16,7 +16,7 @@ export default function PrizeBanner() {
   const [tips, setTips] = useState(null);
   const [tipsLoading, setTipsLoading] = useState(false);
   const [tipsOpen, setTipsOpen] = useState(false);
-  const [mobileExpanded, setMobileExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const { user } = useAuth();
   const { enabled: aiEnabled, hidden: aiHidden } = useAIStatus();
 
@@ -74,39 +74,42 @@ export default function PrizeBanner() {
 
   return (
     <div
-      className="nb-card p-3 sm:p-5 mb-4 sm:mb-8 bg-gradient-to-br from-amber-200 via-amber-100 to-amber-200 relative overflow-hidden"
+      className="nb-card p-3 sm:p-4 mb-4 sm:mb-6 bg-gradient-to-br from-amber-200 via-amber-100 to-amber-200 relative overflow-hidden transition-all"
       data-testid="prize-banner"
     >
-
       <div className="absolute top-0 right-0 w-32 h-32 opacity-15 select-none pointer-events-none flex items-center justify-center">
         <Trophy className="w-28 h-28 text-amber-900" />
       </div>
       
-      {/* Barra compacta para celular (evita rolagem excessiva) */}
-      <div className="sm:hidden flex items-center justify-between gap-2 relative z-10">
-        <div className="flex items-center gap-2 min-w-0">
-          <Trophy className="w-5 h-5 text-amber-900 flex-shrink-0" />
+      {/* Cabeçalho da Faixa de Prêmio com Controle de Expansão/Recolhimento */}
+      <div className="flex items-center justify-between gap-2 relative z-10">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-amber-300 border border-black flex items-center justify-center flex-shrink-0 shadow-[1px_1px_0_0_#000]">
+            <Trophy className="w-4 h-4 text-amber-950" />
+          </div>
           <div className="min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-wider text-amber-900 truncate">
-              {ai_winner ? `Vencedor • ${month_label}` : hasTie ? `Empate Top 1 • ${days_remaining}d` : `Prêmio do mês • ${days_remaining}d restantes`}
+              {ai_winner ? `Vencedor • ${month_label}` : hasTie ? `Empate Top 1 • ${days_remaining}d restantes` : `Prêmio do mês (${month_label}) • ${days_remaining}d restantes`}
             </div>
-            <div className="font-heading font-black text-xs text-neutral-900 truncate">
-              {ai_winner ? ai_winner.winner_name : hasTie ? `${topLeaders.map(l => l.name).join(' & ')} (${topLeaderOnTime} no prazo)` : leader ? `${leader.name} (${leaderOnTime} no prazo)` : prize.title}
+            <div className="font-heading font-black text-xs sm:text-sm text-neutral-900 truncate">
+              {ai_winner ? ai_winner.winner_name : hasTie ? `${topLeaders.map(l => l.name).join(' & ')} (${topLeaderOnTime} no prazo)` : leader ? `${leader.name} (${leaderOnTime} no prazo) • ${prize.title}` : prize.title}
             </div>
           </div>
         </div>
         <button
-          onClick={() => setMobileExpanded(!mobileExpanded)}
-          className="nb-btn bg-white hover:bg-amber-50 px-2 py-1 text-[11px] font-bold flex items-center gap-1 flex-shrink-0"
-          data-testid="toggle-mobile-prize-details"
+          onClick={() => setExpanded(!expanded)}
+          className="nb-btn bg-white hover:bg-amber-50 px-2.5 py-1 text-xs font-bold flex items-center gap-1.5 flex-shrink-0 border-2 border-black shadow-[2px_2px_0_0_#000]"
+          data-testid="toggle-prize-details"
         >
-          <span>{mobileExpanded ? "Ocultar" : "Ver prêmio"}</span>
-          <ChevronDown className={`w-3 h-3 transition-transform ${mobileExpanded ? "rotate-180" : ""}`} />
+          <span>{expanded ? "Recolher" : "Expandir Detalhes"}</span>
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
         </button>
       </div>
 
-      {/* Conteúdo completo (visível se expandido no celular ou sempre em telas maiores) */}
-      <div className={`${mobileExpanded ? "block mt-3 pt-3 border-t border-amber-900/15" : "hidden sm:block"}`}>
+      {/* Detalhes Expansíveis do Prêmio Mensal */}
+      <div className={`expandable-grid ${expanded ? "open" : ""}`} aria-hidden={!expanded}>
+        <div className="expandable-inner">
+          <div className="mt-3 pt-3 border-t-2 border-black/20 space-y-4">
         {/* Vencedor oficial do mês eleito pela IA */}
         {ai_winner && (
         <div className="relative z-10 mb-4 nb-card bg-amber-300 p-3.5 sm:p-4 border-2 border-black" data-testid="ai-winner-banner">
@@ -250,7 +253,6 @@ export default function PrizeBanner() {
           </div>
         </div>
       </div>
-      </div>
 
       {showAiButton && (
         <div className="relative z-10 mt-3 sm:mt-4">
@@ -291,6 +293,9 @@ export default function PrizeBanner() {
           )}
         </div>
       )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

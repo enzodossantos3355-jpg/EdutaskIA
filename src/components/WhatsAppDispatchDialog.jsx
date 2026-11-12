@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
+import ModalPortal from "@/components/ModalPortal";
 import {
   MessageSquare,
   X,
@@ -14,6 +15,12 @@ import {
   CheckCircle2,
   RefreshCw,
   FileText,
+  Calendar,
+  Lock,
+  Pin,
+  Smartphone,
+  Camera,
+  MessageCircle,
 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { formatDateBR } from "@/lib/priority";
@@ -251,7 +258,7 @@ export default function WhatsAppDispatchDialog({
           : `/announcements/${item.id}/send-whatsapp`;
 
       const { data } = await api.post(endpoint, payload);
-      toast.success(`📲 ${data.message || "Disparo no WhatsApp concluído!"}`);
+      toast.success(data.message || "Disparo no WhatsApp concluído!");
       if (onSuccess) onSuccess();
       onClose();
     } catch (e) {
@@ -266,10 +273,11 @@ export default function WhatsAppDispatchDialog({
   const formattedDueDate = formatDateBR(item.due_date || item.created_at);
 
   return (
-    <div
-      className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-3 sm:p-4 nb-fade-in backdrop-blur-xs"
-      data-testid="whatsapp-dispatch-dialog"
-    >
+    <ModalPortal>
+      <div
+        className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs"
+        data-testid="whatsapp-dispatch-dialog"
+      >
       <div className="nb-card bg-white w-full max-w-2xl max-h-[94vh] overflow-y-auto p-5 sm:p-7 space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between border-b-2 border-black pb-4">
@@ -334,8 +342,8 @@ export default function WhatsAppDispatchDialog({
                 {item.subject}
               </span>
             )}
-            <span className="nb-badge bg-white text-neutral-800 text-xs">
-              📅 {type === "task" ? `Entrega: ${formattedDueDate}` : `Data: ${formattedDueDate}`}
+            <span className="nb-badge bg-white text-neutral-800 text-xs inline-flex items-center gap-1">
+              <Calendar className="w-3 h-3" /> {type === "task" ? `Entrega: ${formattedDueDate}` : `Data: ${formattedDueDate}`}
             </span>
           </div>
           <h4 className="font-heading font-black text-lg">{item.title}</h4>
@@ -365,15 +373,17 @@ export default function WhatsAppDispatchDialog({
             </span>
           </div>
 
-          <p className="text-xs text-neutral-600 mb-3 pl-6">
-            🔒 <b>Texto Base Oficial Protegido:</b> O cabeçalho completo, matéria, título, prazo e enunciado são mantidos integralmente e nunca alterados.
+          <p className="text-xs text-neutral-600 mb-3 pl-6 flex items-start gap-1.5">
+            <Lock className="w-3.5 h-3.5 text-neutral-700 flex-shrink-0 mt-0.5" />
+            <span><b>Texto Base Oficial Protegido:</b> O cabeçalho completo, matéria, título, prazo e enunciado são mantidos integralmente e nunca alterados.</span>
           </p>
 
           {sendG1 && (
             <div className="space-y-2 pt-2 border-t border-emerald-200 pl-6">
               <div className="flex items-center justify-between flex-wrap gap-1.5">
                 <label className="text-xs font-bold text-neutral-800 flex items-center gap-1">
-                  <span>📌 Modelo Pré-Pronto da Parte Extra (Grupo 1):</span>
+                  <Pin className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Modelo Pré-Pronto da Parte Extra (Grupo 1):</span>
                 </label>
                 <div className="flex items-center gap-2">
                   {group1DefaultExtra && (
@@ -607,15 +617,15 @@ export default function WhatsAppDispatchDialog({
               <div className="nb-card bg-neutral-900 text-white p-3.5 rounded-xl text-xs space-y-2 font-mono">
                 <div className="text-[10px] uppercase font-bold text-neutral-400 flex items-center justify-between border-b border-neutral-700 pb-1.5">
                   <span className="flex items-center gap-1.5 text-emerald-400">
-                    📱 Pré-visualização Real no WhatsApp (Grupo 2):
+                    <Smartphone className="w-3.5 h-3.5" /> Pré-visualização Real no WhatsApp (Grupo 2):
                   </span>
                   {selectedPhotoId && selectedPhotoId !== "none" ? (
-                    <span className="text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40">
-                      📷 Foto com Enunciado (Grupo 2)
+                    <span className="text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40 inline-flex items-center gap-1">
+                      <Camera className="w-3 h-3" /> Foto com Enunciado (Grupo 2)
                     </span>
                   ) : (
-                    <span className="text-neutral-400 bg-neutral-800 px-1.5 py-0.5 rounded">
-                      💬 Apenas Texto (Grupo 2)
+                    <span className="text-neutral-400 bg-neutral-800 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                      <MessageCircle className="w-3 h-3" /> Apenas Texto (Grupo 2)
                     </span>
                   )}
                 </div>
@@ -645,10 +655,11 @@ export default function WhatsAppDispatchDialog({
             data-testid="confirm-whatsapp-dispatch-btn"
           >
             <Send className={`w-4 h-4 ${sending ? "animate-spin" : ""}`} />
-            {sending ? "Disparando..." : "Disparar no WhatsApp 🚀"}
+            {sending ? "Disparando..." : "Disparar no WhatsApp"}
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }

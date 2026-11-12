@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
+import ModalPortal from "@/components/ModalPortal";
 import { cleanLatexFormula, MathRenderer } from "@/lib/mathUtils";
 
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
@@ -32,6 +33,8 @@ import {
   FolderPlus,
   FolderCheck,
   Layers,
+  Check,
+  Folder,
 } from "lucide-react";
 
 const SUMMARY_MODEL_OPTIONS = [
@@ -529,8 +532,8 @@ export default function AdminResumosPanel() {
                 Enviar para "{selectedSubject || 'Geral'}" no Drive
               </label>
 
-              <span className="nb-badge bg-emerald-200 text-emerald-950 font-heading font-black text-xs border-2 border-black">
-                ✓ Drive Conectado
+              <span className="nb-badge bg-emerald-200 text-emerald-950 font-heading font-black text-xs border-2 border-black inline-flex items-center gap-1">
+                <Check className="w-3.5 h-3.5 stroke-[3]" /> Drive Conectado
               </span>
             </div>
           )}
@@ -604,8 +607,9 @@ export default function AdminResumosPanel() {
                         : "bg-gray-100 border-gray-300 text-gray-700"
                     }`}
                   >
-                    📁 {sub.name}
-                    {hasFolder && <span className="text-emerald-700 text-[10px]">✓</span>}
+                    <Folder className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
+                    <span>{sub.name}</span>
+                    {hasFolder && <Check className="w-3 h-3 text-emerald-700 stroke-[3]" />}
                   </span>
                 );
               })}
@@ -882,7 +886,8 @@ export default function AdminResumosPanel() {
 
       {/* Manual Topic Add / Edit Modal */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="nb-card w-full max-w-2xl bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_0_#000] p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b-2 border-black pb-3">
               <h3 className="text-lg sm:text-xl font-heading font-black text-black uppercase">
@@ -985,34 +990,38 @@ export default function AdminResumosPanel() {
               </div>
             </form>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Image Lightbox Preview */}
       {previewImageId && (
-        <div
-          onClick={() => setPreviewImageId(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm cursor-pointer"
-        >
-          <div className="nb-card relative max-w-4xl max-h-[90vh] bg-white p-3 rounded-2xl border-2 border-black shadow-[6px_6px_0_0_#000]">
-            <button
-              onClick={() => setPreviewImageId(null)}
-              className="nb-btn absolute -top-3 -right-3 w-8 h-8 bg-amber-300 text-black font-black border-2 border-black rounded-full flex items-center justify-center shadow-[2px_2px_0_0_#000]"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <img
-              src={`/api/files/${previewImageId}`}
-              alt="Visualização Fonte"
-              className="max-h-[80vh] w-auto rounded-xl object-contain"
-            />
+        <ModalPortal>
+          <div
+            onClick={() => setPreviewImageId(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm cursor-pointer"
+          >
+            <div className="nb-card relative max-w-4xl max-h-[90vh] bg-white p-3 rounded-2xl border-2 border-black shadow-[6px_6px_0_0_#000]">
+              <button
+                onClick={() => setPreviewImageId(null)}
+                className="nb-btn absolute -top-3 -right-3 w-8 h-8 bg-amber-300 text-black font-black border-2 border-black rounded-full flex items-center justify-center shadow-[2px_2px_0_0_#000]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <img
+                src={`/api/files/${previewImageId}`}
+                alt="Visualização Fonte"
+                className="max-h-[80vh] w-auto rounded-xl object-contain"
+              />
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Google Drive Files Picker Modal */}
       {showDrivePicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="nb-card w-full max-w-2xl bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_0_#000] p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b-2 border-black pb-3">
               <h3 className="text-base sm:text-lg font-heading font-black text-black uppercase flex items-center gap-2">
@@ -1083,7 +1092,8 @@ export default function AdminResumosPanel() {
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Send, X, Sparkles, Bot, User as UserIcon, Trash2 } from "lucide-react";
+import { Send, X, Sparkles, Bot, User as UserIcon, Trash2, Target, Lightbulb, CheckCircle2, BookOpen, ListTodo } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
+import ModalPortal from "@/components/ModalPortal";
 
 /**
  * Reusable AI chat drawer/modal.
@@ -93,7 +94,8 @@ export default function AIChatDialog({ open, onClose, taskId, taskTitle, session
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4" data-testid="ai-chat-dialog">
+    <ModalPortal>
+      <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4" data-testid="ai-chat-dialog">
       <div className="nb-card bg-white w-full max-w-2xl h-[92vh] sm:h-[85vh] flex flex-col p-3.5 sm:p-5 rounded-t-2xl sm:rounded-2xl shadow-2xl">
         <div className="flex items-center justify-between mb-2 sm:mb-3 flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -123,7 +125,10 @@ export default function AIChatDialog({ open, onClose, taskId, taskTitle, session
         {/* Task Context Banner */}
         {taskId && (
           <div className="mb-2 p-2 bg-violet-100 rounded-lg border border-violet-300 text-[11px] font-bold text-violet-950 flex items-center justify-between flex-shrink-0">
-            <span className="truncate">🎯 Foco na tarefa: <strong>{taskTitle || "Tarefa selecionada"}</strong></span>
+            <span className="truncate flex items-center gap-1.5">
+              <Target className="w-3.5 h-3.5 text-violet-800 flex-shrink-0" />
+              <span className="truncate">Foco na tarefa: <strong>{taskTitle || "Tarefa selecionada"}</strong></span>
+            </span>
             <span className="text-[10px] text-violet-700 bg-white/70 px-1.5 py-0.5 rounded border border-violet-200 ml-2 flex-shrink-0">
               Gabarito ativo
             </span>
@@ -135,7 +140,7 @@ export default function AIChatDialog({ open, onClose, taskId, taskTitle, session
           {!loadingHistory && messages.length === 0 && (
             <div className="nb-card bg-amber-50 p-4 text-xs sm:text-sm text-neutral-700 text-center">
               <Sparkles className="w-5 h-5 mx-auto mb-1.5 text-amber-500" strokeWidth={2.5} />
-              Tire qualquer dúvida sobre matérias, confira o raciocínio dos gabaritos ou pergunte sobre suas tarefas pendentes! 💡
+              Tire qualquer dúvida sobre matérias, confira o raciocínio dos gabaritos ou pergunte sobre suas tarefas pendentes!
             </div>
           )}
           {messages.map((m, i) => (
@@ -165,49 +170,55 @@ export default function AIChatDialog({ open, onClose, taskId, taskTitle, session
           {taskId ? (
             <>
               <button
+                type="button"
                 onClick={() => send("Pode me dar uma dica sobre como começar essa tarefa?")}
                 disabled={sending}
-                className="nb-btn bg-white hover:bg-violet-50 text-[11px] px-2.5 py-1 whitespace-nowrap flex-shrink-0"
+                className="nb-btn bg-white hover:bg-violet-50 text-[11px] px-2.5 py-1 whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5"
               >
-                💡 Dica para começar
+                <Lightbulb className="w-3.5 h-3.5 text-amber-600" /> Dica para começar
               </button>
               <button
+                type="button"
                 onClick={() => send("Como conferir a resposta ou o gabarito oficial dessa tarefa?")}
                 disabled={sending}
-                className="nb-btn bg-white hover:bg-emerald-50 text-[11px] px-2.5 py-1 whitespace-nowrap flex-shrink-0"
+                className="nb-btn bg-white hover:bg-emerald-50 text-[11px] px-2.5 py-1 whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5"
               >
-                ✅ Conferir gabarito
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Conferir gabarito
               </button>
               <button
+                type="button"
                 onClick={() => send("Pode me explicar o enunciado passo a passo?")}
                 disabled={sending}
-                className="nb-btn bg-white hover:bg-sky-50 text-[11px] px-2.5 py-1 whitespace-nowrap flex-shrink-0"
+                className="nb-btn bg-white hover:bg-sky-50 text-[11px] px-2.5 py-1 whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5"
               >
-                📖 Explicar enunciado
+                <BookOpen className="w-3.5 h-3.5 text-sky-700" /> Explicar enunciado
               </button>
             </>
           ) : (
             <>
               <button
+                type="button"
                 onClick={() => send("Quais são minhas tarefas pendentes para fazer?")}
                 disabled={sending}
-                className="nb-btn bg-white hover:bg-sky-50 text-[11px] px-2.5 py-1 whitespace-nowrap flex-shrink-0"
+                className="nb-btn bg-white hover:bg-sky-50 text-[11px] px-2.5 py-1 whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5"
               >
-                📋 Minhas tarefas pendentes
+                <ListTodo className="w-3.5 h-3.5 text-sky-700" /> Minhas tarefas pendentes
               </button>
               <button
+                type="button"
                 onClick={() => send("Como está meu perfil e meu progresso de tarefas?")}
                 disabled={sending}
-                className="nb-btn bg-white hover:bg-amber-50 text-[11px] px-2.5 py-1 whitespace-nowrap flex-shrink-0"
+                className="nb-btn bg-white hover:bg-amber-50 text-[11px] px-2.5 py-1 whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5"
               >
-                👤 Meu perfil e progresso
+                <UserIcon className="w-3.5 h-3.5 text-amber-700" /> Meu perfil e progresso
               </button>
               <button
+                type="button"
                 onClick={() => send("O que você recomenda eu estudar agora?")}
                 disabled={sending}
-                className="nb-btn bg-white hover:bg-violet-50 text-[11px] px-2.5 py-1 whitespace-nowrap flex-shrink-0"
+                className="nb-btn bg-white hover:bg-violet-50 text-[11px] px-2.5 py-1 whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5"
               >
-                🎯 O que estudar agora?
+                <Target className="w-3.5 h-3.5 text-violet-700" /> O que estudar agora?
               </button>
             </>
           )}
@@ -237,6 +248,7 @@ export default function AIChatDialog({ open, onClose, taskId, taskTitle, session
           </button>
         </form>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }

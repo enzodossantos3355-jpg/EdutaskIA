@@ -11,6 +11,9 @@ import {
   EyeOff,
   Palette,
   RotateCw,
+  Check,
+  Clock,
+  ShoppingBag,
 } from "lucide-react";
 
 const MODEL_OPTIONS = [
@@ -290,7 +293,7 @@ export default function AIAdminPanel() {
                     {isSelected ? (
                       <>
                         <span className="w-2 h-2 rounded-full bg-emerald-700" />
-                        <span>✓ EM USO NO SISTEMA</span>
+                        <span className="inline-flex items-center gap-1"><Check className="w-3 h-3 stroke-[3]" /> EM USO NO SISTEMA</span>
                       </>
                     ) : (
                       <span>Selecionar este modelo</span>
@@ -380,14 +383,14 @@ export default function AIAdminPanel() {
                     </h3>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap text-xs">
-                    <span className="nb-badge bg-emerald-100 text-emerald-950 font-bold">
-                      ✓ {reportData.completed_count} Feitas ({reportData.on_time_count} no prazo)
+                    <span className="nb-badge bg-emerald-100 text-emerald-950 font-bold inline-flex items-center gap-1">
+                      <Check className="w-3 h-3 stroke-[3]" /> {reportData.completed_count} Feitas ({reportData.on_time_count} no prazo)
                     </span>
-                    <span className="nb-badge bg-amber-100 text-amber-950 font-bold">
-                      ⏳ {reportData.pending_count} Pendências
+                    <span className="nb-badge bg-amber-100 text-amber-950 font-bold inline-flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> {reportData.pending_count} Pendências
                     </span>
-                    <span className="nb-badge bg-violet-100 text-violet-950 font-bold">
-                      🛍️ {reportData.points} pts loja
+                    <span className="nb-badge bg-violet-100 text-violet-950 font-bold inline-flex items-center gap-1">
+                      <ShoppingBag className="w-3 h-3" /> {reportData.points} pts loja
                     </span>
                   </div>
                 </div>

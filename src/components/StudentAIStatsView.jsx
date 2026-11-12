@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Trophy, Sparkles, CheckCircle, Clock, ShoppingBag, Award, Star, Loader2, Info } from "lucide-react";
+import { Trophy, Sparkles, CheckCircle, Clock, ShoppingBag, Award, Star, Loader2, Info, Crown, Check } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import Avatar from "@/components/Avatar";
 import { effectClass } from "@/lib/effects";
@@ -70,17 +70,18 @@ export default function StudentAIStatsView() {
         </p>
       </div>
 
-      {/* 👑 Spotlight da(s) Pessoa(s) que Estão Liderando (com suporte a empate no 1º lugar) */}
+      {/* Spotlight da(s) Pessoa(s) que Estão Liderando (com suporte a empate no 1º lugar) */}
       {leaders.length > 0 ? (
         <div className="nb-card bg-gradient-to-br from-amber-300 via-amber-200 to-amber-300 p-5 sm:p-7 border-3 border-black relative overflow-hidden" data-testid="ai-leader-spotlight">
-          <div className="absolute top-2 right-2 opacity-10 text-8xl sm:text-9xl select-none pointer-events-none">
-            👑
+          <div className="absolute top-3 right-3 opacity-10 select-none pointer-events-none">
+            <Crown className="w-28 h-28 sm:w-36 sm:h-36 text-amber-900" />
           </div>
 
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-3 flex-wrap">
-              <span className="nb-badge bg-black text-amber-300 text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-1">
-                {isTieTop1 ? `👑 Empate no 1º Lugar (${leaders.length} alunos empatados)` : '👑 Quem está liderando a avaliação'}
+              <span className="nb-badge bg-black text-amber-300 text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-1 inline-flex items-center gap-1.5">
+                <Crown className="w-3.5 h-3.5 text-amber-300" />
+                <span>{isTieTop1 ? `Empate no 1º Lugar (${leaders.length} alunos empatados)` : "Quem está liderando a avaliação"}</span>
               </span>
               <span className="nb-badge bg-white text-neutral-900 text-[10px] sm:text-xs font-bold">
                 Nota IA: {leaders[0]?.score}/100
@@ -120,15 +121,18 @@ export default function StudentAIStatsView() {
                             {ld.name}
                           </h3>
                           {isMe && (
-                            <span className="nb-badge bg-emerald-400 text-black text-[10px] font-bold">É você! 🎉</span>
+                            <span className="nb-badge bg-emerald-400 text-black text-[10px] font-bold inline-flex items-center gap-1">
+                              <Sparkles className="w-3 h-3" /> É você!
+                            </span>
                           )}
                         </div>
-                        <div className="text-[11px] font-bold text-amber-900 mb-1">
-                          👑 1º Lugar Empatado(a)
+                        <div className="text-[11px] font-bold text-amber-900 mb-1 flex items-center gap-1">
+                          <Crown className="w-3.5 h-3.5 text-amber-800" />
+                          <span>1º Lugar Empatado(a)</span>
                         </div>
                         <div className="flex flex-wrap gap-1.5 mt-1.5">
-                          <span className="nb-badge bg-emerald-100 text-emerald-950 text-[10px] font-bold">
-                            ✓ {ld.on_time_month} no prazo
+                          <span className="nb-badge bg-emerald-100 text-emerald-950 text-[10px] font-bold inline-flex items-center gap-1">
+                            <Check className="w-3 h-3 stroke-[3]" /> {ld.on_time_month} no prazo
                           </span>
                           <span className="nb-badge bg-white text-neutral-800 text-[10px] font-bold border border-black/20">
                             {ld.uncompleted_count === 0 ? "0 pendências" : `${ld.uncompleted_count} pend.`}
@@ -156,7 +160,9 @@ export default function StudentAIStatsView() {
                   <h2 className="font-heading font-black text-xl sm:text-3xl text-neutral-900 leading-tight flex items-center gap-2 flex-wrap">
                     <span>{leaders[0].name}</span>
                     {leaders[0].id === user?.id && (
-                      <span className="nb-badge bg-emerald-400 text-black text-xs font-bold">É você! 🎉</span>
+                      <span className="nb-badge bg-emerald-400 text-black text-xs font-bold inline-flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5" /> É você!
+                      </span>
                     )}
                   </h2>
 

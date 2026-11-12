@@ -78,7 +78,8 @@ h4,
   border-radius: 0.625rem;
   box-shadow: 3px 3px 0 0 #0a0a0a;
   font-weight: 700;
-  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease-out, opacity 0.15s ease-out;
+  user-select: none;
 }
 
 .nb-btn:hover:not(:disabled) {
@@ -87,8 +88,9 @@ h4,
 }
 
 .nb-btn:active:not(:disabled) {
-  transform: translate(2px, 2px);
-  box-shadow: none;
+  transform: scale(0.97) translate(1px, 1px);
+  box-shadow: 1px 1px 0 0 #0a0a0a;
+  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out;
 }
 
 .nb-btn:disabled {
@@ -216,11 +218,135 @@ h4,
 
 @keyframes nb-fade-in {
   from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; transform: none; }
 }
 
 .nb-fade-in {
-  animation: nb-fade-in 0.35s ease-out both;
+  animation: nb-fade-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Page entrance animation (0.2s duration, opacity + 8px translateY) */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page-enter {
+  animation: page-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Task completion checkmark bounce/pop */
+@keyframes check-pop {
+  0% { transform: scale(0.65) rotate(-12deg); opacity: 0.3; }
+  60% { transform: scale(1.18) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.animate-check-pop {
+  animation: check-pop 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Modal backdrop gradual darkening and window scale from 0.97 to 1 */
+@keyframes modal-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-window-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.modal-backdrop,
+.fixed.inset-0.z-50,
+.fixed.inset-0.z-60,
+.fixed.inset-0.z-\[60\],
+.fixed.inset-0.z-\[70\],
+.fixed.inset-0.z-\[80\],
+.fixed.inset-0.z-\[90\],
+.fixed.inset-0.z-\[100\] {
+  animation: modal-backdrop-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+.modal-window,
+.fixed.inset-0.z-50 > .nb-card:not(.drawer-panel),
+.fixed.inset-0.z-60 > .nb-card:not(.drawer-panel),
+.fixed.inset-0.z-\[60\] > .nb-card:not(.drawer-panel),
+.fixed.inset-0.z-\[70\] > .nb-card:not(.drawer-panel),
+.fixed.inset-0.z-\[80\] > .nb-card:not(.drawer-panel),
+.fixed.inset-0.z-\[90\] > .nb-card:not(.drawer-panel),
+.fixed.inset-0.z-\[100\] > .nb-card:not(.drawer-panel) {
+  animation: modal-window-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Dropdown menus & filter popovers (opacity + short movement) */
+@keyframes menu-open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.menu-enter {
+  animation: menu-open 0.18s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  transform-origin: top;
+}
+
+/* Edit panels: slide from right on desktop, slide from bottom on mobile */
+@keyframes panel-slide-desktop {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes panel-slide-mobile {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.panel-drawer {
+  animation: panel-slide-mobile 0.24s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+@media (min-width: 640px) {
+  .panel-drawer {
+    animation: panel-slide-desktop 0.24s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+}
+
+/* Smooth height animation for expandable sections (avoids layout jumps) */
+.expandable-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease-out;
+}
+.expandable-grid.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.expandable-inner {
+  overflow: hidden;
+  min-height: 0;
 }
 
 

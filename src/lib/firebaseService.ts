@@ -7,6 +7,9 @@ import {
   getDoc,
   updateDoc,
   deleteField,
+  onSnapshot,
+  query,
+  Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -17,6 +20,7 @@ export enum OperationType {
   LIST = 'list',
   GET = 'get',
   WRITE = 'write',
+  SUBSCRIBE = 'subscribe',
 }
 
 export interface FirestoreErrorInfo {
@@ -30,19 +34,55 @@ export interface FirestoreErrorInfo {
   };
 }
 
+let _firestoreQuotaBlockedUntil = 0;
+
+export function isFirestoreQuotaExceeded(): boolean {
+  return Date.now() < _firestoreQuotaBlockedUntil;
+}
+
+export function markFirestoreQuotaExceeded() {
+  _firestoreQuotaBlockedUntil = Date.now() + 10 * 60 * 1000; // 10 minutes
+}
+
+// ---------------------------------------------------------------------------
+// Registros de Diagnóstico e Auditoria de Sincronização (Sem Expor Dados Sensíveis)
+// ---------------------------------------------------------------------------
+export function logSyncAudit(context: string, payload: {
+  userId?: string | null;
+  fromCache?: boolean;
+  docCount?: number;
+  hasError?: boolean;
+  errorMsg?: string | null;
+}) {
+  const now = new Date();
+  const brtTime = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    dateStyle: 'short',
+    timeStyle: 'medium',
+  }).format(now);
+  const maskedUser = payload.userId ? `${payload.userId.slice(0, 4)}***${payload.userId.slice(-2)}` : 'anon';
+  const source = payload.fromCache ? 'Firestore Cache (Offline)' : 'Firestore Server (Live)';
+  console.log(`[EduTask Sync Audit] [${brtTime} BRT] [${context}] User: ${maskedUser} | Source: ${source} | Docs: ${payload.docCount ?? 0} ${payload.hasError ? `| Error: ${payload.errorMsg}` : '| Status: OK'}`);
+}
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: null,
-      email: null,
-      emailVerified: null,
-    },
-    operationType,
-    path,
-  };
-  console.warn('Firestore Operation Notice:', JSON.stringify(errInfo));
-  throw new Error(errInfo.error);
+  const errMsg = error instanceof Error ? error.message : String(error);
+  if (errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('resource_exhausted')) {
+    markFirestoreQuotaExceeded();
+  } else {
+    const errInfo: FirestoreErrorInfo = {
+      error: errMsg,
+      authInfo: {
+        userId: null,
+        email: null,
+        emailVerified: null,
+      },
+      operationType,
+      path,
+    };
+    console.warn('Firestore Operation Notice:', JSON.stringify(errInfo));
+  }
+  throw new Error(errMsg);
 }
 
 function sanitizeFirestoreData(obj: any): any {
@@ -373,6 +413,7 @@ export const firebaseService = {
   },
 
   async getFile(fileId: string): Promise<any | null> {
+    if (isFirestoreQuotaExceeded()) return null;
     const path = `files/${fileId}`;
     try {
       const snap = await getDoc(doc(db, 'files', fileId));
@@ -381,6 +422,11 @@ export const firebaseService = {
       }
       return null;
     } catch (e: any) {
+      const msg = String(e?.message || '');
+      if (msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted')) {
+        markFirestoreQuotaExceeded();
+        return null;
+      }
       handleFirestoreError(e, OperationType.GET, path);
     }
   },
@@ -557,6 +603,75 @@ export const firebaseService = {
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
     }
+  },
+
+  // Real-time Subscriptions with Audit Logging
+  subscribeToTasks(
+    userId: string | undefined,
+    onNext: (tasks: any[], fromCache: boolean) => void,
+    onError: (err: any) => void
+  ): Unsubscribe {
+    const colRef = collection(db, 'tasks');
+    return onSnapshot(
+      colRef,
+      { includeMetadataChanges: true },
+      (snap) => {
+        const fromCache = snap.metadata.fromCache;
+        const tasks: any[] = [];
+        snap.forEach((docSnap) => {
+          tasks.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        logSyncAudit('Tasks Subscription', {
+          userId,
+          fromCache,
+          docCount: tasks.length,
+          hasError: false,
+        });
+        onNext(tasks, fromCache);
+      },
+      (err) => {
+        logSyncAudit('Tasks Subscription Error', {
+          userId,
+          hasError: true,
+          errorMsg: err?.message || String(err),
+        });
+        onError(err);
+      }
+    );
+  },
+
+  subscribeToAnnouncements(
+    userId: string | undefined,
+    onNext: (announcements: any[], fromCache: boolean) => void,
+    onError: (err: any) => void
+  ): Unsubscribe {
+    const colRef = collection(db, 'announcements');
+    return onSnapshot(
+      colRef,
+      { includeMetadataChanges: true },
+      (snap) => {
+        const fromCache = snap.metadata.fromCache;
+        const list: any[] = [];
+        snap.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        logSyncAudit('Announcements Subscription', {
+          userId,
+          fromCache,
+          docCount: list.length,
+          hasError: false,
+        });
+        onNext(list, fromCache);
+      },
+      (err) => {
+        logSyncAudit('Announcements Subscription Error', {
+          userId,
+          hasError: true,
+          errorMsg: err?.message || String(err),
+        });
+        onError(err);
+      }
+    );
   },
 };
 

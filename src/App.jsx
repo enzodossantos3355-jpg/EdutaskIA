@@ -5,6 +5,8 @@ import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AIStatusProvider } from "@/context/AIStatusContext";
+import { PWAProvider } from "@/context/PWAContext";
+import PWAInstallCard from "@/components/PWAInstallCard";
 import LoginPage from "@/pages/LoginPage";
 import AdminDashboard from "@/pages/AdminDashboard";
 import StudentDashboard from "@/pages/StudentDashboard";
@@ -48,27 +50,37 @@ function App() {
         <ThemeProvider>
           <AuthProvider>
             <AIStatusProvider>
-            <Toaster position="top-right" richColors />
-            <Routes>
-              <Route path="/" element={<HomeRedirect />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute role="admin">
-                    <AdminDashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/aluno"
-                element={
-                  <ProtectedRoute role="aluno">
-                    <StudentDashboard />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
+              <PWAProvider>
+                <Toaster
+                  position="top-right"
+                  richColors
+                  toastOptions={{
+                    duration: 3200,
+                    className: "border-2 border-black shadow-[3px_3px_0_0_#000] font-body text-xs sm:text-sm font-bold",
+                  }}
+                />
+                <Routes>
+                  <Route path="/" element={<HomeRedirect />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route
+                    path="/admin"
+                    element={
+                      <ProtectedRoute role="admin">
+                        <AdminDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/aluno"
+                    element={
+                      <ProtectedRoute role="aluno">
+                        <StudentDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Routes>
+                <PWAInstallCard />
+              </PWAProvider>
             </AIStatusProvider>
           </AuthProvider>
         </ThemeProvider>

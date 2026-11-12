@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import api, { formatApiError } from "@/lib/api";
 import { toast } from "sonner";
+import ModalPortal from "@/components/ModalPortal";
 import {
   Link2,
   ExternalLink,
@@ -354,10 +355,11 @@ export default function StudentButtonsPanel({ annualCycle }) {
 
       {/* Modal de Criação / Edição */}
       {modalOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 sm:p-4 nb-fade-in backdrop-blur-xs"
-          data-testid="student-button-modal"
-        >
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs"
+            data-testid="student-button-modal"
+          >
           <div className="nb-card bg-white w-full max-w-lg p-5 sm:p-7 space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b-2 border-black pb-3">
               <div className="flex items-center gap-2">
@@ -561,45 +563,48 @@ export default function StudentButtonsPanel({ annualCycle }) {
               </div>
             </form>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Modal de Confirmação de Exclusão de Botão */}
       {btnToDelete && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 nb-fade-in" data-testid="delete-button-modal">
-          <div className="bg-white border-2 border-black p-6 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] max-w-sm w-full space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-100 border-2 border-black flex items-center justify-center text-red-600 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex-shrink-0">
-                <Trash2 className="w-5 h-5" />
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" data-testid="delete-button-modal">
+            <div className="nb-card bg-white border-2 border-black p-6 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] max-w-sm w-full space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-100 border-2 border-black flex items-center justify-center text-red-600 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex-shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-black text-base leading-tight">Excluir Botão</h3>
+                  <p className="text-xs text-neutral-500 font-bold">{btnToDelete.name}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-heading font-black text-base leading-tight">Excluir Botão</h3>
-                <p className="text-xs text-neutral-500 font-bold">{btnToDelete.name}</p>
+              <p className="text-xs text-neutral-600 leading-relaxed">
+                Tem certeza que deseja remover este botão? Os alunos deixarão de visualizá-lo em seu painel.
+              </p>
+              <div className="flex items-center gap-2 justify-end pt-2 border-t border-black/10">
+                <button
+                  type="button"
+                  onClick={() => setBtnToDelete(null)}
+                  className="nb-btn bg-white hover:bg-neutral-100 px-3.5 py-2 text-xs font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  disabled={deletingId === btnToDelete.id}
+                  className="nb-btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-xs font-heading font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1.5"
+                  data-testid="confirm-delete-button-btn"
+                >
+                  {deletingId === btnToDelete.id ? "Excluindo..." : "Excluir Botão"}
+                </button>
               </div>
-            </div>
-            <p className="text-xs text-neutral-600 leading-relaxed">
-              Tem certeza que deseja remover este botão? Os alunos deixarão de visualizá-lo em seu painel.
-            </p>
-            <div className="flex items-center gap-2 justify-end pt-2 border-t border-black/10">
-              <button
-                type="button"
-                onClick={() => setBtnToDelete(null)}
-                className="nb-btn bg-white hover:bg-neutral-100 px-3.5 py-2 text-xs font-bold"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDelete}
-                disabled={deletingId === btnToDelete.id}
-                className="nb-btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-xs font-heading font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1.5"
-                data-testid="confirm-delete-button-btn"
-              >
-                {deletingId === btnToDelete.id ? "Excluindo..." : "Excluir Botão"}
-              </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

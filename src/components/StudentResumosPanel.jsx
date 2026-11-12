@@ -3,6 +3,7 @@ import { api, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
 import PersonalizedSummaryModal from "./PersonalizedSummaryModal";
 import MarkdownSummaryViewer from "./MarkdownSummaryViewer";
+import ModalPortal from "@/components/ModalPortal";
 import { MathRenderer, cleanLatexFormula } from "@/lib/mathUtils";
 import {
   BookOpen,
@@ -21,19 +22,9 @@ import {
   ChevronRight,
   Loader2,
   CheckCircle2,
+  Zap,
 } from "lucide-react";
-
-// Subject color map for high-contrast Neo-Brutalist subject badges
-const SUBJECT_COLORS = {
-  matemática: "bg-sky-300 text-sky-950 border-black",
-  português: "bg-emerald-300 text-emerald-950 border-black",
-  ciências: "bg-amber-300 text-amber-950 border-black",
-  história: "bg-purple-300 text-purple-950 border-black",
-  geografia: "bg-rose-300 text-rose-950 border-black",
-  inglês: "bg-indigo-300 text-indigo-950 border-black",
-  artes: "bg-pink-300 text-pink-950 border-black",
-  "educação física": "bg-orange-300 text-orange-950 border-black",
-};
+import { getSubjectColorConfig } from "@/lib/subjectColors";
 
 export default function StudentResumosPanel() {
   const [subTab, setSubTab] = useState("apostilas"); // 'apostilas' | 'recentes'
@@ -114,8 +105,8 @@ export default function StudentResumosPanel() {
   });
 
   const getSubjectBadgeStyle = (subjectName = "") => {
-    const key = subjectName.trim().toLowerCase();
-    return SUBJECT_COLORS[key] || "bg-amber-300 text-black border-black";
+    const cfg = getSubjectColorConfig(subjectName, subjects);
+    return `${cfg.bgClass} ${cfg.textClass} border-black`;
   };
 
   return (
@@ -130,8 +121,9 @@ export default function StudentResumosPanel() {
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="space-y-2 max-w-2xl">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="nb-badge bg-amber-300 text-black font-heading font-black text-xs uppercase px-3 py-1 border-2 border-black shadow-[2px_2px_0_0_#000]">
-                ⚡ Central de Estudos Edutask
+              <span className="nb-badge bg-amber-300 text-black font-heading font-black text-xs uppercase px-3 py-1 border-2 border-black shadow-[2px_2px_0_0_#000] inline-flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-black" />
+                <span>Central de Estudos Edutask</span>
               </span>
               <span className="nb-badge bg-white text-black font-heading font-black text-xs uppercase px-3 py-1 border-2 border-black">
                 {summaries.length} Resumos Cadastrados
@@ -265,9 +257,13 @@ export default function StudentResumosPanel() {
           ) : filteredSummaries.length === 0 ? (
             <div className="p-12 text-center bg-amber-50 rounded-2xl border-3 border-dashed border-black">
               <BookOpen className="w-12 h-12 text-amber-600 mx-auto mb-3" />
-              <h3 className="text-lg font-heading font-black text-black uppercase">Nenhum resumo encontrado</h3>
+              <h3 className="text-lg font-heading font-black text-black uppercase">
+                {summaries.length === 0 ? "Ainda não há resumos publicados" : "Nenhum resumo encontrado"}
+              </h3>
               <p className="text-xs font-bold text-neutral-600 mt-1 font-body">
-                Tente alterar os termos da busca ou selecione outra matéria acima.
+                {summaries.length === 0
+                  ? "Assim que seu professor publicar um resumo de estudos, ele aparecerá nesta área."
+                  : "Tente alterar os termos da busca ou selecione outra matéria acima."}
               </p>
             </div>
           ) : (
@@ -413,7 +409,8 @@ export default function StudentResumosPanel() {
 
       {/* Full Summary Reader Modal */}
       {readingTopic && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
           <div className="nb-card relative w-full max-w-4xl my-8 bg-white rounded-2xl border-3 border-black shadow-[8px_8px_0_0_#000] p-6 space-y-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between border-b-3 border-black pb-4">
               <div>
@@ -489,12 +486,14 @@ export default function StudentResumosPanel() {
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Reader Modal for Recent History Item */}
       {readingHistoryItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
           <div className="nb-card relative w-full max-w-4xl my-8 bg-white rounded-2xl border-3 border-black shadow-[8px_8px_0_0_#000] p-6 space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between border-b-3 border-black pb-4">
               <div>
@@ -532,29 +531,33 @@ export default function StudentResumosPanel() {
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Lightbox Preview */}
       {previewImageId && (
-        <div
-          onClick={() => setPreviewImageId(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm cursor-pointer"
-        >
-          <div className="nb-card relative max-w-4xl max-h-[90vh] bg-white p-4 rounded-2xl border-3 border-black shadow-[8px_8px_0_0_#000]">
-            <button
-              onClick={() => setPreviewImageId(null)}
-              className="nb-btn absolute -top-4 -right-4 w-9 h-9 bg-amber-300 text-black font-black border-2 border-black rounded-full flex items-center justify-center shadow-[3px_3px_0_0_#000]"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <img
-              src={`/api/files/${previewImageId}`}
-              alt="Visualização Fonte"
-              className="max-h-[80vh] w-auto rounded-xl object-contain"
-            />
+        <ModalPortal>
+          <div
+            onClick={() => setPreviewImageId(null)}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm cursor-pointer"
+          >
+            <div className="nb-card relative max-w-4xl max-h-[90vh] bg-white p-4 rounded-2xl border-3 border-black shadow-[8px_8px_0_0_#000]">
+              <button
+                type="button"
+                onClick={() => setPreviewImageId(null)}
+                className="nb-btn absolute -top-4 -right-4 w-9 h-9 bg-amber-300 text-black font-black border-2 border-black rounded-full flex items-center justify-center shadow-[3px_3px_0_0_#000]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <img
+                src={`/api/files/${previewImageId}`}
+                alt="Visualização Fonte"
+                className="max-h-[80vh] w-auto rounded-xl object-contain"
+              />
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Generator Modal */}

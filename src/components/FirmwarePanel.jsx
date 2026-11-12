@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
+import ModalPortal from "@/components/ModalPortal";
 import {
   Cpu,
   Download,
@@ -21,6 +22,15 @@ import {
   Share2,
   Trash2,
   AlertTriangle,
+  Settings,
+  FileText,
+  Cloud,
+  Link2,
+  Smartphone,
+  User,
+  Lightbulb,
+  Palette,
+  Trophy,
 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 
@@ -28,6 +38,7 @@ const SYSTEM_FEATURES = [
   {
     id: "ai-summaries-generator",
     emoji: "📝",
+    Icon: FileText,
     title: "Gerador de Resumos por IA",
     category: "Inteligência Artificial",
     description: "Síntese automática de matérias, fórmulas KaTeX, exemplos práticos e exportação em PDF, PNG e Markdown.",
@@ -36,6 +47,7 @@ const SYSTEM_FEATURES = [
   {
     id: "google-drive-sync",
     emoji: "☁️",
+    Icon: Cloud,
     title: "Integração com Google Drive",
     category: "Armazenamento & Nuvem",
     description: "Seleção direta de fontes de estudo, arquivos de resumos e fotos enviadas do Google Drive.",
@@ -44,6 +56,7 @@ const SYSTEM_FEATURES = [
   {
     id: "custom-student-buttons",
     emoji: "🔗",
+    Icon: Link2,
     title: "Atalhos & Botões Customizados",
     category: "Navegação",
     description: "Criação de botões personalizados com links diretos para o Google Classroom, resumos e videoaulas.",
@@ -52,6 +65,7 @@ const SYSTEM_FEATURES = [
   {
     id: "whatsapp-dispatch",
     emoji: "📲",
+    Icon: Smartphone,
     title: "Disparador WhatsApp de Comunicados",
     category: "Comunicação",
     description: "Disparo oficial de avisos institucionais, relatórios de tarefas e imagens do firmware nos grupos.",
@@ -60,6 +74,7 @@ const SYSTEM_FEATURES = [
   {
     id: "netflix-profiles",
     emoji: "👤",
+    Icon: User,
     title: "Perfis Estilo Netflix",
     category: "Acessos & UI",
     description: "Alternância ágil entre alunos e admin com avatares customizados, fotos e autenticação segura.",
@@ -68,6 +83,7 @@ const SYSTEM_FEATURES = [
   {
     id: "task-delivery",
     emoji: "📚",
+    Icon: BookOpen,
     title: "Entrega e Gestão de Tarefas",
     category: "Acadêmico",
     description: "Criação de tarefas com anexos, fotos de quadro/livro, prazos rigorosos e status de pontualidade.",
@@ -76,6 +92,7 @@ const SYSTEM_FEATURES = [
   {
     id: "ai-answers",
     emoji: "✨",
+    Icon: Sparkles,
     title: "Gabarito Inteligente com IA",
     category: "Inteligência Artificial",
     description: "Geração de gabaritos em tamanhos Curto, Médio e Detalhado orientados pela fonte colocada pelo professor.",
@@ -84,6 +101,7 @@ const SYSTEM_FEATURES = [
   {
     id: "ai-tutor",
     emoji: "💡",
+    Icon: Lightbulb,
     title: "Tutor Pedagógico Sutil",
     category: "Inteligência Artificial",
     description: "Tira-dúvidas socrático que orienta o raciocínio do aluno sem alucinar respostas falsas.",
@@ -92,6 +110,7 @@ const SYSTEM_FEATURES = [
   {
     id: "effects-store",
     emoji: "🎨",
+    Icon: Palette,
     title: "Loja de Molduras de Avatar",
     category: "Gamificação",
     description: "Pontos obtidos em tarefas servem exclusivamente para desbloquear auras, molduras e cosméticos.",
@@ -100,6 +119,7 @@ const SYSTEM_FEATURES = [
   {
     id: "ai-monthly-eval",
     emoji: "🏆",
+    Icon: Trophy,
     title: "Avaliação Mensal por IA",
     category: "Inteligência Artificial",
     description: "Eleição do aluno vencedor do mês avaliado por pontualidade e penalizado por tarefas não feitas.",
@@ -264,8 +284,8 @@ export default function FirmwarePanel() {
       await api.put(`/firmware/features/${featureId}`, { enabled: nextVal });
       toast.success(
         nextVal
-          ? `⚡ Módulo "${title}" ativado com sucesso!`
-          : `⏸️ Módulo "${title}" desativado!`
+          ? `Módulo "${title}" ativado com sucesso!`
+          : `Módulo "${title}" desativado!`
       );
     } catch (err) {
       setFeaturesState((prev) => ({ ...prev, [featureId]: currentVal }));
@@ -294,7 +314,7 @@ export default function FirmwarePanel() {
       a.click();
       document.body.removeChild(a);
 
-      toast.success("Imagem do Firmware baixada com sucesso! 🖼️");
+      toast.success("Imagem do Firmware baixada com sucesso!");
     } catch (err) {
       toast.error("Não foi possível gerar a imagem.");
     } finally {
@@ -322,7 +342,7 @@ export default function FirmwarePanel() {
       };
 
       const { data } = await api.post("/whatsapp/send-firmware", payload);
-      toast.success(`📲 ${data.message || "Foto do Firmware enviada para o WhatsApp com sucesso!"}`);
+      toast.success(data.message || "Foto do Firmware enviada para o WhatsApp com sucesso!");
       setWhatsappModalOpen(false);
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao enviar foto do firmware pelo WhatsApp. Verifique se a sessão está conectada.");
@@ -375,8 +395,8 @@ export default function FirmwarePanel() {
 
       {/* Version & System Card */}
       <div className="nb-card p-6 sm:p-8 bg-gradient-to-br from-sky-200 via-sky-100 to-amber-100 relative overflow-hidden border-3 border-black">
-        <div className="absolute -top-6 -right-6 text-[160px] opacity-10 select-none pointer-events-none">
-          ⚙️
+        <div className="absolute -top-6 -right-6 opacity-10 select-none pointer-events-none">
+          <Settings className="w-40 h-40 text-sky-900" />
         </div>
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -465,6 +485,7 @@ export default function FirmwarePanel() {
           {SYSTEM_FEATURES.map((feat) => {
             const isEnabled = featuresState[feat.id] !== false;
             const isBusy = togglingFeature === feat.id;
+            const FeatureIcon = feat.Icon || Cpu;
             return (
               <div
                 key={feat.id}
@@ -473,8 +494,8 @@ export default function FirmwarePanel() {
                 }`}
                 data-testid={`firmware-feature-${feat.id}`}
               >
-                <div className="w-12 h-12 nb-card bg-sky-100 flex items-center justify-center text-2xl flex-shrink-0 border-2 border-black">
-                  {feat.emoji}
+                <div className="w-12 h-12 nb-card bg-sky-100 flex items-center justify-center flex-shrink-0 border-2 border-black">
+                  <FeatureIcon className="w-6 h-6 text-sky-900" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
@@ -517,7 +538,8 @@ export default function FirmwarePanel() {
 
       {/* Modal: Mandar no Zap a Foto do Firmware */}
       {whatsappModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5" data-testid="send-firmware-whatsapp-modal">
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5" data-testid="send-firmware-whatsapp-modal">
           <div className="nb-card bg-white w-full max-w-lg p-5 sm:p-7 border-3 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] space-y-4">
             <div className="flex items-start justify-between gap-3 border-b border-black/10 pb-3">
               <div className="flex items-center gap-3">
@@ -553,9 +575,9 @@ export default function FirmwarePanel() {
                   className="nb-input cursor-pointer text-sm"
                   data-testid="firmware-whatsapp-target-select"
                 >
-                  <option value="all">📢 Todos os Grupos Configurados (Grupo 1 e Grupo 2)</option>
-                  <option value="group1">📚 Apenas Grupo 1 (Tarefas & Comunicados)</option>
-                  <option value="group2">📷 Apenas Grupo 2 (Fotos & Enunciados)</option>
+                  <option value="all">Todos os Grupos Configurados (Grupo 1 e Grupo 2)</option>
+                  <option value="group1">Apenas Grupo 1 (Tarefas & Comunicados)</option>
+                  <option value="group2">Apenas Grupo 2 (Fotos & Enunciados)</option>
                 </select>
               </div>
 
@@ -605,7 +627,8 @@ export default function FirmwarePanel() {
               </div>
             </form>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

@@ -29,6 +29,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/katex": "^0.16.8",
     "@types/sharp": "^0.32.0",
+    "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.1.1",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "adm-zip": "^0.6.1",
@@ -57,7 +58,9 @@
     "sharp": "^0.35.5",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "vite-plugin-pwa": "^2.0.0",
+    "web-push": "^4.0.0"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",

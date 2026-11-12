@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { Clock, X, Trash2, AlertTriangle, Check, RefreshCw, Calendar, ShieldCheck, Play } from "lucide-react";
+import { Clock, X, Trash2, AlertTriangle, Check, RefreshCw, Calendar, ShieldCheck, Play, ClipboardList } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { formatDateBR } from "@/lib/priority";
 import AdminSystemClock from "@/components/AdminSystemClock";
+import ModalPortal from "@/components/ModalPortal";
 
 /**
  * Dialog for Admin to configure automatic task deletion by hour of day
@@ -85,8 +86,9 @@ export default function TaskCleanupDialog({ open, onClose, onSaved }) {
   const willDeleteToday = data?.will_delete_today;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto" data-testid="task-cleanup-dialog">
-      <div className="nb-card bg-white w-full max-w-2xl max-h-[92vh] overflow-y-auto p-5 sm:p-7 nb-fade-in my-auto">
+    <ModalPortal>
+      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto" data-testid="task-cleanup-dialog">
+        <div className="nb-card bg-white w-full max-w-2xl max-h-[92vh] overflow-y-auto p-5 sm:p-7 my-auto modal-window">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-5 border-b border-black/10 pb-4">
           <div className="flex items-center gap-3">
@@ -137,8 +139,9 @@ export default function TaskCleanupDialog({ open, onClose, onSaved }) {
 
                   {tasksToday.length > 0 && (
                     <div className="mt-3 space-y-2">
-                      <p className="text-xs font-bold text-amber-950">
-                        📋 {tasksToday.length} tarefa(s) cumprem a regra e serão excluídas no horário {cleanupTime}:
+                      <p className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                        <ClipboardList className="w-3.5 h-3.5 text-amber-900 flex-shrink-0" />
+                        <span>{tasksToday.length} tarefa(s) cumprem a regra e serão excluídas no horário {cleanupTime}:</span>
                       </p>
                       <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
                         {tasksToday.map((t) => (
@@ -302,35 +305,40 @@ export default function TaskCleanupDialog({ open, onClose, onSaved }) {
 
         {/* Confirmação de execução manual */}
         {confirmManual && (
-          <div className="fixed inset-0 z-60 bg-black/60 flex items-center justify-center p-4">
-            <div className="nb-card bg-white p-5 max-w-sm w-full space-y-4">
-              <h3 className="font-heading font-black text-xl text-neutral-900 flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-red-600" />
-                Confirmar Exclusão Imediata?
-              </h3>
-              <p className="text-xs text-neutral-700">
-                Isso irá apagar permanentemente as <strong>{tasksToday.length} tarefa(s)</strong> que atendem ao critério agora mesmo.
-              </p>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setConfirmManual(false)}
-                  className="nb-btn bg-white px-3 py-1.5 text-xs"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleRunNow}
-                  disabled={running}
-                  className="nb-btn bg-red-400 hover:bg-red-500 px-4 py-1.5 text-xs font-bold text-neutral-900"
-                  data-testid="confirm-run-cleanup"
-                >
-                  {running ? "Apagando..." : "Sim, Apagar Agora"}
-                </button>
+          <ModalPortal>
+            <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
+              <div className="nb-card bg-white p-5 max-w-sm w-full space-y-4">
+                <h3 className="font-heading font-black text-xl text-neutral-900 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  Confirmar Exclusão Imediata?
+                </h3>
+                <p className="text-xs text-neutral-700">
+                  Isso irá apagar permanentemente as <strong>{tasksToday.length} tarefa(s)</strong> que atendem ao critério agora mesmo.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmManual(false)}
+                    className="nb-btn bg-white px-3 py-1.5 text-xs"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRunNow}
+                    disabled={running}
+                    className="nb-btn bg-red-400 hover:bg-red-500 px-4 py-1.5 text-xs font-bold text-neutral-900"
+                    data-testid="confirm-run-cleanup"
+                  >
+                    {running ? "Apagando..." : "Sim, Apagar Agora"}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          </ModalPortal>
         )}
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }
