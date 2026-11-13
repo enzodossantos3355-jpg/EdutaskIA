@@ -1,56 +1,43 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { api, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
-import PersonalizedSummaryModal from "./PersonalizedSummaryModal";
 import MarkdownSummaryViewer from "./MarkdownSummaryViewer";
 import ModalPortal from "@/components/ModalPortal";
-import { MathRenderer, cleanLatexFormula } from "@/lib/mathUtils";
+import { getSubjectColorConfig } from "@/lib/subjectColors";
 import {
   BookOpen,
   Search,
-  Sparkles,
-  FileText,
   Eye,
   X,
-  History,
   Calendar,
   Image as ImageIcon,
   Calculator,
-  Brain,
   GraduationCap,
   Layers,
-  ChevronRight,
   Loader2,
-  CheckCircle2,
   Zap,
+  CheckCircle2,
 } from "lucide-react";
-import { getSubjectColorConfig } from "@/lib/subjectColors";
+
+function isRecentlyPublished(item) {
+  const ref = item.published_at || item.updated_at || item.created_at;
+  if (!ref) return false;
+  const diff = Date.now() - new Date(ref).getTime();
+  return diff >= 0 && diff <= 48 * 60 * 60 * 1000;
+}
 
 export default function StudentResumosPanel() {
-  const [subTab, setSubTab] = useState("apostilas"); // 'apostilas' | 'recentes'
-
   const [summaries, setSummaries] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState("TODAS");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Recent history state
-  const [recentGenerations, setRecentGenerations] = useState([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-
-  // Modal State
   const [readingTopic, setReadingTopic] = useState(null);
-  const [readingHistoryItem, setReadingHistoryItem] = useState(null);
-  const [showPersonalizedModal, setShowPersonalizedModal] = useState(false);
-  const [initialModalSubject, setInitialModalSubject] = useState("");
-
-  // Lightbox preview
   const [previewImageId, setPreviewImageId] = useState(null);
 
   useEffect(() => {
     loadData();
-    loadHistory();
   }, []);
 
   const loadData = async () => {
@@ -60,7 +47,10 @@ export default function StudentResumosPanel() {
         api.get("/summaries"),
         api.get("/subjects"),
       ]);
-      setSummaries(sumRes.data || []);
+      const publishedOnly = (sumRes.data || []).filter(
+        (item) => item.is_published === true && item.summary_text && item.summary_text.trim().length > 0
+      );
+      setSummaries(publishedOnly);
       setSubjects(subjRes.data || []);
     } catch (err) {
       toast.error(formatApiError(err));
@@ -69,40 +59,39 @@ export default function StudentResumosPanel() {
     }
   };
 
-  const loadHistory = async () => {
-    setLoadingHistory(true);
-    try {
-      const { data } = await api.get("/summaries/history");
-      setRecentGenerations(data || []);
-    } catch (err) {
-      toast.error(formatApiError(err));
-    } finally {
-      setLoadingHistory(false);
+  const filteredSummaries = useMemo(() => {
+    return summaries.filter((item) => {
+      const matchSubject =
+        selectedSubject === "TODAS" ||
+        item.subject.toLowerCase() === selectedSubject.toLowerCase();
+
+      const query = searchQuery.trim().toLowerCase();
+      const matchQuery =
+        !query ||
+        item.subject.toLowerCase().includes(query) ||
+        item.topic.toLowerCase().includes(query) ||
+        item.summary_text.toLowerCase().includes(query) ||
+        (item.key_concepts || []).some((c) => c.toLowerCase().includes(query)) ||
+        (item.formulas || []).some((f) => f.toLowerCase().includes(query)) ||
+        (item.source_topic_titles || []).some((t) => t.toLowerCase().includes(query));
+
+      return matchSubject && matchQuery;
+    });
+  }, [summaries, selectedSubject, searchQuery]);
+
+  const groupedBySubject = useMemo(() => {
+    const groups = new Map();
+    for (const item of filteredSummaries) {
+      const key = item.subject || "Geral";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
     }
-  };
+    return Array.from(groups.entries());
+  }, [filteredSummaries]);
 
-  const handleOpenPersonalizedModal = (subj = "") => {
-    setInitialModalSubject(subj);
-    setShowPersonalizedModal(true);
-  };
-
-  // Filter logic for apostilas
-  const filteredSummaries = summaries.filter((item) => {
-    const matchSubject =
-      selectedSubject === "TODAS" ||
-      item.subject.toLowerCase() === selectedSubject.toLowerCase();
-
-    const query = searchQuery.trim().toLowerCase();
-    const matchQuery =
-      !query ||
-      item.subject.toLowerCase().includes(query) ||
-      item.topic.toLowerCase().includes(query) ||
-      item.summary_text.toLowerCase().includes(query) ||
-      (item.key_concepts || []).some((c) => c.toLowerCase().includes(query)) ||
-      (item.formulas || []).some((f) => f.toLowerCase().includes(query));
-
-    return matchSubject && matchQuery;
-  });
+  const subjectsWithMaterialsCount = useMemo(() => {
+    return new Set(summaries.map((s) => s.subject.toLowerCase())).size;
+  }, [summaries]);
 
   const getSubjectBadgeStyle = (subjectName = "") => {
     const cfg = getSubjectColorConfig(subjectName, subjects);
@@ -110,427 +99,311 @@ export default function StudentResumosPanel() {
   };
 
   return (
-    <div className="space-y-6 font-body">
-      {/* Neo-Brutalist Top Banner */}
-      <div className="nb-card bg-amber-300 p-6 rounded-2xl border-3 border-black shadow-[6px_6px_0_0_#000] relative overflow-hidden">
-        {/* Subtle Decorative Pattern Accent */}
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-6 opacity-10 pointer-events-none">
-          <Brain className="w-64 h-64 text-black" />
-        </div>
-
-        <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="nb-badge bg-amber-300 text-black font-heading font-black text-xs uppercase px-3 py-1 border-2 border-black shadow-[2px_2px_0_0_#000] inline-flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-black" />
-                <span>Central de Estudos Edutask</span>
-              </span>
-              <span className="nb-badge bg-white text-black font-heading font-black text-xs uppercase px-3 py-1 border-2 border-black">
-                {summaries.length} Resumos Cadastrados
-              </span>
-            </div>
-
-            <h1 className="text-2xl sm:text-3xl font-heading font-black text-black uppercase tracking-tight flex items-center gap-3">
-              <GraduationCap className="w-8 h-8 text-black shrink-0" />
-              <span>Resumos de Estudo por Matéria</span>
-            </h1>
-
-            <p className="text-xs sm:text-sm font-bold text-neutral-900 leading-relaxed font-body">
-              Estude os conceitos das matérias, visualizações de contas matemáticas e resumos inteligentes organizados pelos professores.
-            </p>
-          </div>
-
-          <button
-            onClick={() => handleOpenPersonalizedModal()}
-            className="nb-btn px-5 py-3.5 bg-amber-400 hover:bg-amber-300 text-black font-heading font-black rounded-xl border-2 border-black shadow-[4px_4px_0_0_#000] flex items-center gap-2.5 uppercase tracking-wide text-xs sm:text-sm shrink-0 transition-all active:translate-x-1 active:translate-y-1"
-          >
-            <Sparkles className="w-5 h-5 text-black animate-pulse" />
-            <span>Gerar Resumo Personalizado</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Navigation SubTabs */}
-      <div className="flex items-center gap-3 border-b-3 border-black pb-3 overflow-x-auto">
-        <button
-          onClick={() => setSubTab("apostilas")}
-          className={`nb-btn px-5 py-2.5 rounded-xl border-2 border-black font-heading font-black text-xs sm:text-sm uppercase transition-all flex items-center gap-2 ${
-            subTab === "apostilas"
-              ? "bg-amber-300 text-black shadow-[3px_3px_0_0_#000] translate-x-[1px] translate-y-[1px]"
-              : "bg-white text-black hover:bg-amber-100 shadow-[2px_2px_0_0_#000]"
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span>Resumos por Matéria ({summaries.length})</span>
-        </button>
-
-
-        <button
-          onClick={() => setSubTab("recentes")}
-          className={`nb-btn px-5 py-2.5 rounded-xl border-2 border-black font-heading font-black text-xs sm:text-sm uppercase transition-all flex items-center gap-2 ${
-            subTab === "recentes"
-              ? "bg-amber-300 text-black shadow-[3px_3px_0_0_#000] translate-x-[1px] translate-y-[1px]"
-              : "bg-white text-black hover:bg-emerald-100 shadow-[2px_2px_0_0_#000]"
-          }`}
-        >
-          <History className="w-4 h-4" />
-          <span>Resumos Gerados Recentes ({recentGenerations.length})</span>
-        </button>
-      </div>
-
-      {/* SubTab 1: Apostilas & Tópicos */}
-      {subTab === "apostilas" && (
-        <div className="space-y-6">
-          {/* Controls: Search & Subject Chips */}
-          <div className="nb-card bg-white p-5 rounded-2xl border-3 border-black shadow-[5px_5px_0_0_#000] space-y-4">
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-neutral-700 font-bold" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Pesquisar por matéria, assunto, conceito ou fórmula..."
-                className="nb-input pl-11 pr-20 py-3 bg-neutral-50 border-2 border-black font-bold text-xs sm:text-sm rounded-xl focus:bg-white"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="nb-btn absolute right-3 top-1/2 -translate-y-1/2 text-xs font-heading font-black bg-neutral-200 hover:bg-neutral-300 text-black px-2.5 py-1 rounded-lg border-2 border-black"
-                >
-                  Limpar
-                </button>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-heading font-black uppercase text-black mb-2 flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-sky-600" />
-                <span>Filtrar por Matéria:</span>
-              </label>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setSelectedSubject("TODAS")}
-                  className={`nb-btn px-4 py-2 rounded-xl border-2 border-black font-heading font-black text-xs transition-all ${
-                    selectedSubject === "TODAS"
-                      ? "bg-amber-300 text-black shadow-[2px_2px_0_0_#000]"
-                      : "bg-neutral-100 text-black hover:bg-amber-100 shadow-[2px_2px_0_0_#000]"
-                  }`}
-                >
-                  Todas ({summaries.length})
-                </button>
-
-                {subjects.map((s) => {
-                  const count = summaries.filter(
-                    (item) => item.subject.toLowerCase() === s.name.toLowerCase()
-                  ).length;
-                  const isSelected = selectedSubject.toLowerCase() === s.name.toLowerCase();
-                  const badgeColor = getSubjectBadgeStyle(s.name);
-
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => setSelectedSubject(s.name)}
-                      className={`nb-btn px-4 py-2 rounded-xl border-2 border-black font-heading font-black text-xs transition-all flex items-center gap-1.5 ${
-                        isSelected
-                          ? "bg-amber-300 text-black shadow-[2px_2px_0_0_#000]"
-                          : `${badgeColor} hover:brightness-95 shadow-[2px_2px_0_0_#000]`
-                      }`}
-                    >
-                      <span>{s.name}</span>
-                      <span className="nb-badge bg-black/10 text-current text-[10px] px-1.5 py-0.2 border border-black/30">
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Cards Grid */}
-          {loading ? (
-            <div className="p-12 text-center text-neutral-700 font-bold flex items-center justify-center gap-3 nb-card bg-white rounded-2xl border-3 border-black shadow-[4px_4px_0_0_#000]">
-              <Loader2 className="w-6 h-6 animate-spin text-black" />
-              <span className="font-heading font-black uppercase text-sm">Carregando resumos de estudo...</span>
-            </div>
-          ) : filteredSummaries.length === 0 ? (
-            <div className="p-12 text-center bg-amber-50 rounded-2xl border-3 border-dashed border-black">
-              <BookOpen className="w-12 h-12 text-amber-600 mx-auto mb-3" />
-              <h3 className="text-lg font-heading font-black text-black uppercase">
-                {summaries.length === 0 ? "Ainda não há resumos publicados" : "Nenhum resumo encontrado"}
-              </h3>
-              <p className="text-xs font-bold text-neutral-600 mt-1 font-body">
-                {summaries.length === 0
-                  ? "Assim que seu professor publicar um resumo de estudos, ele aparecerá nesta área."
-                  : "Tente alterar os termos da busca ou selecione outra matéria acima."}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {filteredSummaries.map((topicItem) => {
-                const badgeColor = getSubjectBadgeStyle(topicItem.subject);
-
-                return (
-                  <div
-                    key={topicItem.id}
-                    className="nb-card bg-white p-6 rounded-2xl border-3 border-black shadow-[5px_5px_0_0_#000] flex flex-col justify-between space-y-4 hover:shadow-[7px_7px_0_0_#000] transition-all group"
-                  >
-                    <div className="space-y-3">
-                      {/* Card Header */}
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <span className={`nb-badge ${badgeColor} font-heading font-black text-xs uppercase border-2 border-black px-3 py-1 shadow-[1.5px_1.5px_0_0_#000]`}>
-                          {topicItem.subject}
-                        </span>
-                        <span className="text-[11px] font-bold text-neutral-500 font-body flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5" />
-                          {new Date(topicItem.updated_at || topicItem.created_at).toLocaleDateString("pt-BR")}
-                        </span>
-                      </div>
-
-                      <h3 className="text-lg sm:text-xl font-heading font-black text-black group-hover:text-amber-900 transition-colors leading-tight">
-                        {topicItem.topic}
-                      </h3>
-
-                      {/* Content Preview Box */}
-                      <p className="text-xs sm:text-sm font-body font-medium text-neutral-800 line-clamp-4 leading-relaxed bg-neutral-50 p-3.5 rounded-xl border-2 border-black/40">
-                        {topicItem.summary_text}
-                      </p>
-                    </div>
-
-                    {/* Card Footer Actions */}
-                    <div className="pt-3 border-t-2 border-black flex items-center justify-between gap-2">
-                      <button
-                        onClick={() => setReadingTopic(topicItem)}
-                        className="nb-btn px-4 py-2.5 bg-sky-400 hover:bg-sky-500 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5 transition-all"
-                      >
-                        <Eye className="w-4 h-4" />
-                        <span>Ler Resumo Completo</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleOpenPersonalizedModal(topicItem.subject)}
-                        title="Gerar resumo personalizado desta matéria"
-                        className="nb-btn p-2.5 bg-amber-300 hover:bg-amber-400 text-black font-heading font-black text-xs rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] transition-all flex items-center gap-1"
-                      >
-                        <Sparkles className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* SubTab 2: Resumos Recentes */}
-      {subTab === "recentes" && (
-        <div className="nb-card bg-white p-6 rounded-2xl border-3 border-black shadow-[5px_5px_0_0_#000] space-y-5">
-          <div className="flex items-center justify-between border-b-3 border-black pb-4">
-            <div className="flex items-center gap-3">
-              <span className="w-12 h-12 rounded-xl bg-emerald-300 text-black border-2 border-black flex items-center justify-center shrink-0 shadow-[2px_2px_0_0_#000]">
-                <History className="w-6 h-6" />
-              </span>
-              <div>
-                <h3 className="text-xl font-heading font-black text-black uppercase">
-                  Resumos Gerados Recentes
-                </h3>
-                <p className="text-xs font-bold text-neutral-600 font-body mt-0.5">
-                  Histórico dos resumos e fichas personalizadas geradas por você.
-                </p>
-              </div>
-            </div>
-
-            <span className="nb-badge bg-emerald-300 text-emerald-950 font-heading font-black text-xs border-2 border-black px-3 py-1 shadow-[2px_2px_0_0_#000]">
-              {recentGenerations.length} {recentGenerations.length === 1 ? "Resumo" : "Resumos"}
+    <div className="space-y-6 font-body" data-testid="student-resumos-panel">
+      {/* Study Hub Header (Somente leitura — sem geração pelo aluno) */}
+      <div className="nb-card bg-amber-300 p-5 sm:p-6 rounded-2xl border-3 border-black shadow-[6px_6px_0_0_#000] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+        <div className="space-y-2 max-w-3xl">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="nb-badge bg-white text-black font-heading font-black text-xs uppercase px-3 py-1 border-2 border-black shadow-[2px_2px_0_0_#000] inline-flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-amber-600" />
+              <span>Biblioteca de Resumos</span>
+            </span>
+            <span className="nb-badge bg-emerald-300 text-emerald-950 font-heading font-black text-xs uppercase px-3 py-1 border-2 border-black tabular-nums">
+              {summaries.length} Disponível(is) em {subjectsWithMaterialsCount} Matéria(s)
             </span>
           </div>
 
-          {loadingHistory ? (
-            <div className="p-12 text-center text-neutral-700 font-bold flex items-center justify-center gap-3">
-              <Loader2 className="w-6 h-6 animate-spin text-black" />
-              <span className="font-heading font-black uppercase text-sm">Carregando histórico recente...</span>
-            </div>
-          ) : recentGenerations.length === 0 ? (
-            <div className="p-12 text-center bg-neutral-50 rounded-2xl border-3 border-dashed border-black">
-              <History className="w-12 h-12 text-emerald-600 mx-auto mb-3" />
-              <h4 className="font-heading font-black text-black text-lg uppercase">Nenhum resumo gerado recentemente</h4>
-              <p className="text-xs font-bold text-neutral-600 mt-1 font-body">
-                Clique no botão "Gerar Resumo Personalizado" para criar seu primeiro resumo!
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {recentGenerations.map((gen) => (
-                <div
-                  key={gen.id}
-                  className="nb-card bg-neutral-50/80 p-5 rounded-2xl border-3 border-black shadow-[4px_4px_0_0_#000] flex flex-col justify-between space-y-4"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="nb-badge bg-amber-300 text-black font-heading font-black text-xs uppercase border-2 border-black px-3 py-1 shadow-[2px_2px_0_0_#000] flex items-center gap-1.5">
-                        {gen.format === "pdf" ? <FileText className="w-3.5 h-3.5 text-black" /> : <ImageIcon className="w-3.5 h-3.5 text-black" />}
-                        <span>{gen.format === "pdf" ? "Resumo Completo" : "Ficha Visual"}</span>
-                      </span>
+          <h1 className="text-2xl sm:text-3xl font-heading font-black text-black uppercase tracking-tight flex items-center gap-3">
+            <GraduationCap className="w-8 h-8 text-black shrink-0" />
+            <span>Resumos de Estudo</span>
+          </h1>
 
+          <p className="text-xs sm:text-sm font-bold text-neutral-900 leading-relaxed">
+            Consulte os resumos preparados e disponibilizados pelo professor em cada matéria, com fórmulas organizadas e exportação para PDF ou imagem.
+          </p>
+        </div>
+      </div>
 
-                      <span className="text-xs font-bold text-neutral-600 font-body flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-neutral-500" />
-                        {new Date(gen.generated_at).toLocaleString("pt-BR")}
-                      </span>
-                    </div>
-
-                    <div>
-                      <div className="text-[10px] font-heading font-black uppercase text-neutral-600">Matérias Incluídas:</div>
-                      <div className="text-xs sm:text-sm font-bold text-black font-body mt-0.5">
-                        {Array.isArray(gen.subject_names) ? gen.subject_names.join(" • ") : "Geral"}
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-3 rounded-xl border-2 border-black text-xs font-medium font-body text-neutral-800 line-clamp-3 leading-relaxed">
-                      {gen.result_markdown}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setReadingHistoryItem(gen)}
-                    className="nb-btn w-full py-3 bg-sky-400 hover:bg-sky-500 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black shadow-[3px_3px_0_0_#000] flex items-center justify-center gap-2 transition-all"
-                  >
-                    <Eye className="w-4 h-4" />
-                    <span>Visualizar, Copiar & Imprimir</span>
-                  </button>
-                </div>
-              ))}
-            </div>
+      {/* Search & Subject Chips */}
+      <div className="nb-card bg-white p-5 rounded-2xl border-3 border-black shadow-[5px_5px_0_0_#000] space-y-4">
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-neutral-700" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar assunto, tópico, conceito ou fórmula..."
+            className="nb-input pl-11 pr-20 py-3 bg-neutral-50 border-2 border-black font-bold text-xs sm:text-sm rounded-xl focus:bg-white"
+            data-testid="student-resumos-search"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="nb-btn absolute right-3 top-1/2 -translate-y-1/2 text-xs font-heading font-black bg-neutral-200 hover:bg-neutral-300 text-black px-2.5 py-1 rounded-lg border-2 border-black"
+            >
+              Limpar
+            </button>
           )}
+        </div>
+
+        <div>
+          <div className="text-xs font-heading font-black uppercase text-black mb-2 flex items-center gap-1.5">
+            <Layers className="w-4 h-4 text-sky-600" />
+            <span>Filtrar por Matéria:</span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedSubject("TODAS")}
+              className={`nb-btn px-4 py-2 rounded-xl border-2 border-black font-heading font-black text-xs transition-all tabular-nums ${
+                selectedSubject === "TODAS"
+                  ? "bg-amber-300 text-black shadow-[2px_2px_0_0_#000]"
+                  : "bg-neutral-100 text-black hover:bg-amber-100 shadow-[2px_2px_0_0_#000]"
+              }`}
+            >
+              Todas ({summaries.length})
+            </button>
+
+            {subjects.map((s) => {
+              const count = summaries.filter(
+                (item) => item.subject.toLowerCase() === s.name.toLowerCase()
+              ).length;
+              const isSelected = selectedSubject.toLowerCase() === s.name.toLowerCase();
+              const badgeColor = getSubjectBadgeStyle(s.name);
+
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSelectedSubject(s.name)}
+                  className={`nb-btn px-4 py-2 rounded-xl border-2 border-black font-heading font-black text-xs transition-all flex items-center gap-1.5 tabular-nums ${
+                    isSelected
+                      ? "bg-amber-300 text-black shadow-[2px_2px_0_0_#000]"
+                      : `${badgeColor} hover:brightness-95 shadow-[2px_2px_0_0_#000]`
+                  }`}
+                >
+                  <span>{s.name}</span>
+                  <span className="bg-black/15 text-current text-[10px] px-1.5 py-0.5 rounded border border-black/30">
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Content Area */}
+      {loading ? (
+        <div className="p-12 text-center text-neutral-700 font-bold flex items-center justify-center gap-3 nb-card bg-white rounded-2xl border-3 border-black shadow-[4px_4px_0_0_#000]">
+          <Loader2 className="w-6 h-6 animate-spin text-black" />
+          <span className="font-heading font-black uppercase text-sm">Carregando resumos disponíveis...</span>
+        </div>
+      ) : filteredSummaries.length === 0 ? (
+        <div className="p-12 text-center bg-amber-50 rounded-2xl border-3 border-dashed border-black">
+          <BookOpen className="w-12 h-12 text-amber-600 mx-auto mb-3" />
+          <h3 className="text-lg font-heading font-black text-black uppercase">
+            {summaries.length === 0
+              ? "Nenhum resumo disponibilizado ainda"
+              : "Nenhum resumo encontrado para este filtro"}
+          </h3>
+          <p className="text-xs font-bold text-neutral-600 mt-1 max-w-md mx-auto">
+            {summaries.length === 0
+              ? "Assim que o professor finalizar e liberar um resumo de alguma matéria, você receberá uma notificação e ele aparecerá aqui."
+              : "Tente limpar a pesquisa ou selecionar outra matéria acima."}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {groupedBySubject.map(([subjectName, items]) => {
+            const badgeColor = getSubjectBadgeStyle(subjectName);
+            return (
+              <div key={subjectName} className="space-y-4">
+                <div className="flex items-center justify-between border-b-2 border-black/20 pb-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className={`nb-badge ${badgeColor} font-heading font-black text-xs sm:text-sm uppercase border-2 border-black px-3 py-1 shadow-[2px_2px_0_0_#000]`}>
+                      {subjectName}
+                    </span>
+                    <span className="text-xs font-bold text-neutral-600 tabular-nums">
+                      {items.length} {items.length === 1 ? "resumo disponível" : "resumos disponíveis"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {items.map((topicItem) => {
+                    const isNew = isRecentlyPublished(topicItem);
+                    const dateStr = topicItem.published_at || topicItem.updated_at || topicItem.created_at;
+                    const concepts = (topicItem.key_concepts || []).slice(0, 4);
+                    const formulasCount = (topicItem.formulas || []).length;
+                    const includedTopics = Array.isArray(topicItem.source_topic_titles)
+                      ? topicItem.source_topic_titles
+                      : [];
+
+                    return (
+                      <div
+                        key={topicItem.id}
+                        className="nb-card bg-white p-5 sm:p-6 rounded-2xl border-3 border-black shadow-[5px_5px_0_0_#000] flex flex-col justify-between space-y-4 hover:shadow-[7px_7px_0_0_#000] transition-all"
+                        data-testid={`student-summary-card-${topicItem.id}`}
+                      >
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5">
+                              <span className="nb-badge bg-emerald-200 text-emerald-950 border border-black text-[10px] font-black uppercase inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Disponível</span>
+                              </span>
+                              {isNew && (
+                                <span className="nb-badge bg-amber-300 text-black border border-black text-[10px] font-black uppercase">
+                                  Novo
+                                </span>
+                              )}
+                            </div>
+
+                            <span className="text-[11px] font-bold text-neutral-600 flex items-center gap-1 tabular-nums">
+                              <Calendar className="w-3.5 h-3.5" />
+                              <span>{new Date(dateStr).toLocaleDateString("pt-BR")}</span>
+                            </span>
+                          </div>
+
+                          <h3 className="text-lg sm:text-xl font-heading font-black text-black leading-tight">
+                            {topicItem.topic}
+                          </h3>
+
+                          {includedTopics.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {includedTopics.slice(0, 4).map((tTitle, idx) => (
+                                <span
+                                  key={idx}
+                                  className="px-2 py-0.5 bg-amber-100 border border-black/60 rounded text-[10px] font-black text-amber-950"
+                                >
+                                  {tTitle}
+                                </span>
+                              ))}
+                              {includedTopics.length > 4 && (
+                                <span className="px-2 py-0.5 bg-amber-100 border border-black/60 rounded text-[10px] font-black text-amber-950">
+                                  +{includedTopics.length - 4} tópicos
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {(concepts.length > 0 || formulasCount > 0) && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {concepts.map((c, idx) => (
+                                <span
+                                  key={idx}
+                                  className="px-2 py-0.5 bg-neutral-100 border border-black/40 rounded text-[11px] font-bold text-neutral-800"
+                                >
+                                  {c}
+                                </span>
+                              ))}
+                              {formulasCount > 0 && (
+                                <span className="px-2 py-0.5 bg-sky-100 border border-black rounded text-[11px] font-bold text-sky-950 inline-flex items-center gap-1 tabular-nums">
+                                  <Calculator className="w-3 h-3" />
+                                  <span>{formulasCount} fórmula(s)</span>
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          <p className="text-xs sm:text-sm font-body font-medium text-neutral-800 line-clamp-3 leading-relaxed bg-neutral-50 p-3.5 rounded-xl border-2 border-black/30">
+                            {topicItem.summary_text}
+                          </p>
+                        </div>
+
+                        <div className="pt-3 border-t-2 border-black/15 flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setReadingTopic(topicItem)}
+                            className="nb-btn w-full px-4 py-2.5 bg-sky-400 hover:bg-sky-500 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center justify-center gap-1.5"
+                            data-testid={`read-summary-${topicItem.id}`}
+                          >
+                            <Eye className="w-4 h-4" />
+                            <span>Estudar Resumo Completo</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
       {/* Full Summary Reader Modal */}
       {readingTopic && (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="nb-card relative w-full max-w-4xl my-8 bg-white rounded-2xl border-3 border-black shadow-[8px_8px_0_0_#000] p-6 space-y-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between border-b-3 border-black pb-4">
-              <div>
-                <span className={`nb-badge ${getSubjectBadgeStyle(readingTopic.subject)} font-heading font-black text-xs uppercase border-2 border-black inline-block mb-2 shadow-[2px_2px_0_0_#000]`}>
-                  {readingTopic.subject}
-                </span>
-                <h2 className="text-xl sm:text-2xl font-heading font-black text-black leading-tight">
-                  {readingTopic.topic}
-                </h2>
-              </div>
-
-              <button
-                onClick={() => setReadingTopic(null)}
-                className="w-9 h-9 rounded-xl bg-neutral-100 hover:bg-neutral-200 border-2 border-black flex items-center justify-center font-black shadow-[2px_2px_0_0_#000]"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <MarkdownSummaryViewer
-              markdown={readingTopic.summary_text}
-              title={readingTopic.topic}
-              subtitle={`Matéria: ${readingTopic.subject} | Data: ${new Date(readingTopic.updated_at || readingTopic.created_at).toLocaleDateString("pt-BR")}`}
-              subjects={[readingTopic.subject]}
-              showToolbar={true}
-            />
-
-            {/* Source Images */}
-            {readingTopic.source_image_ids && readingTopic.source_image_ids.length > 0 && (
-              <div className="nb-card bg-neutral-50 p-5 rounded-2xl border-2 border-black space-y-3">
-                <h4 className="font-heading font-black text-xs sm:text-sm uppercase text-black flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4 text-neutral-700" /> Fotos Fontes do Caderno do Professor:
-                </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {readingTopic.source_image_ids.map((imgId) => (
-                    <div
-                      key={imgId}
-                      onClick={() => setPreviewImageId(imgId)}
-                      className="group relative h-24 rounded-xl border-2 border-black overflow-hidden cursor-pointer shadow-[2px_2px_0_0_#000] bg-black"
-                    >
-                      <img
-                        src={`/api/files/${imgId}`}
-                        alt="Fonte"
-                        className="w-full h-full object-cover group-hover:opacity-75 transition-opacity"
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 text-white">
-                        <Eye className="w-5 h-5" />
-                      </div>
-                    </div>
-                  ))}
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 sm:p-5 backdrop-blur-sm">
+            <div className="nb-card relative w-full max-w-4xl bg-white rounded-2xl border-3 border-black shadow-[8px_8px_0_0_#000] p-5 sm:p-6 space-y-6 max-h-[92vh] overflow-y-auto">
+              <div className="flex items-start justify-between border-b-3 border-black pb-4 gap-3">
+                <div>
+                  <span className={`nb-badge ${getSubjectBadgeStyle(readingTopic.subject)} font-heading font-black text-xs uppercase border-2 border-black inline-block mb-2 shadow-[2px_2px_0_0_#000]`}>
+                    {readingTopic.subject}
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-heading font-black text-black leading-tight">
+                    {readingTopic.topic}
+                  </h2>
                 </div>
-              </div>
-            )}
 
-            <div className="flex items-center justify-between pt-4 border-t-3 border-black">
-              <button
-                onClick={() => {
-                  const subj = readingTopic.subject;
-                  setReadingTopic(null);
-                  handleOpenPersonalizedModal(subj);
-                }}
-                className="nb-btn px-5 py-3 bg-amber-300 hover:bg-amber-400 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black shadow-[3px_3px_0_0_#000] flex items-center gap-2"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Gerar Resumo Desta Matéria</span>
-              </button>
-
-              <button
-                onClick={() => setReadingTopic(null)}
-                className="nb-btn px-5 py-3 bg-white hover:bg-neutral-100 text-black font-heading font-bold text-xs uppercase rounded-xl border-2 border-black"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-          </div>
-        </ModalPortal>
-      )}
-
-      {/* Reader Modal for Recent History Item */}
-      {readingHistoryItem && (
-        <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="nb-card relative w-full max-w-4xl my-8 bg-white rounded-2xl border-3 border-black shadow-[8px_8px_0_0_#000] p-6 space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between border-b-3 border-black pb-4">
-              <div>
-                <span className="nb-badge bg-amber-300 text-black font-heading font-black text-xs uppercase border-2 border-black inline-block mb-2 shadow-[2px_2px_0_0_#000]">
-                  {readingHistoryItem.format === "pdf" ? "Resumo Completo" : "Ficha Visual"}
-                </span>
-
-                <h2 className="text-xl font-heading font-black text-black">
-                  Gerado em {new Date(readingHistoryItem.generated_at).toLocaleString("pt-BR")}
-                </h2>
+                <button
+                  type="button"
+                  onClick={() => setReadingTopic(null)}
+                  className="w-9 h-9 rounded-xl bg-neutral-100 hover:bg-neutral-200 border-2 border-black flex items-center justify-center font-black shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <button
-                onClick={() => setReadingHistoryItem(null)}
-                className="w-9 h-9 rounded-xl bg-neutral-100 hover:bg-neutral-200 border-2 border-black flex items-center justify-center font-black shadow-[2px_2px_0_0_#000]"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+              <MarkdownSummaryViewer
+                markdown={readingTopic.summary_text}
+                title={readingTopic.topic}
+                subtitle={`Matéria: ${readingTopic.subject} | Liberado em: ${new Date(readingTopic.published_at || readingTopic.updated_at || readingTopic.created_at).toLocaleDateString("pt-BR")}`}
+                subjects={[readingTopic.subject]}
+                showToolbar={true}
+              />
 
-            <MarkdownSummaryViewer
-              markdown={readingHistoryItem.result_markdown}
-              title="Resumo de Estudo Edutask"
-              subtitle={`Matérias: ${Array.isArray(readingHistoryItem.subject_names) ? readingHistoryItem.subject_names.join(" • ") : "Geral"} | Data: ${new Date(readingHistoryItem.generated_at).toLocaleDateString("pt-BR")}`}
-              subjects={Array.isArray(readingHistoryItem.subject_names) ? readingHistoryItem.subject_names : []}
-              showToolbar={true}
-            />
+              {readingTopic.source_image_ids && readingTopic.source_image_ids.length > 0 && (
+                <div className="nb-card bg-neutral-50 p-4 rounded-2xl border-2 border-black space-y-3">
+                  <h4 className="font-heading font-black text-xs sm:text-sm uppercase text-black flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-neutral-700" />
+                    <span>Fotos de Apoio do Professor:</span>
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {readingTopic.source_image_ids.map((imgId) => (
+                      <div
+                        key={imgId}
+                        onClick={() => setPreviewImageId(imgId)}
+                        className="group relative h-24 rounded-xl border-2 border-black overflow-hidden cursor-pointer shadow-[2px_2px_0_0_#000] bg-black"
+                      >
+                        <img
+                          src={`/api/files/${imgId}`}
+                          alt="Fonte"
+                          className="w-full h-full object-cover group-hover:opacity-75 transition-opacity"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 text-white">
+                          <Eye className="w-5 h-5" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-            <div className="flex items-center justify-end pt-4 border-t-3 border-black">
-              <button
-                onClick={() => setReadingHistoryItem(null)}
-                className="nb-btn px-5 py-2.5 bg-white hover:bg-neutral-100 text-black font-heading font-bold text-xs uppercase rounded-xl border-2 border-black"
-              >
-                Fechar
-              </button>
+              <div className="flex items-center justify-end pt-4 border-t-3 border-black gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReadingTopic(null)}
+                  className="nb-btn px-5 py-3 bg-white hover:bg-neutral-100 text-black font-heading font-bold text-xs uppercase rounded-xl border-2 border-black"
+                >
+                  Fechar
+                </button>
+              </div>
             </div>
-          </div>
           </div>
         </ModalPortal>
       )}
@@ -559,16 +432,6 @@ export default function StudentResumosPanel() {
           </div>
         </ModalPortal>
       )}
-
-      {/* Generator Modal */}
-      <PersonalizedSummaryModal
-        isOpen={showPersonalizedModal}
-        onClose={() => {
-          setShowPersonalizedModal(false);
-          loadHistory();
-        }}
-        initialSubject={initialModalSubject}
-      />
     </div>
   );
 }

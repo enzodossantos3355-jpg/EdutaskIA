@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Calendar as CalendarIcon, Paperclip, Check, BookOpen, Filter, Megaphone, LayoutGrid, CalendarDays, Sparkles, ShoppingBag, BarChart3, HelpCircle, Star, ExternalLink, Image as ImageIcon, Loader2, Copy, CheckCheck, FileText, ChevronDown, ChevronUp, Lock, Bot, Coins, RotateCcw, Scissors, Gem, Link2, Zap, X, Download, Smartphone, Bell, BellRing, BellOff } from "lucide-react";
+import { Calendar as CalendarIcon, Paperclip, Check, BookOpen, Filter, Megaphone, LayoutGrid, CalendarDays, Sparkles, ShoppingBag, BarChart3, HelpCircle, Star, ExternalLink, Image as ImageIcon, Loader2, Copy, CheckCheck, FileText, ChevronDown, ChevronUp, Lock, Bot, Coins, RotateCcw, Scissors, Gem, Link2, Zap, X, Download, Smartphone, Bell, BellRing, BellOff, Pencil } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import { useAuth } from "@/context/AuthContext";
@@ -178,6 +178,16 @@ function StudentAnnouncementsView({ announcements, specialAnnouncements, regular
                             <span>Aviso Especial</span>
                           </span>
                           <span className="text-[11px] text-amber-950 font-bold">{formatDateBR(a.created_at)}</span>
+                          {(a.was_edited || a.edited_at) && (
+                            <span
+                              className="inline-flex items-center gap-1 bg-white text-black px-2 py-0.5 rounded border border-black text-[10px] font-black uppercase shadow-[1px_1px_0_0_#000]"
+                              data-testid={`student-announcement-edited-${a.id}`}
+                              title={a.edited_at ? `Editado em ${formatDateBR(a.edited_at, true)}` : "Aviso editado"}
+                            >
+                              <Pencil className="w-2.5 h-2.5" />
+                              <span>Editado{a.edited_at ? ` • ${formatDateBR(a.edited_at, true)}` : ""}</span>
+                            </span>
+                          )}
                         </div>
                         <h3 className="font-heading font-black text-lg sm:text-xl leading-tight text-neutral-900 mb-2">
                           {a.title}
@@ -224,9 +234,26 @@ function StudentAnnouncementsView({ announcements, specialAnnouncements, regular
                         <Megaphone className="w-4 h-4 sm:w-5 sm:h-5 text-violet-950" strokeWidth={2.5} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-heading font-bold text-base sm:text-lg leading-tight mb-1 text-black">{a.title}</h3>
+                        <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                          <h3 className="font-heading font-bold text-base sm:text-lg leading-tight text-black">{a.title}</h3>
+                          {(a.was_edited || a.edited_at) && (
+                            <span
+                              className="inline-flex items-center gap-1 bg-amber-200 text-black px-2 py-0.5 rounded border border-black text-[10px] font-black uppercase"
+                              data-testid={`student-announcement-edited-${a.id}`}
+                              title={a.edited_at ? `Editado em ${formatDateBR(a.edited_at, true)}` : "Aviso editado"}
+                            >
+                              <Pencil className="w-2.5 h-2.5" />
+                              <span>Editado</span>
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs sm:text-sm text-neutral-800 whitespace-pre-wrap mb-2">{a.message}</p>
-                        <span className="text-[11px] text-neutral-600 font-bold">{formatDateBR(a.created_at)}</span>
+                        <div className="flex items-center gap-2 flex-wrap text-[11px] text-neutral-600 font-bold">
+                          <span>{formatDateBR(a.created_at)}</span>
+                          {(a.was_edited || a.edited_at) && a.edited_at && (
+                            <span className="text-neutral-700">• Editado em {formatDateBR(a.edited_at, true)}</span>
+                          )}
+                        </div>
                         <AnnouncementComments announcementId={a.id} />
                       </div>
                     </div>
@@ -338,6 +365,9 @@ export default function StudentDashboard() {
       if (subjRes?.data && Array.isArray(subjRes.data)) {
         setCachedSubjects(subjRes.data);
       }
+      if (statusRes?.data?.collection_prefix !== undefined) {
+        firebaseService.setCollectionPrefix(statusRes.data.collection_prefix);
+      }
       if (statusRes?.data?.annual_cycle) {
         setAnnualCycle(statusRes.data.annual_cycle);
       }
@@ -388,46 +418,33 @@ export default function StudentDashboard() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Subscrições em Tempo Real com Limpeza Garantida (onSnapshot Unsubscribe Cleanup)
+  // Subscrições em Tempo Real (ignora snapshots em cache local para evitar exibir tarefas antigas/incompletas)
   useEffect(() => {
     if (!user?.id) return;
 
     let unsubTasks = null;
     let unsubAnnouncements = null;
+    let firstTaskSnap = true;
+    let firstAnnSnap = true;
+    let refreshTimer = null;
+
+    const triggerLiveRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        load({ silent: true });
+      }, 450);
+    };
 
     try {
       unsubTasks = firebaseService.subscribeToTasks(
         user.id,
-        (remoteTasks, fromCache) => {
-          setIsOfflineData(fromCache);
-          const currentUserId = user.id;
-          setTasks((prevTasks) => {
-            const prevCompletionsMap = new Map();
-            prevTasks.forEach((pt) => {
-              if (pt.completed) {
-                prevCompletionsMap.set(pt.id, {
-                  completed_at: pt.completed_at,
-                  points_awarded: pt.points_awarded,
-                });
-              }
-            });
-
-            return (remoteTasks || [])
-              .filter((t) => {
-                const validAssigned = (t.assigned_to || []).filter((id) => id && typeof id === "string" && id.trim().length > 0);
-                if (validAssigned.length === 0) return true;
-                return validAssigned.some((id) => String(id).trim() === String(currentUserId).trim());
-              })
-              .map((t) => {
-                const prevComp = prevCompletionsMap.get(t.id);
-                return {
-                  ...t,
-                  completed: t.completed !== undefined ? Boolean(t.completed) : Boolean(prevComp),
-                  completed_at: t.completed_at || prevComp?.completed_at,
-                  points_awarded: t.points_awarded || prevComp?.points_awarded,
-                };
-              });
-          });
+        (_remoteTasks, fromCache) => {
+          if (fromCache) return;
+          if (firstTaskSnap) {
+            firstTaskSnap = false;
+            return;
+          }
+          triggerLiveRefresh();
         },
         (err) => {
           console.warn("[StudentDashboard] Fallback em erro de subscription tasks:", err);
@@ -436,9 +453,13 @@ export default function StudentDashboard() {
 
       unsubAnnouncements = firebaseService.subscribeToAnnouncements(
         user.id,
-        (remoteAnn, fromCache) => {
-          setIsOfflineData(fromCache);
-          setAnnouncements(remoteAnn || []);
+        (_remoteAnn, fromCache) => {
+          if (fromCache) return;
+          if (firstAnnSnap) {
+            firstAnnSnap = false;
+            return;
+          }
+          triggerLiveRefresh();
         },
         (err) => {
           console.warn("[StudentDashboard] Fallback em erro de subscription announcements:", err);
@@ -449,10 +470,11 @@ export default function StudentDashboard() {
     }
 
     return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
       if (unsubTasks) unsubTasks();
       if (unsubAnnouncements) unsubAnnouncements();
     };
-  }, [user?.id]);
+  }, [user?.id, load]);
 
   // Listener para auto-atualização de tarefas quando criadas/modificadas pelo professor ou ao focar a aba
   const lastFocusRefreshRef = useRef(0);
@@ -1207,6 +1229,16 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, onMarkUpdateRead, index }
           <span className={`nb-badge ${priority.bg}`} data-testid={`student-task-priority-${task.id}`}>
             {priority.icon} {priority.label}
           </span>
+          {(task.was_edited || task.edited_at || task.last_updated_at) && (
+            <span
+              className="nb-badge bg-amber-200 text-amber-950 border border-black inline-flex items-center gap-1"
+              data-testid={`student-task-edited-${task.id}`}
+              title={`Editada em ${formatDateBR(task.edited_at || task.last_updated_at, true)}`}
+            >
+              <Pencil className="w-3 h-3" />
+              <span>Editada</span>
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 text-xs mb-2 sm:mb-3 flex-wrap">

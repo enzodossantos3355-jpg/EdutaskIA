@@ -8,7 +8,6 @@ import {
   updateDoc,
   deleteField,
   onSnapshot,
-  query,
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -36,6 +35,55 @@ export interface FirestoreErrorInfo {
 
 let _firestoreQuotaBlockedUntil = 0;
 
+function detectInitialCollectionPrefix(): string {
+  // Node / Server-side detection
+  if (typeof window === 'undefined' && typeof process !== 'undefined' && process.env) {
+    const kService = (process.env.K_SERVICE || '').toLowerCase();
+    const isAiStudioServer = kService.startsWith('ais-') || Boolean(process.env.AI_STUDIO_APP_ID);
+    const isRenderOrVercel = Boolean(process.env.RENDER || process.env.VERCEL);
+    const isPreviewServer =
+      process.env.EDUTASK_ENV === 'preview' ||
+      process.env.IS_PREVIEW === 'true' ||
+      isAiStudioServer ||
+      (!isRenderOrVercel && process.env.NODE_ENV !== 'production');
+    return isPreviewServer ? 'preview_' : '';
+  }
+
+  // Browser-side detection (AI Studio Preview / Shared Preview / Vite Dev vs Published Render/Vercel)
+  if (typeof window !== 'undefined') {
+    const isViteDev = typeof import.meta !== 'undefined' && Boolean((import.meta as any).env?.DEV);
+    const host = (window.location?.hostname || '').toLowerCase();
+    const isPreviewHost =
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host.endsWith('.local') ||
+      host.includes('scf.usercontent') ||
+      host.includes('aistudio') ||
+      host.startsWith('ais-dev-') ||
+      host.startsWith('ais-pre-') ||
+      (host.includes('ais-') && host.includes('.run.app'));
+    if (isViteDev || isPreviewHost) {
+      return 'preview_';
+    }
+  }
+
+  return '';
+}
+
+let _collectionPrefix: string = detectInitialCollectionPrefix();
+
+export function setCollectionPrefix(prefix: string) {
+  _collectionPrefix = typeof prefix === 'string' ? prefix : '';
+}
+
+export function getCollectionPrefix(): string {
+  return _collectionPrefix;
+}
+
+function colPath(base: string): string {
+  return `${_collectionPrefix}${base}`;
+}
+
 export function isFirestoreQuotaExceeded(): boolean {
   return Date.now() < _firestoreQuotaBlockedUntil;
 }
@@ -44,9 +92,6 @@ export function markFirestoreQuotaExceeded() {
   _firestoreQuotaBlockedUntil = Date.now() + 10 * 60 * 1000; // 10 minutes
 }
 
-// ---------------------------------------------------------------------------
-// Registros de Diagnóstico e Auditoria de Sincronização (Sem Expor Dados Sensíveis)
-// ---------------------------------------------------------------------------
 export function logSyncAudit(context: string, payload: {
   userId?: string | null;
   fromCache?: boolean;
@@ -62,7 +107,7 @@ export function logSyncAudit(context: string, payload: {
   }).format(now);
   const maskedUser = payload.userId ? `${payload.userId.slice(0, 4)}***${payload.userId.slice(-2)}` : 'anon';
   const source = payload.fromCache ? 'Firestore Cache (Offline)' : 'Firestore Server (Live)';
-  console.log(`[EduTask Sync Audit] [${brtTime} BRT] [${context}] User: ${maskedUser} | Source: ${source} | Docs: ${payload.docCount ?? 0} ${payload.hasError ? `| Error: ${payload.errorMsg}` : '| Status: OK'}`);
+  console.log(`[EduTask Sync Audit] [${brtTime} BRT] [${context}] User: ${maskedUser} | Source: ${source} | Prefix: "${_collectionPrefix}" | Docs: ${payload.docCount ?? 0} ${payload.hasError ? `| Error: ${payload.errorMsg}` : '| Status: OK'}`);
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
@@ -105,27 +150,31 @@ function sanitizeFirestoreData(obj: any): any {
 }
 
 export const firebaseService = {
+  setCollectionPrefix,
+  getCollectionPrefix,
+
   // Tasks
   async getAllTasks(): Promise<any[]> {
-    const path = 'tasks';
+    const col = colPath('tasks');
     try {
-      const snap = await getDocs(collection(db, path));
+      const snap = await getDocs(collection(db, col));
       const tasks: any[] = [];
       snap.forEach((docSnap) => {
         tasks.push({ id: docSnap.id, ...docSnap.data() });
       });
       return tasks;
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.LIST, path);
+      handleFirestoreError(e, OperationType.LIST, col);
     }
   },
 
   async saveTask(task: any): Promise<boolean> {
+    const col = colPath('tasks');
     const taskId = task.id || `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const path = `tasks/${taskId}`;
+    const path = `${col}/${taskId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...task, id: taskId });
-      await setDoc(doc(db, 'tasks', taskId), sanitized, { merge: true });
+      await setDoc(doc(db, col, taskId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -133,9 +182,10 @@ export const firebaseService = {
   },
 
   async deleteTask(taskId: string): Promise<boolean> {
-    const path = `tasks/${taskId}`;
+    const col = colPath('tasks');
+    const path = `${col}/${taskId}`;
     try {
-      await deleteDoc(doc(db, 'tasks', taskId));
+      await deleteDoc(doc(db, col, taskId));
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -144,23 +194,24 @@ export const firebaseService = {
 
   // Users
   async getAllUsers(): Promise<any[]> {
-    const path = 'users';
+    const col = colPath('users');
     try {
-      const snap = await getDocs(collection(db, path));
+      const snap = await getDocs(collection(db, col));
       const users: any[] = [];
       snap.forEach((docSnap) => {
         users.push({ id: docSnap.id, ...docSnap.data() });
       });
       return users;
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.LIST, path);
+      handleFirestoreError(e, OperationType.LIST, col);
     }
   },
 
   async getUserById(userId: string): Promise<any | null> {
-    const path = `users/${userId}`;
+    const col = colPath('users');
+    const path = `${col}/${userId}`;
     try {
-      const snap = await getDoc(doc(db, 'users', userId));
+      const snap = await getDoc(doc(db, col, userId));
       if (snap.exists()) {
         return { id: snap.id, ...snap.data() };
       }
@@ -171,11 +222,11 @@ export const firebaseService = {
   },
 
   async saveUser(user: any): Promise<boolean> {
+    const col = colPath('users');
     const userId = user.id || `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const path = `users/${userId}`;
+    const path = `${col}/${userId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...user, id: userId });
-      // Only delete field if explicitly set to null
       if (user.avatar_data === null) {
         sanitized.avatar_data = deleteField();
         sanitized.avatar_content_type = deleteField();
@@ -183,7 +234,7 @@ export const firebaseService = {
         delete sanitized.avatar_data;
         delete sanitized.avatar_content_type;
       }
-      await setDoc(doc(db, 'users', userId), sanitized, { merge: true });
+      await setDoc(doc(db, col, userId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -191,10 +242,11 @@ export const firebaseService = {
   },
 
   async updateUser(userId: string, updates: any): Promise<boolean> {
-    const path = `users/${userId}`;
+    const col = colPath('users');
+    const path = `${col}/${userId}`;
     try {
       const sanitized = sanitizeFirestoreData(updates);
-      await updateDoc(doc(db, 'users', userId), sanitized);
+      await updateDoc(doc(db, col, userId), sanitized);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.UPDATE, path);
@@ -202,9 +254,10 @@ export const firebaseService = {
   },
 
   async deleteUser(userId: string): Promise<boolean> {
-    const path = `users/${userId}`;
+    const col = colPath('users');
+    const path = `${col}/${userId}`;
     try {
-      await deleteDoc(doc(db, 'users', userId));
+      await deleteDoc(doc(db, col, userId));
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -213,25 +266,26 @@ export const firebaseService = {
 
   // Subjects
   async getAllSubjects(): Promise<any[]> {
-    const path = 'subjects';
+    const col = colPath('subjects');
     try {
-      const snap = await getDocs(collection(db, path));
+      const snap = await getDocs(collection(db, col));
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.LIST, path);
+      handleFirestoreError(e, OperationType.LIST, col);
     }
   },
 
   async saveSubject(subject: any): Promise<boolean> {
+    const col = colPath('subjects');
     const subId = subject.id || `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const path = `subjects/${subId}`;
+    const path = `${col}/${subId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...subject, id: subId });
-      await setDoc(doc(db, 'subjects', subId), sanitized, { merge: true });
+      await setDoc(doc(db, col, subId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -239,9 +293,10 @@ export const firebaseService = {
   },
 
   async deleteSubject(subId: string): Promise<boolean> {
-    const path = `subjects/${subId}`;
+    const col = colPath('subjects');
+    const path = `${col}/${subId}`;
     try {
-      await deleteDoc(doc(db, 'subjects', subId));
+      await deleteDoc(doc(db, col, subId));
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -250,25 +305,26 @@ export const firebaseService = {
 
   // Announcements
   async getAllAnnouncements(): Promise<any[]> {
-    const path = 'announcements';
+    const col = colPath('announcements');
     try {
-      const snap = await getDocs(collection(db, path));
+      const snap = await getDocs(collection(db, col));
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.LIST, path);
+      handleFirestoreError(e, OperationType.LIST, col);
     }
   },
 
   async saveAnnouncement(ann: any): Promise<boolean> {
+    const col = colPath('announcements');
     const annId = ann.id || `ann_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const path = `announcements/${annId}`;
+    const path = `${col}/${annId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...ann, id: annId });
-      await setDoc(doc(db, 'announcements', annId), sanitized, { merge: true });
+      await setDoc(doc(db, col, annId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -276,9 +332,10 @@ export const firebaseService = {
   },
 
   async deleteAnnouncement(annId: string): Promise<boolean> {
-    const path = `announcements/${annId}`;
+    const col = colPath('announcements');
+    const path = `${col}/${annId}`;
     try {
-      await deleteDoc(doc(db, 'announcements', annId));
+      await deleteDoc(doc(db, col, annId));
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -287,25 +344,26 @@ export const firebaseService = {
 
   // Completions
   async getAllCompletions(): Promise<any[]> {
-    const path = 'completions';
+    const col = colPath('completions');
     try {
-      const snap = await getDocs(collection(db, path));
+      const snap = await getDocs(collection(db, col));
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.LIST, path);
+      handleFirestoreError(e, OperationType.LIST, col);
     }
   },
 
   async saveCompletion(comp: any): Promise<boolean> {
+    const col = colPath('completions');
     const compId = comp.id || `${comp.user_id}_${comp.task_id}`;
-    const path = `completions/${compId}`;
+    const path = `${col}/${compId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...comp, id: compId });
-      await setDoc(doc(db, 'completions', compId), sanitized, { merge: true });
+      await setDoc(doc(db, col, compId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -313,10 +371,11 @@ export const firebaseService = {
   },
 
   async deleteCompletion(userId: string, taskId: string): Promise<boolean> {
+    const col = colPath('completions');
     const compId = `${userId}_${taskId}`;
-    const path = `completions/${compId}`;
+    const path = `${col}/${compId}`;
     try {
-      await deleteDoc(doc(db, 'completions', compId));
+      await deleteDoc(doc(db, col, compId));
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -325,25 +384,26 @@ export const firebaseService = {
 
   // Comments
   async getAllComments(): Promise<any[]> {
-    const path = 'comments';
+    const col = colPath('comments');
     try {
-      const snap = await getDocs(collection(db, path));
+      const snap = await getDocs(collection(db, col));
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.LIST, path);
+      handleFirestoreError(e, OperationType.LIST, col);
     }
   },
 
   async saveComment(comment: any): Promise<boolean> {
+    const col = colPath('comments');
     const commentId = comment.id || `cmt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const path = `comments/${commentId}`;
+    const path = `${col}/${commentId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...comment, id: commentId });
-      await setDoc(doc(db, 'comments', commentId), sanitized, { merge: true });
+      await setDoc(doc(db, col, commentId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -351,9 +411,10 @@ export const firebaseService = {
   },
 
   async deleteComment(commentId: string): Promise<boolean> {
-    const path = `comments/${commentId}`;
+    const col = colPath('comments');
+    const path = `${col}/${commentId}`;
     try {
-      await deleteDoc(doc(db, 'comments', commentId));
+      await deleteDoc(doc(db, col, commentId));
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -362,9 +423,10 @@ export const firebaseService = {
 
   // Settings
   async getSettings(key: string): Promise<any | null> {
-    const path = `settings/${key}`;
+    const col = colPath('settings');
+    const path = `${col}/${key}`;
     try {
-      const snap = await getDoc(doc(db, 'settings', key));
+      const snap = await getDoc(doc(db, col, key));
       if (snap.exists()) {
         return snap.data();
       }
@@ -375,10 +437,11 @@ export const firebaseService = {
   },
 
   async saveSettings(key: string, data: any): Promise<boolean> {
-    const path = `settings/${key}`;
+    const col = colPath('settings');
+    const path = `${col}/${key}`;
     try {
       const sanitized = sanitizeFirestoreData(data);
-      await setDoc(doc(db, 'settings', key), sanitized, { merge: true });
+      await setDoc(doc(db, col, key), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -387,25 +450,26 @@ export const firebaseService = {
 
   // Files
   async getAllFiles(): Promise<any[]> {
-    const path = 'files';
+    const col = colPath('files');
     try {
-      const snap = await getDocs(collection(db, path));
+      const snap = await getDocs(collection(db, col));
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.LIST, path);
+      handleFirestoreError(e, OperationType.LIST, col);
     }
   },
 
   async saveFile(file: any): Promise<boolean> {
+    const col = colPath('files');
     const fileId = file.id || `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const path = `files/${fileId}`;
+    const path = `${col}/${fileId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...file, id: fileId });
-      await setDoc(doc(db, 'files', fileId), sanitized, { merge: true });
+      await setDoc(doc(db, col, fileId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -414,9 +478,10 @@ export const firebaseService = {
 
   async getFile(fileId: string): Promise<any | null> {
     if (isFirestoreQuotaExceeded()) return null;
-    const path = `files/${fileId}`;
+    const col = colPath('files');
+    const path = `${col}/${fileId}`;
     try {
-      const snap = await getDoc(doc(db, 'files', fileId));
+      const snap = await getDoc(doc(db, col, fileId));
       if (snap.exists()) {
         return { id: snap.id, ...snap.data() };
       }
@@ -432,9 +497,10 @@ export const firebaseService = {
   },
 
   async deleteFile(fileId: string): Promise<boolean> {
-    const path = `files/${fileId}`;
+    const col = colPath('files');
+    const path = `${col}/${fileId}`;
     try {
-      await deleteDoc(doc(db, 'files', fileId));
+      await deleteDoc(doc(db, col, fileId));
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -443,25 +509,26 @@ export const firebaseService = {
 
   // Login Logs
   async getAllLoginLogs(): Promise<any[]> {
-    const path = 'login_logs';
+    const col = colPath('login_logs');
     try {
-      const snap = await getDocs(collection(db, path));
+      const snap = await getDocs(collection(db, col));
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.LIST, path);
+      handleFirestoreError(e, OperationType.LIST, col);
     }
   },
 
   async saveLoginLog(log: any): Promise<boolean> {
+    const col = colPath('login_logs');
     const logId = log.id || `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const path = `login_logs/${logId}`;
+    const path = `${col}/${logId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...log, id: logId });
-      await setDoc(doc(db, 'login_logs', logId), sanitized, { merge: true });
+      await setDoc(doc(db, col, logId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -469,9 +536,10 @@ export const firebaseService = {
   },
 
   async deleteLoginLog(logId: string): Promise<boolean> {
-    const path = `login_logs/${logId}`;
+    const col = colPath('login_logs');
+    const path = `${col}/${logId}`;
     try {
-      await deleteDoc(doc(db, 'login_logs', logId));
+      await deleteDoc(doc(db, col, logId));
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -479,42 +547,43 @@ export const firebaseService = {
   },
 
   async clearAllLoginLogs(): Promise<boolean> {
-    const path = 'login_logs';
+    const col = colPath('login_logs');
     try {
-      const snap = await getDocs(collection(db, path));
+      const snap = await getDocs(collection(db, col));
       const promises: Promise<void>[] = [];
       snap.forEach((docSnap) => {
-        promises.push(deleteDoc(doc(db, path, docSnap.id)));
+        promises.push(deleteDoc(doc(db, col, docSnap.id)));
       });
       await Promise.all(promises);
       return true;
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.DELETE, path);
+      handleFirestoreError(e, OperationType.DELETE, col);
     }
   },
 
   // Student Answers
   async getAllStudentAnswers(): Promise<any[]> {
-    const path = 'student_answers';
+    const col = colPath('student_answers');
     try {
-      const snap = await getDocs(collection(db, path));
+      const snap = await getDocs(collection(db, col));
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.LIST, path);
+      handleFirestoreError(e, OperationType.LIST, col);
     }
   },
 
   async saveStudentAnswer(ansOrId: any, maybeAns?: any): Promise<boolean> {
+    const col = colPath('student_answers');
     const ansObj = maybeAns !== undefined ? { ...maybeAns, id: ansOrId } : ansOrId;
     const ansId = typeof ansOrId === 'string' ? ansOrId : ansObj.id || `ans_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const path = `student_answers/${ansId}`;
+    const path = `${col}/${ansId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...ansObj, id: ansId });
-      await setDoc(doc(db, 'student_answers', ansId), sanitized, { merge: true });
+      await setDoc(doc(db, col, ansId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -522,9 +591,10 @@ export const firebaseService = {
   },
 
   async deleteStudentAnswer(ansId: string): Promise<boolean> {
-    const path = `student_answers/${ansId}`;
+    const col = colPath('student_answers');
+    const path = `${col}/${ansId}`;
     try {
-      await deleteDoc(doc(db, 'student_answers', ansId));
+      await deleteDoc(doc(db, col, ansId));
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -533,25 +603,26 @@ export const firebaseService = {
 
   // Summaries / Apostilas
   async getAllSummaries(): Promise<any[]> {
-    const path = 'summaries';
+    const col = colPath('summaries');
     try {
-      const snap = await getDocs(collection(db, path));
+      const snap = await getDocs(collection(db, col));
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.LIST, path);
+      handleFirestoreError(e, OperationType.LIST, col);
     }
   },
 
   async saveSummary(summary: any): Promise<boolean> {
+    const col = colPath('summaries');
     const sumId = summary.id || `sum_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const path = `summaries/${sumId}`;
+    const path = `${col}/${sumId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...summary, id: sumId });
-      await setDoc(doc(db, 'summaries', sumId), sanitized, { merge: true });
+      await setDoc(doc(db, col, sumId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -559,9 +630,49 @@ export const firebaseService = {
   },
 
   async deleteSummary(sumId: string): Promise<boolean> {
-    const path = `summaries/${sumId}`;
+    const col = colPath('summaries');
+    const path = `${col}/${sumId}`;
     try {
-      await deleteDoc(doc(db, 'summaries', sumId));
+      await deleteDoc(doc(db, col, sumId));
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.DELETE, path);
+    }
+  },
+
+  // Summary Topics (Separados dos Resumos — visíveis apenas para o Admin)
+  async getAllSummaryTopics(): Promise<any[]> {
+    const col = colPath('summary_topics');
+    try {
+      const snap = await getDocs(collection(db, col));
+      const list: any[] = [];
+      snap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return list;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.LIST, col);
+    }
+  },
+
+  async saveSummaryTopic(topicItem: any): Promise<boolean> {
+    const col = colPath('summary_topics');
+    const topicId = topicItem.id || `top_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const path = `${col}/${topicId}`;
+    try {
+      const sanitized = sanitizeFirestoreData({ ...topicItem, id: topicId });
+      await setDoc(doc(db, col, topicId), sanitized, { merge: true });
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.WRITE, path);
+    }
+  },
+
+  async deleteSummaryTopic(topicId: string): Promise<boolean> {
+    const col = colPath('summary_topics');
+    const path = `${col}/${topicId}`;
+    try {
+      await deleteDoc(doc(db, col, topicId));
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -570,25 +681,26 @@ export const firebaseService = {
 
   // Student Summary Generations (Recent 7 days history)
   async getAllSummaryGenerations(): Promise<any[]> {
-    const path = 'summary_generations';
+    const col = colPath('summary_generations');
     try {
-      const snap = await getDocs(collection(db, path));
+      const snap = await getDocs(collection(db, col));
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.LIST, path);
+      handleFirestoreError(e, OperationType.LIST, col);
     }
   },
 
   async saveSummaryGeneration(gen: any): Promise<boolean> {
+    const col = colPath('summary_generations');
     const genId = gen.id || `sgen_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const path = `summary_generations/${genId}`;
+    const path = `${col}/${genId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...gen, id: genId });
-      await setDoc(doc(db, 'summary_generations', genId), sanitized, { merge: true });
+      await setDoc(doc(db, col, genId), sanitized, { merge: true });
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -596,9 +708,10 @@ export const firebaseService = {
   },
 
   async deleteSummaryGeneration(genId: string): Promise<boolean> {
-    const path = `summary_generations/${genId}`;
+    const col = colPath('summary_generations');
+    const path = `${col}/${genId}`;
     try {
-      await deleteDoc(doc(db, 'summary_generations', genId));
+      await deleteDoc(doc(db, col, genId));
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -611,7 +724,7 @@ export const firebaseService = {
     onNext: (tasks: any[], fromCache: boolean) => void,
     onError: (err: any) => void
   ): Unsubscribe {
-    const colRef = collection(db, 'tasks');
+    const colRef = collection(db, colPath('tasks'));
     return onSnapshot(
       colRef,
       { includeMetadataChanges: true },
@@ -645,7 +758,7 @@ export const firebaseService = {
     onNext: (announcements: any[], fromCache: boolean) => void,
     onError: (err: any) => void
   ): Unsubscribe {
-    const colRef = collection(db, 'announcements');
+    const colRef = collection(db, colPath('announcements'));
     return onSnapshot(
       colRef,
       { includeMetadataChanges: true },
@@ -674,4 +787,3 @@ export const firebaseService = {
     );
   },
 };
-

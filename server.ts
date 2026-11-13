@@ -21,6 +21,51 @@ const JWT_SECRET = process.env.JWT_SECRET || 'edutask-super-secret-jwt-key-2026'
 const PORT = 3000;
 const HOST = '0.0.0.0';
 
+const K_SERVICE_NAME = (process.env.K_SERVICE || '').toLowerCase();
+const IS_AI_STUDIO_RUNTIME =
+  K_SERVICE_NAME.startsWith('ais-') || Boolean(process.env.AI_STUDIO_APP_ID);
+const IS_DEPLOYED_HOST_ENV = Boolean(process.env.RENDER || process.env.VERCEL);
+
+export const IS_PREVIEW_ENV =
+  process.env.EDUTASK_ENV === 'preview' ||
+  process.env.IS_PREVIEW === 'true' ||
+  IS_AI_STUDIO_RUNTIME ||
+  (!IS_DEPLOYED_HOST_ENV && process.env.NODE_ENV !== 'production');
+
+export const CURRENT_PUSH_ENV: 'preview' | 'production' = IS_PREVIEW_ENV ? 'preview' : 'production';
+
+function isPreviewOriginHost(originOrHost?: string): boolean {
+  if (!originOrHost || typeof originOrHost !== 'string') return false;
+  const s = originOrHost.toLowerCase();
+  return (
+    s.includes('localhost') ||
+    s.includes('127.0.0.1') ||
+    s.includes('.local') ||
+    s.includes('scf.usercontent') ||
+    s.includes('aistudio') ||
+    s.includes('ais-dev-') ||
+    s.includes('ais-pre-') ||
+    (s.includes('ais-') && s.includes('.run.app'))
+  );
+}
+
+function isSubAllowedInCurrentEnv(sub: any): boolean {
+  if (!sub || typeof sub.endpoint !== 'string' || !sub.endpoint || !sub.subscription) {
+    return false;
+  }
+  if (IS_PREVIEW_ENV) {
+    // Em Preview, apenas inscrições explicitamente criadas em Preview são permitidas
+    return sub.env === 'preview';
+  }
+  // Em Produção (Render), bloqueia qualquer inscrição marcada como preview ou originada de host preview
+  if (sub.env === 'preview') return false;
+  if (sub.origin_host && isPreviewOriginHost(sub.origin_host)) return false;
+  return true;
+}
+
+firebaseService.setCollectionPrefix(IS_PREVIEW_ENV ? 'preview_' : '');
+console.log(`[EduTask Env] Modo: ${IS_PREVIEW_ENV ? 'PREVIEW (Isolado em preview_*)' : 'PRODUÇÃO (Render/Live)'} | K_SERVICE=${process.env.K_SERVICE || 'none'}`);
+
 if (!process.env.TZ) {
   process.env.TZ = 'America/Sao_Paulo';
 }
@@ -359,14 +404,33 @@ interface GeneratedTaskAnswer {
   generated_at: string;
 }
 
+export interface StudyTopic {
+  id: string;
+  subject: string;
+  topic: string;
+  extracted_notes?: string;
+  key_concepts: string[];
+  formulas: string[];
+  source_image_ids: string[];
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
 export interface SummaryTopic {
   id: string;
   subject: string;
   topic: string;
+  extracted_notes?: string;
   summary_text: string;
   key_concepts: string[];
   formulas: string[];
   source_image_ids: string[];
+  source_topic_ids?: string[];
+  source_topic_titles?: string[];
+  status?: 'topic_only' | 'draft' | 'published';
+  is_published?: boolean;
+  published_at?: string | null;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -388,6 +452,8 @@ interface TaskItem {
   whatsapp_caption?: string; // Enunciado / legenda específica para o Grupo 2
   created_by: string;
   created_at: string;
+  edited_at?: string;
+  was_edited?: boolean;
   last_updated_at?: string;
   update_changes?: string[];
   update_read_by?: string[];
@@ -409,6 +475,8 @@ interface Announcement {
   is_special?: boolean;
   created_by: string;
   created_at: string;
+  edited_at?: string;
+  was_edited?: boolean;
 }
 
 interface Comment {
@@ -475,7 +543,7 @@ export interface StudentButton {
 
 const BASE_DIR = process.env.VERCEL || process.env.NODE_ENV === 'production' ? os.tmpdir() : __dirname;
 const DATA_DIR = path.resolve(BASE_DIR, 'data');
-const DB_FILE = path.resolve(DATA_DIR, 'db.json');
+const DB_FILE = path.resolve(DATA_DIR, IS_PREVIEW_ENV ? 'preview_db.json' : 'db.json');
 const UPLOAD_DIR = path.resolve(BASE_DIR, 'uploads');
 const AVATAR_DIR = path.resolve(BASE_DIR, 'avatars');
 
@@ -549,6 +617,7 @@ class Database {
   login_logs: LoginLog[] = [];
   point_adjustments: PointAdjustment[] = [];
   files: Map<string, FileRecord> = new Map();
+  summary_topics: Map<string, StudyTopic> = new Map();
   summaries: Map<string, SummaryTopic> = new Map();
   ai_chats: Map<string, ChatSession> = new Map();
   effect_overrides: Record<string, { cost?: number; rarity?: string }> = {};
@@ -661,6 +730,20 @@ class Database {
   task_student_answers: Map<string, GeneratedTaskAnswer> = new Map();
   summary_generations: Map<string, any> = new Map();
   push_vapid_keys: { publicKey: string; privateKey: string } | null = null;
+  push_vapid_env: 'preview' | 'production' | null = null;
+  push_settings: {
+    task_created: boolean;
+    task_edited: boolean;
+    announcement_created: boolean;
+    announcement_edited: boolean;
+    summary_published: boolean;
+  } = {
+    task_created: true,
+    task_edited: true,
+    announcement_created: true,
+    announcement_edited: true,
+    summary_published: true,
+  };
   push_subscriptions: Array<{
     id: string;
     user_id: string;
@@ -668,6 +751,8 @@ class Database {
     endpoint: string;
     subscription: any;
     user_agent?: string;
+    env?: 'preview' | 'production';
+    origin_host?: string;
     created_at: string;
     updated_at: string;
   }> = [];
@@ -701,8 +786,9 @@ class Database {
 
   async syncWithFirebase() {
     try {
-      console.log('[Firebase] Sincronizando coleções do Firestore...');
-      const [tasks, users, announcements, completions, subjects, comments, settings, studentAnswers, remoteFiles, remoteSummaries, remoteSummaryGens] = await Promise.all([
+      const prefix = firebaseService.getCollectionPrefix() || '(produção)';
+      console.log(`[Firebase] Sincronizando coleções do Firestore [${prefix}]...`);
+      const [tasks, users, announcements, completions, subjects, comments, settings, studentAnswers, remoteFiles, remoteSummaryTopics, remoteSummaries, remoteSummaryGens] = await Promise.all([
         firebaseService.getAllTasks(),
         firebaseService.getAllUsers(),
         firebaseService.getAllAnnouncements(),
@@ -712,73 +798,92 @@ class Database {
         firebaseService.getSettings('system'),
         firebaseService.getAllStudentAnswers(),
         firebaseService.getAllFiles(),
+        firebaseService.getAllSummaryTopics(),
         firebaseService.getAllSummaries(),
         firebaseService.getAllSummaryGenerations(),
       ]);
 
-      if (tasks && tasks.length > 0) {
+      // Tarefas: Firestore é a fonte autoritativa (inclusive quando vazio após exclusões)
+      if (Array.isArray(tasks)) {
+        this.tasks.clear();
         tasks.forEach((t) => {
+          if (!t?.id) return;
           this.tasks.set(t.id, {
+            ...t,
             id: t.id,
-            title: t.title,
-            description: t.description,
-            subject: t.subject,
-            due_date: t.due_date,
-            points: t.points || 10,
-            assigned_to: t.assigned_to || [],
-            attachments: t.attachments || [],
-            admin_photos: t.admin_photos || [],
+            title: t.title || '',
+            description: t.description || '',
+            subject: t.subject || '',
+            due_date: t.due_date || '',
+            points: t.points ?? 10,
+            assigned_to: Array.isArray(t.assigned_to) ? t.assigned_to : [],
+            attachments: Array.isArray(t.attachments) ? t.attachments : [],
+            admin_photos: Array.isArray(t.admin_photos) ? t.admin_photos : [],
             answer: t.answer || '',
             answer_source: t.answer_source || '',
             created_by: t.created_by || 'system',
             created_at: t.created_at || new Date().toISOString(),
+            edited_at: t.edited_at || t.last_updated_at || undefined,
+            was_edited: Boolean(t.was_edited || t.edited_at || t.last_updated_at),
+            last_updated_at: t.last_updated_at || undefined,
+            update_changes: Array.isArray(t.update_changes) ? t.update_changes : undefined,
+            update_read_by: Array.isArray(t.update_read_by) ? t.update_read_by : undefined,
           });
         });
       }
 
-      if (users && users.length > 0) {
+      if (Array.isArray(users) && users.length > 0) {
+        const preservedAdmin = this.users.get('admin-user-001');
+        this.users.clear();
         users.forEach((u) => {
-          if (u.id) this.users.set(u.id, u);
+          if (u?.id) this.users.set(u.id, u);
         });
+        if (preservedAdmin && !this.users.has('admin-user-001')) {
+          this.users.set('admin-user-001', preservedAdmin);
+        }
       }
 
-      if (subjects && subjects.length > 0) {
+      if (Array.isArray(subjects) && subjects.length > 0) {
+        this.subjects.clear();
         subjects.forEach((s) => {
-          if (s.id) this.subjects.set(s.id, s);
+          if (s?.id) this.subjects.set(s.id, s);
         });
       }
 
-      if (announcements && announcements.length > 0) {
+      if (Array.isArray(announcements)) {
+        this.announcements.clear();
         announcements.forEach((a) => {
-          if (a.id) this.announcements.set(a.id, a);
+          if (a?.id) {
+            this.announcements.set(a.id, {
+              ...a,
+              edited_at: a.edited_at || undefined,
+              was_edited: Boolean(a.was_edited || a.edited_at),
+            });
+          }
         });
       }
 
-      if (completions && completions.length > 0) {
+      if (Array.isArray(completions)) {
         const compMap = new Map<string, any>();
-        (this.completions || []).forEach((c: any) => {
+        completions.forEach((c: any) => {
+          if (!c?.user_id || !c?.task_id) return;
           const k = c.id || `${c.user_id}_${c.task_id}`;
           compMap.set(k, { ...c, id: k });
-        });
-        completions.forEach((c: any) => {
-          const k = c.id || `${c.user_id}_${c.task_id}`;
-          if (!compMap.has(k)) {
-            compMap.set(k, { ...c, id: k });
-          } else {
-            compMap.set(k, { ...compMap.get(k), ...c });
-          }
         });
         this.completions = Array.from(compMap.values());
       }
 
-      if (comments && comments.length > 0) {
+      if (Array.isArray(comments)) {
+        this.comments.clear();
         comments.forEach((c) => {
-          if (c.id) this.comments.set(c.id, c);
+          if (c?.id) this.comments.set(c.id, c);
         });
       }
 
       if (settings) {
         this.monthly_prize = settings.monthly_prize || null;
+        if (settings.active_month_key) this.active_month_key = settings.active_month_key;
+        if (Array.isArray(settings.monthly_history)) this.monthly_history = settings.monthly_history;
         if (settings.task_cleanup_config) {
           const prevRunDate = this.task_cleanup_config?.last_run_date;
           this.task_cleanup_config = { ...this.task_cleanup_config, ...settings.task_cleanup_config };
@@ -804,26 +909,45 @@ class Database {
         if (settings.ai_enabled !== undefined) this.ai_enabled = settings.ai_enabled;
         if (settings.ai_hidden !== undefined) this.ai_hidden = settings.ai_hidden;
         if (settings.frames_disabled !== undefined) this.frames_disabled = settings.frames_disabled;
+        if (settings.frame_rotation_disabled !== undefined) this.frame_rotation_disabled = settings.frame_rotation_disabled;
         if (settings.annual_cycle) this.annual_cycle = settings.annual_cycle;
         if (settings.annual_history) this.annual_history = settings.annual_history;
-        if (settings.push_vapid_keys?.publicKey && settings.push_vapid_keys?.privateKey) {
+        if (settings.push_settings) {
+          this.push_settings = { ...this.push_settings, ...settings.push_settings };
+        }
+        const remoteVapidEnv = settings.push_vapid_env;
+        const vapidMatchesCurrentEnv = IS_PREVIEW_ENV
+          ? remoteVapidEnv === 'preview'
+          : remoteVapidEnv !== 'preview';
+        if (vapidMatchesCurrentEnv && settings.push_vapid_keys?.publicKey && settings.push_vapid_keys?.privateKey) {
           this.push_vapid_keys = settings.push_vapid_keys;
+          this.push_vapid_env = CURRENT_PUSH_ENV;
         }
         if (Array.isArray(settings.push_subscriptions)) {
           const mergedMap = new Map<string, any>();
           for (const sub of this.push_subscriptions || []) {
-            if (sub?.endpoint) mergedMap.set(sub.endpoint, sub);
+            if (isSubAllowedInCurrentEnv(sub)) mergedMap.set(sub.endpoint, sub);
           }
           for (const sub of settings.push_subscriptions) {
-            if (sub?.endpoint) mergedMap.set(sub.endpoint, sub);
+            if (isSubAllowedInCurrentEnv(sub)) mergedMap.set(sub.endpoint, sub);
           }
-          this.push_subscriptions = Array.from(mergedMap.values());
+          const filteredSubs = Array.from(mergedMap.values());
+          const droppedRemoteCrossEnv = settings.push_subscriptions.some((sub: any) => !isSubAllowedInCurrentEnv(sub));
+          this.push_subscriptions = filteredSubs;
+          if (droppedRemoteCrossEnv) {
+            console.log(`[WebPush Env Isolation] Limpando inscrições de outro ambiente no Firestore (${CURRENT_PUSH_ENV}).`);
+            setTimeout(() => saveSystemSettingsToFirestore(), 500);
+          }
         }
+      } else {
+        this.push_subscriptions = (this.push_subscriptions || []).filter(isSubAllowedInCurrentEnv);
       }
 
-      if (studentAnswers && studentAnswers.length > 0) {
+      if (Array.isArray(studentAnswers)) {
+        this.task_student_answers.clear();
         studentAnswers.forEach((sa) => {
-          if (sa.key) this.task_student_answers.set(sa.key, sa);
+          const key = sa.key || sa.id;
+          if (key) this.task_student_answers.set(key, sa);
         });
       }
 
@@ -843,20 +967,52 @@ class Database {
         });
       }
 
-      if (remoteSummaries && remoteSummaries.length > 0) {
-        remoteSummaries.forEach((s) => {
-          if (s.id) this.summaries.set(s.id, s);
+      if (Array.isArray(remoteSummaryTopics)) {
+        this.summary_topics.clear();
+        remoteSummaryTopics.forEach((t) => {
+          if (t?.id) this.summary_topics.set(t.id, t);
         });
       }
 
-      if (remoteSummaryGens && remoteSummaryGens.length > 0) {
+      if (Array.isArray(remoteSummaries)) {
+        this.summaries.clear();
+        remoteSummaries.forEach((s) => {
+          if (!s?.id) return;
+          const hasText = Boolean(s.summary_text && String(s.summary_text).trim().length > 0);
+          if (!hasText || s.status === 'topic_only') {
+            // Migração automática: itens antigos sem texto de resumo vão para summary_topics
+            if (!this.summary_topics.has(s.id)) {
+              const migratedTopic: StudyTopic = {
+                id: s.id,
+                subject: s.subject || 'Geral',
+                topic: s.topic || 'Tópico',
+                extracted_notes: s.extracted_notes || '',
+                key_concepts: Array.isArray(s.key_concepts) ? s.key_concepts : [],
+                formulas: Array.isArray(s.formulas) ? s.formulas : [],
+                source_image_ids: Array.isArray(s.source_image_ids) ? s.source_image_ids : [],
+                created_at: s.created_at || new Date().toISOString(),
+                updated_at: s.updated_at || new Date().toISOString(),
+                created_by: s.created_by || 'admin',
+              };
+              this.summary_topics.set(migratedTopic.id, migratedTopic);
+              firebaseService.saveSummaryTopic(migratedTopic).catch(() => {});
+            }
+            firebaseService.deleteSummary(s.id).catch(() => {});
+            return;
+          }
+          this.summaries.set(s.id, s);
+        });
+      }
+
+      if (Array.isArray(remoteSummaryGens)) {
+        this.summary_generations.clear();
         remoteSummaryGens.forEach((g) => {
-          if (g.id) this.summary_generations.set(g.id, g);
+          if (g?.id) this.summary_generations.set(g.id, g);
         });
       }
 
       this.saveToDisk();
-      console.log('[Firebase] Sincronização com o Firestore concluída.');
+      console.log(`[Firebase] Sincronização concluída [${prefix}] (${this.tasks.size} tarefas, ${this.announcements.size} avisos, ${this.summary_topics.size} tópicos, ${this.summaries.size} resumos).`);
     } catch (e: any) {
       console.warn('[Firebase] Falha na sincronização:', e?.message || e);
     }
@@ -885,15 +1041,19 @@ class Database {
         ai_enabled: this.ai_enabled,
         ai_hidden: this.ai_hidden,
         frames_disabled: this.frames_disabled,
+        frame_rotation_disabled: this.frame_rotation_disabled,
         annual_cycle: this.annual_cycle,
         annual_history: this.annual_history,
         ai_model: this.ai_model,
         summary_ai_model: this.summary_ai_model,
         task_student_answers: Array.from(this.task_student_answers.entries()),
+        summary_topics: Array.from(this.summary_topics.entries()),
         summaries: Array.from(this.summaries.entries()),
         summary_generations: Array.from(this.summary_generations.entries()),
         push_vapid_keys: this.push_vapid_keys,
-        push_subscriptions: this.push_subscriptions,
+        push_vapid_env: this.push_vapid_env,
+        push_settings: this.push_settings,
+        push_subscriptions: (this.push_subscriptions || []).filter(isSubAllowedInCurrentEnv),
       };
       fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
     } catch (e) {
@@ -903,8 +1063,10 @@ class Database {
 
   loadFromDisk(): boolean {
     try {
-      if (fs.existsSync(DB_FILE)) {
-        const raw = fs.readFileSync(DB_FILE, 'utf8');
+      // Isolamento estrito: Preview carrega APENAS preview_db.json e NUNCA faz fallback para db.json (Render)
+      const fileToLoad = fs.existsSync(DB_FILE) ? DB_FILE : null;
+      if (fileToLoad) {
+        const raw = fs.readFileSync(fileToLoad, 'utf8');
         const data = JSON.parse(raw);
         if (data.users) this.users = new Map(data.users);
         if (data.subjects) this.subjects = new Map(data.subjects);
@@ -916,6 +1078,8 @@ class Database {
         if (data.point_adjustments) this.point_adjustments = data.point_adjustments;
         if (data.effect_overrides) this.effect_overrides = data.effect_overrides;
         if (data.monthly_prize) this.monthly_prize = data.monthly_prize;
+        if (data.active_month_key) this.active_month_key = data.active_month_key;
+        if (data.monthly_history) this.monthly_history = data.monthly_history;
         if (data.task_cleanup_config) this.task_cleanup_config = { ...this.task_cleanup_config, ...data.task_cleanup_config };
         if (data.student_buttons) this.student_buttons = new Map(data.student_buttons);
         if (data.whatsapp_config) this.whatsapp_config = { ...this.whatsapp_config, ...data.whatsapp_config };
@@ -923,18 +1087,49 @@ class Database {
         if (data.ai_enabled !== undefined) this.ai_enabled = data.ai_enabled;
         if (data.ai_hidden !== undefined) this.ai_hidden = data.ai_hidden;
         if (data.frames_disabled !== undefined) this.frames_disabled = data.frames_disabled;
+        if (data.frame_rotation_disabled !== undefined) this.frame_rotation_disabled = data.frame_rotation_disabled;
         if (data.annual_cycle) this.annual_cycle = data.annual_cycle;
         if (data.annual_history) this.annual_history = data.annual_history;
         if (data.ai_model) this.ai_model = data.ai_model;
         if (data.summary_ai_model) this.summary_ai_model = data.summary_ai_model;
         if (data.task_student_answers) this.task_student_answers = new Map(data.task_student_answers);
-        if (data.summaries) this.summaries = new Map(data.summaries);
+        if (data.summary_topics) this.summary_topics = new Map(data.summary_topics);
+        if (data.summaries) {
+          const loadedSummaries = new Map<string, SummaryTopic>(data.summaries);
+          for (const [sid, item] of loadedSummaries.entries()) {
+            const hasText = Boolean(item?.summary_text && String(item.summary_text).trim().length > 0);
+            if (!hasText || item?.status === 'topic_only') {
+              if (!this.summary_topics.has(sid)) {
+                this.summary_topics.set(sid, {
+                  id: sid,
+                  subject: item?.subject || 'Geral',
+                  topic: item?.topic || 'Tópico',
+                  extracted_notes: item?.extracted_notes || '',
+                  key_concepts: Array.isArray(item?.key_concepts) ? item.key_concepts : [],
+                  formulas: Array.isArray(item?.formulas) ? item.formulas : [],
+                  source_image_ids: Array.isArray(item?.source_image_ids) ? item.source_image_ids : [],
+                  created_at: item?.created_at || new Date().toISOString(),
+                  updated_at: item?.updated_at || new Date().toISOString(),
+                  created_by: item?.created_by || 'admin',
+                });
+              }
+              loadedSummaries.delete(sid);
+            }
+          }
+          this.summaries = loadedSummaries;
+        }
         if (data.summary_generations) this.summary_generations = new Map(data.summary_generations);
-        if (data.push_vapid_keys?.publicKey && data.push_vapid_keys?.privateKey) {
+        const diskVapidEnv = data.push_vapid_env;
+        const diskVapidOk = IS_PREVIEW_ENV ? diskVapidEnv === 'preview' : diskVapidEnv !== 'preview';
+        if (diskVapidOk && data.push_vapid_keys?.publicKey && data.push_vapid_keys?.privateKey) {
           this.push_vapid_keys = data.push_vapid_keys;
+          this.push_vapid_env = CURRENT_PUSH_ENV;
+        }
+        if (data.push_settings) {
+          this.push_settings = { ...this.push_settings, ...data.push_settings };
         }
         if (Array.isArray(data.push_subscriptions)) {
-          this.push_subscriptions = data.push_subscriptions;
+          this.push_subscriptions = data.push_subscriptions.filter(isSubAllowedInCurrentEnv);
         }
         // Ensure admin does not have a trivial '123' password
         for (const u of this.users.values()) {
@@ -1697,6 +1892,53 @@ export function areTopicsSimilar(t1: string, t2: string): boolean {
   return (intersection / union) >= 0.35 || intersection >= 2;
 }
 
+export function deduplicateStudyTopics(): { merged_count: number } {
+  let mergedCount = 0;
+  const bySubject: Record<string, StudyTopic[]> = {};
+
+  for (const t of db.summary_topics.values()) {
+    const subKey = (t.subject || 'Geral').trim().toLowerCase();
+    if (!bySubject[subKey]) bySubject[subKey] = [];
+    bySubject[subKey].push(t);
+  }
+
+  for (const [, list] of Object.entries(bySubject)) {
+    if (list.length <= 1) continue;
+    const removedIds = new Set<string>();
+
+    for (let i = 0; i < list.length; i++) {
+      const primary = list[i];
+      if (removedIds.has(primary.id)) continue;
+
+      for (let j = i + 1; j < list.length; j++) {
+        const candidate = list[j];
+        if (removedIds.has(candidate.id)) continue;
+
+        if (areTopicsSimilar(primary.topic, candidate.topic)) {
+          if (candidate.extracted_notes && !(primary.extracted_notes || '').includes(candidate.extracted_notes.slice(0, 40))) {
+            primary.extracted_notes = `${primary.extracted_notes || ''}\n${candidate.extracted_notes}`.trim();
+          }
+          primary.key_concepts = Array.from(new Set([...(primary.key_concepts || []), ...(candidate.key_concepts || [])])).filter(Boolean);
+          primary.formulas = Array.from(new Set([...(primary.formulas || []), ...(candidate.formulas || [])])).filter(Boolean);
+          primary.source_image_ids = Array.from(new Set([...(primary.source_image_ids || []), ...(candidate.source_image_ids || [])])).filter(Boolean);
+          primary.updated_at = new Date().toISOString();
+
+          db.summary_topics.delete(candidate.id);
+          removedIds.add(candidate.id);
+          firebaseService.deleteSummaryTopic(candidate.id).catch(console.warn);
+          firebaseService.saveSummaryTopic(primary).catch(console.warn);
+          mergedCount++;
+        }
+      }
+    }
+  }
+
+  if (mergedCount > 0) {
+    db.saveToDisk();
+  }
+  return { merged_count: mergedCount };
+}
+
 export function deduplicateSummaries(): { merged_count: number } {
   let mergedCount = 0;
   const bySubject: Record<string, SummaryTopic[]> = {};
@@ -1720,31 +1962,35 @@ export function deduplicateSummaries(): { merged_count: number } {
         if (removedIds.has(candidate.id)) continue;
 
         if (areTopicsSimilar(primary.topic, candidate.topic)) {
-          console.log(`[Deduplicate] Mesclando tópico duplicado "${candidate.topic}" (${candidate.id}) no tópico principal "${primary.topic}" (${primary.id})`);
+          console.log(`[Deduplicate] Mesclando resumo duplicado "${candidate.topic}" (${candidate.id}) no principal "${primary.topic}" (${primary.id})`);
 
-          // Mescla texto explicativo se trouxer conteúdo novo
+          if (candidate.extracted_notes && !(primary.extracted_notes || '').includes(candidate.extracted_notes.slice(0, 40))) {
+            primary.extracted_notes = `${primary.extracted_notes || ''}\n${candidate.extracted_notes}`.trim();
+          }
+
           if (candidate.summary_text && !primary.summary_text.includes(candidate.summary_text.slice(0, 40))) {
             primary.summary_text = `${primary.summary_text}\n\n${candidate.summary_text}`.trim();
           }
 
-          // Mescla conceitos-chave únicos
-          const mergedConcepts = new Set([...(primary.key_concepts || []), ...(candidate.key_concepts || [])]);
-          primary.key_concepts = Array.from(mergedConcepts).filter(Boolean);
+          if (candidate.is_published && !primary.is_published) {
+            primary.is_published = true;
+            primary.status = 'published';
+            primary.published_at = candidate.published_at || primary.published_at || new Date().toISOString();
+          } else if (!primary.status) {
+            primary.status = primary.summary_text?.trim() ? (primary.is_published ? 'published' : 'draft') : 'draft';
+          }
 
-          // Mescla fórmulas únicas
-          const mergedFormulas = new Set([...(primary.formulas || []), ...(candidate.formulas || [])]);
-          primary.formulas = Array.from(mergedFormulas).filter(Boolean);
-
-          // Mescla IDs das imagens fontes
-          const mergedImages = new Set([...(primary.source_image_ids || []), ...(candidate.source_image_ids || [])]);
-          primary.source_image_ids = Array.from(mergedImages).filter(Boolean);
-
+          primary.key_concepts = Array.from(new Set([...(primary.key_concepts || []), ...(candidate.key_concepts || [])])).filter(Boolean);
+          primary.formulas = Array.from(new Set([...(primary.formulas || []), ...(candidate.formulas || [])])).filter(Boolean);
+          primary.source_image_ids = Array.from(new Set([...(primary.source_image_ids || []), ...(candidate.source_image_ids || [])])).filter(Boolean);
+          primary.source_topic_ids = Array.from(new Set([...(primary.source_topic_ids || []), ...(candidate.source_topic_ids || [])])).filter(Boolean);
+          primary.source_topic_titles = Array.from(new Set([...(primary.source_topic_titles || []), ...(candidate.source_topic_titles || [])])).filter(Boolean);
           primary.updated_at = new Date().toISOString();
 
-          // Remove o duplicado
           db.summaries.delete(candidate.id);
           removedIds.add(candidate.id);
           firebaseService.deleteSummary(candidate.id).catch(console.warn);
+          firebaseService.saveSummary(primary).catch(console.warn);
           mergedCount++;
         }
       }
@@ -1753,44 +1999,127 @@ export function deduplicateSummaries(): { merged_count: number } {
 
   if (mergedCount > 0) {
     db.saveToDisk();
-    console.log(`[Deduplicate] Total de ${mergedCount} tópicos duplicados mesclados com sucesso!`);
+    console.log(`[Deduplicate] Total de ${mergedCount} resumos duplicados mesclados com sucesso!`);
   }
   return { merged_count: mergedCount };
 }
 
-api.get('/summaries', requireAuth, (req, res) => {
-  // Executa checagem de deduplicação para garantir que não haja tópicos repetidos
-  deduplicateSummaries();
+function isSummaryVisibleToStudent(s: SummaryTopic): boolean {
+  if (!s) return false;
+  const hasText = Boolean(s.summary_text && s.summary_text.trim().length > 0);
+  if (!hasText) return false;
+  if (s.is_published === true) return true;
+  if (s.is_published === false || s.status === 'topic_only' || s.status === 'draft') return false;
+  return s.is_published === undefined && s.status === undefined && hasText;
+}
 
+function resolveTopicStatus(s: SummaryTopic): 'draft' | 'published' {
+  return s.is_published ? 'published' : 'draft';
+}
+
+// ---------------------------------------------------------------------------
+// ETAPA 1 (Admin): Tópicos por Matéria (100% separados dos Resumos)
+// ---------------------------------------------------------------------------
+api.get('/admin/summary-topics', requireAdmin, (req, res) => {
   const { subject } = req.query;
-  let allSummaries = Array.from(db.summaries.values());
+  let allTopics = Array.from(db.summary_topics.values());
   if (subject && typeof subject === 'string' && subject.trim()) {
-    allSummaries = allSummaries.filter(
-      (s) => s.subject.toLowerCase() === subject.trim().toLowerCase()
-    );
+    allTopics = allTopics.filter((t) => t.subject.toLowerCase() === subject.trim().toLowerCase());
   }
-  res.json(allSummaries);
+  allTopics.sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''));
+  res.json(allTopics);
 });
 
-api.post('/admin/summaries/deduplicate', requireAdmin, (req, res) => {
-  const result = deduplicateSummaries();
-  res.json({ ok: true, ...result, summaries: Array.from(db.summaries.values()) });
+api.post('/admin/summary-topics/deduplicate', requireAdmin, (_req, res) => {
+  const topicsRes = deduplicateStudyTopics();
+  const summariesRes = deduplicateSummaries();
+  res.json({
+    ok: true,
+    merged_count: topicsRes.merged_count + summariesRes.merged_count,
+    topics_merged: topicsRes.merged_count,
+    summaries_merged: summariesRes.merged_count,
+    topics: Array.from(db.summary_topics.values()),
+    summaries: Array.from(db.summaries.values()),
+  });
+});
+
+api.post('/admin/summary-topics', requireAdmin, async (req, res) => {
+  const { subject, topic, extracted_notes, key_concepts, formulas, source_image_ids } = req.body || {};
+  if (!subject || !String(subject).trim() || !topic || !String(topic).trim()) {
+    return res.status(400).json({ detail: 'Matéria e Nome do Tópico são obrigatórios' });
+  }
+
+  const id = `top-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+  const nowIso = new Date().toISOString();
+  const newTopic: StudyTopic = {
+    id,
+    subject: String(subject).trim(),
+    topic: String(topic).trim(),
+    extracted_notes: typeof extracted_notes === 'string' ? extracted_notes.trim() : '',
+    key_concepts: Array.isArray(key_concepts) ? key_concepts.filter(Boolean) : [],
+    formulas: Array.isArray(formulas) ? formulas.filter(Boolean) : [],
+    source_image_ids: Array.isArray(source_image_ids) ? source_image_ids.filter(Boolean) : [],
+    created_at: nowIso,
+    updated_at: nowIso,
+    created_by: (req as any).user?.id || 'admin',
+  };
+
+  db.summary_topics.set(id, newTopic);
+  db.saveToDisk();
+  await firebaseService.saveSummaryTopic(newTopic).catch(console.warn);
+
+  res.json(newTopic);
+});
+
+api.put('/admin/summary-topics/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const existing = db.summary_topics.get(id);
+  if (!existing) return res.status(404).json({ detail: 'Tópico não encontrado' });
+
+  const { subject, topic, extracted_notes, key_concepts, formulas, source_image_ids } = req.body || {};
+  if (subject !== undefined) existing.subject = String(subject).trim();
+  if (topic !== undefined) existing.topic = String(topic).trim();
+  if (extracted_notes !== undefined) existing.extracted_notes = String(extracted_notes).trim();
+  if (key_concepts !== undefined) existing.key_concepts = Array.isArray(key_concepts) ? key_concepts.filter(Boolean) : [];
+  if (formulas !== undefined) existing.formulas = Array.isArray(formulas) ? formulas.filter(Boolean) : [];
+  if (source_image_ids !== undefined) existing.source_image_ids = Array.isArray(source_image_ids) ? source_image_ids.filter(Boolean) : [];
+  existing.updated_at = new Date().toISOString();
+
+  db.summary_topics.set(id, existing);
+  db.saveToDisk();
+  await firebaseService.saveSummaryTopic(existing).catch(console.warn);
+
+  res.json(existing);
+});
+
+api.delete('/admin/summary-topics/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  if (!db.summary_topics.has(id)) {
+    return res.status(404).json({ detail: 'Tópico não encontrado' });
+  }
+
+  db.summary_topics.delete(id);
+  db.saveToDisk();
+  await firebaseService.deleteSummaryTopic(id).catch(console.warn);
+
+  res.json({ ok: true });
 });
 
 let processSourceLock: Promise<any> = Promise.resolve();
 
+// ETAPA 1 (Admin): Extrair apenas Tópicos das fotos/anotações e salvar em db.summary_topics (separado dos Resumos)
 api.post('/admin/summaries/process-source', requireAdmin, upload.array('images', 10), async (req, res) => {
-  // Enfileira chamadas concorrentes para garantir que a segunda chamada veja o tópico criado pela primeira
   const currentTask = async () => {
     try {
-      const { subject } = req.body || {};
+      const { subject, notes } = req.body || {};
       if (!subject || !subject.trim()) {
         return res.status(400).json({ detail: 'Nome da matéria é obrigatório' });
       }
 
       const files = (req.files as Express.Multer.File[]) || [];
-      if (!files || files.length === 0) {
-        return res.status(400).json({ detail: 'Envie pelo menos uma foto fonte para resumo' });
+      const extraNotes = typeof notes === 'string' ? notes.trim() : '';
+      if ((!files || files.length === 0) && !extraNotes) {
+        return res.status(400).json({ detail: 'Envie pelo menos uma foto ou anotação para extrair os tópicos' });
       }
 
       const savedFileIds: string[] = [];
@@ -1808,6 +2137,7 @@ api.post('/admin/summaries/process-source', requireAdmin, upload.array('images',
           console.warn('Could not save summary source file to disk:', err);
         }
 
+        const base64Data = file.buffer.toString('base64');
         db.files.set(fileId, {
           id: fileId,
           original_filename: file.originalname || 'imagem_resumo.jpg',
@@ -1818,54 +2148,65 @@ api.post('/admin/summaries/process-source', requireAdmin, upload.array('images',
           created_at: new Date().toISOString(),
         });
 
-        savedFileIds.push(fileId);
+        await firebaseService.saveFile({
+          id: fileId,
+          original_filename: file.originalname || 'imagem_resumo.jpg',
+          content_type: mime,
+          size: file.size,
+          base64: base64Data,
+          uploaded_by: (req as any).user?.id || 'admin',
+          created_at: new Date().toISOString(),
+        }).catch(() => {});
 
+        savedFileIds.push(fileId);
         imageParts.push({
           inlineData: {
-            data: file.buffer.toString('base64'),
+            data: base64Data,
             mimeType: mime,
           },
         });
       }
 
-      const existingTopics = Array.from(db.summaries.values()).filter(
-        (s) => s.subject.toLowerCase() === subject.trim().toLowerCase()
+      const existingTopics = Array.from(db.summary_topics.values()).filter(
+        (t) => t.subject.toLowerCase() === subject.trim().toLowerCase()
       );
 
       const existingTopicsOverview = existingTopics.map((t) => ({
         id: t.id,
         topic: t.topic,
-        summary_text: t.summary_text,
         key_concepts: t.key_concepts,
         formulas: t.formulas,
       }));
 
-      const promptText = `Você é um tutor pedagógico e especialista em criação de resumos de estudos do Edutask.
-Analise com atenção as fotos e anotações de estudo enviadas relativas à matéria "${subject.trim()}".
+      const promptText = `Você é um organizador curricular especialista do Edutask.
+Analise com atenção o material enviado (imagens e/ou anotações) da matéria "${subject.trim()}" e EXTRAIA OS TÓPICOS DE ESTUDO presentes no conteúdo para o professor selecionar depois quais deseja transformar em resumo.
 
-Abaixo estão os assuntos/tópicos já existentes cadastrados para a matéria "${subject.trim()}":
+Tópicos já cadastrados nesta matéria:
 ${JSON.stringify(existingTopicsOverview, null, 2)}
 
-INSTRUÇÕES PEDAGÓGICAS RIGOROSAS:
-1. ATENÇÃO: NUNCA crie múltiplos tópicos ou duplicações para o mesmo assunto! Se o conteúdo das imagens for sobre um assunto que já existe (ou se for uma continuação, exemplo ou exercício do mesmo tema), você DEVE obrigatoriamente marcar "is_existing_topic": true e apontar para o "topic_id" existente.
-2. Se pertencer a um assunto EXISTENTE:
-   - Defina "is_existing_topic": true e informe "topic_id" com o ID correspondente.
-   - SINTETIZE e INTEGRE o novo conteúdo ao resumo existente, melhorando a explicação sem repetir parágrafos ou gerar redundâncias.
-   - Atualize a lista de conceitos-chave ("key_concepts") e equações/fórmulas ("formulas") unificando o conhecimento.
-3. Se for genuinamente um assunto NOVO e diferente de todos os anteriores:
-   - Defina "is_existing_topic": false e "topic_id": null.
-   - Escolha um título de assunto didático e preciso ("topic_title").
-   - Escreva um resumo bem estruturado, claro e didático ("summary_text") em linguagem acessível e organizada.
-   - Liste os conceitos-chave ("key_concepts") e fórmulas/equações essenciais ("formulas").
+Anotações do professor (se houver):
+${extraNotes || 'Nenhuma anotação extra'}
 
-Retorne EXCLUSIVAMENTE um objeto JSON com a seguinte estrutura:
+INSTRUÇÕES:
+1. Identifique de 1 a 6 tópicos claros e distintos presentes no material.
+2. Se um assunto das fotos já corresponder a um tópico existente acima, aponte "existing_topic_id" com o ID correspondente para apenas adicionar as novas imagens e notas sem duplicar.
+3. Para cada tópico novo ou atualizado, NÃO escreva ainda o resumo completo — extraia apenas:
+   - "topic_title": Nome didático e objetivo do tópico (ex: "Frações e Operações Básicas")
+   - "extracted_notes": Breve descrição do que aparece no material sobre esse tópico (2 a 4 linhas objetivas para orientar o professor)
+   - "key_concepts": Lista curta de conceitos/palavras-chave detectados
+   - "formulas": Lista de fórmulas ou equações encontradas (use sintaxe LaTeX se houver matemática)
+
+Retorne EXCLUSIVAMENTE um JSON válido:
 {
-  "is_existing_topic": boolean,
-  "topic_id": string | null,
-  "topic_title": string,
-  "summary_text": string,
-  "key_concepts": string[],
-  "formulas": string[]
+  "topics": [
+    {
+      "existing_topic_id": string | null,
+      "topic_title": string,
+      "extracted_notes": string,
+      "key_concepts": string[],
+      "formulas": string[]
+    }
+  ]
 }`;
 
       const geminiRes = await callGeminiGenerate({
@@ -1886,118 +2227,98 @@ Retorne EXCLUSIVAMENTE um objeto JSON com a seguinte estrutura:
       try {
         aiParsed = JSON.parse(responseText);
       } catch (e) {
-        console.warn('Erro ao parsear resposta da IA:', responseText);
+        console.warn('Erro ao parsear tópicos extraídos pela IA:', responseText);
       }
 
-      const proposedTitle = (aiParsed.topic_title || '').trim();
-
-      // Busca por correspondência existente inteligente (evita qualquer duplicação)
-      let matchedExistingTopic: SummaryTopic | null = null;
-
-      // 1. Pelo ID retornado pela IA
-      if (aiParsed.is_existing_topic && aiParsed.topic_id && db.summaries.has(aiParsed.topic_id)) {
-        matchedExistingTopic = db.summaries.get(aiParsed.topic_id)!;
-      }
-
-      // 2. Por similaridade de título na mesma matéria
-      if (!matchedExistingTopic && proposedTitle) {
-        for (const t of existingTopics) {
-          if (areTopicsSimilar(t.topic, proposedTitle)) {
-            matchedExistingTopic = t;
-            console.log(`[ProcessSource] Correspondência encontrada por similaridade de título: "${proposedTitle}" -> "${t.topic}"`);
-            break;
-          }
-        }
-      }
-
-      // 3. Por sobreposição de conceitos-chave
-      if (!matchedExistingTopic && Array.isArray(aiParsed.key_concepts) && aiParsed.key_concepts.length > 0) {
-        const incomingConcepts = new Set(aiParsed.key_concepts.map((c: string) => normalizeTopicString(c)));
-        for (const t of existingTopics) {
-          let matchCount = 0;
-          for (const c of t.key_concepts || []) {
-            if (incomingConcepts.has(normalizeTopicString(c))) {
-              matchCount++;
-            }
-          }
-          if (matchCount >= 2) {
-            matchedExistingTopic = t;
-            console.log(`[ProcessSource] Correspondência encontrada por conceitos-chave: "${t.topic}"`);
-            break;
-          }
-        }
-      }
+      const rawTopics: any[] = Array.isArray(aiParsed.topics) && aiParsed.topics.length > 0
+        ? aiParsed.topics
+        : [{
+            existing_topic_id: aiParsed.topic_id || null,
+            topic_title: aiParsed.topic_title || `Tópico ${new Date().toLocaleDateString('pt-BR')}`,
+            extracted_notes: aiParsed.extracted_notes || extraNotes || 'Material anexado pelo professor.',
+            key_concepts: Array.isArray(aiParsed.key_concepts) ? aiParsed.key_concepts : [],
+            formulas: Array.isArray(aiParsed.formulas) ? aiParsed.formulas : [],
+          }];
 
       const nowIso = new Date().toISOString();
-      let targetSummary: SummaryTopic;
-      let isNewTopic = false;
+      const processedTopics: StudyTopic[] = [];
+      let createdCount = 0;
+      let updatedCount = 0;
 
-      if (matchedExistingTopic) {
-        targetSummary = matchedExistingTopic;
-        // Mantém o título mais informativo
-        if (proposedTitle && proposedTitle.length > targetSummary.topic.length) {
-          targetSummary.topic = proposedTitle;
+      for (const item of rawTopics) {
+        const proposedTitle = (item.topic_title || '').trim();
+        if (!proposedTitle) continue;
+
+        let matchedExistingTopic: StudyTopic | null = null;
+        if (item.existing_topic_id && db.summary_topics.has(item.existing_topic_id)) {
+          matchedExistingTopic = db.summary_topics.get(item.existing_topic_id)!;
+        }
+        if (!matchedExistingTopic) {
+          for (const t of Array.from(db.summary_topics.values()).filter((s) => s.subject.toLowerCase() === subject.trim().toLowerCase())) {
+            if (areTopicsSimilar(t.topic, proposedTitle)) {
+              matchedExistingTopic = t;
+              break;
+            }
+          }
         }
 
-        // Integra o texto sem duplicar frases
-        const newText = (aiParsed.summary_text || '').trim();
-        if (newText && !targetSummary.summary_text.includes(newText.slice(0, 40))) {
-          targetSummary.summary_text = `${targetSummary.summary_text}\n\n${newText}`.trim();
+        if (matchedExistingTopic) {
+          const notePiece = (item.extracted_notes || '').trim();
+          if (notePiece && !(matchedExistingTopic.extracted_notes || '').includes(notePiece.slice(0, 40))) {
+            matchedExistingTopic.extracted_notes = `${matchedExistingTopic.extracted_notes || ''}\n${notePiece}`.trim();
+          }
+          matchedExistingTopic.key_concepts = Array.from(new Set([
+            ...(matchedExistingTopic.key_concepts || []),
+            ...(Array.isArray(item.key_concepts) ? item.key_concepts : []),
+          ])).filter(Boolean);
+          matchedExistingTopic.formulas = Array.from(new Set([
+            ...(matchedExistingTopic.formulas || []),
+            ...(Array.isArray(item.formulas) ? item.formulas : []),
+          ])).filter(Boolean);
+          matchedExistingTopic.source_image_ids = Array.from(new Set([
+            ...(matchedExistingTopic.source_image_ids || []),
+            ...savedFileIds,
+          ])).filter(Boolean);
+          matchedExistingTopic.updated_at = nowIso;
+
+          db.summary_topics.set(matchedExistingTopic.id, matchedExistingTopic);
+          await firebaseService.saveSummaryTopic(matchedExistingTopic).catch(console.warn);
+          processedTopics.push(matchedExistingTopic);
+          updatedCount++;
+        } else {
+          const newId = `top-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+          const newTopic: StudyTopic = {
+            id: newId,
+            subject: subject.trim(),
+            topic: proposedTitle,
+            extracted_notes: (item.extracted_notes || extraNotes || '').trim(),
+            key_concepts: Array.isArray(item.key_concepts) ? item.key_concepts.filter(Boolean) : [],
+            formulas: Array.isArray(item.formulas) ? item.formulas.filter(Boolean) : [],
+            source_image_ids: savedFileIds,
+            created_at: nowIso,
+            updated_at: nowIso,
+            created_by: (req as any).user?.id || 'admin',
+          };
+          db.summary_topics.set(newId, newTopic);
+          await firebaseService.saveSummaryTopic(newTopic).catch(console.warn);
+          processedTopics.push(newTopic);
+          createdCount++;
         }
-
-        // Combina conceitos únicos
-        const combinedConcepts = new Set([
-          ...(targetSummary.key_concepts || []),
-          ...(aiParsed.key_concepts || []),
-        ]);
-        targetSummary.key_concepts = Array.from(combinedConcepts).filter(Boolean);
-
-        // Combina fórmulas únicas
-        const combinedFormulas = new Set([
-          ...(targetSummary.formulas || []),
-          ...(aiParsed.formulas || []),
-        ]);
-        targetSummary.formulas = Array.from(combinedFormulas).filter(Boolean);
-
-        // Combina imagens fontes
-        const combinedImages = new Set([
-          ...(targetSummary.source_image_ids || []),
-          ...savedFileIds,
-        ]);
-        targetSummary.source_image_ids = Array.from(combinedImages).filter(Boolean);
-        targetSummary.updated_at = nowIso;
-      } else {
-        isNewTopic = true;
-        const newId = `sum-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-        targetSummary = {
-          id: newId,
-          subject: subject.trim(),
-          topic: proposedTitle || 'Assunto ' + new Date().toLocaleDateString('pt-BR'),
-          summary_text: aiParsed.summary_text || 'Resumo processado a partir das imagens fornecidas.',
-          key_concepts: Array.isArray(aiParsed.key_concepts) ? aiParsed.key_concepts : [],
-          formulas: Array.isArray(aiParsed.formulas) ? aiParsed.formulas : [],
-          source_image_ids: savedFileIds,
-          created_at: nowIso,
-          updated_at: nowIso,
-          created_by: (req as any).user?.id || 'admin',
-        };
       }
 
-      db.summaries.set(targetSummary.id, targetSummary);
       db.saveToDisk();
-      await firebaseService.saveSummary(targetSummary).catch(console.warn);
-
-      // Executa deduplicação de segurança
-      deduplicateSummaries();
+      deduplicateStudyTopics();
 
       res.json({
         ok: true,
-        summary: targetSummary,
-        is_new_topic: isNewTopic,
+        topics: processedTopics,
+        is_new_topic: createdCount > 0,
+        created_count: createdCount,
+        updated_count: updatedCount,
       });
     } catch (err: any) {
-      console.error('[Resumos AI Error]', err);
-      res.status(500).json({ detail: err.message || 'Erro ao processar imagens para resumo' });
+      console.error('[Resumos AI Extract Topics Error]', err);
+      res.status(500).json({ detail: err.message || 'Erro ao extrair tópicos do material' });
     }
   };
 
@@ -2006,46 +2327,387 @@ Retorne EXCLUSIVAMENTE um objeto JSON com a seguinte estrutura:
   await nextTask;
 });
 
-api.post('/admin/summaries/topics', requireAdmin, async (req, res) => {
-  const { subject, topic, summary_text, key_concepts, formulas, source_image_ids } = req.body || {};
-  if (!subject || !subject.trim() || !topic || !topic.trim()) {
-    return res.status(400).json({ detail: 'Matéria e Título do Assunto são obrigatórios' });
+// ---------------------------------------------------------------------------
+// ETAPA 2 & 3: Resumos (Gerados pelo Admin a partir dos Tópicos e Disponibilizados)
+// ---------------------------------------------------------------------------
+api.get('/summaries', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  const { subject } = req.query;
+  let allSummaries = Array.from(db.summaries.values())
+    .filter((s) => Boolean(s.summary_text && s.summary_text.trim().length > 0))
+    .map((s) => ({
+      ...s,
+      status: resolveTopicStatus(s),
+      is_published: Boolean(s.is_published ?? (s.status === undefined && s.summary_text?.trim())),
+    }));
+
+  if (user.role !== 'admin') {
+    allSummaries = allSummaries.filter((s) => isSummaryVisibleToStudent(s));
+  }
+
+  if (subject && typeof subject === 'string' && subject.trim()) {
+    allSummaries = allSummaries.filter(
+      (s) => s.subject.toLowerCase() === subject.trim().toLowerCase()
+    );
+  }
+
+  allSummaries.sort((a, b) =>
+    (b.published_at || b.updated_at || b.created_at || '').localeCompare(
+      a.published_at || a.updated_at || a.created_at || ''
+    )
+  );
+  res.json(allSummaries);
+});
+
+api.post('/admin/summaries/deduplicate', requireAdmin, (_req, res) => {
+  const result = deduplicateSummaries();
+  res.json({ ok: true, ...result, summaries: Array.from(db.summaries.values()) });
+});
+
+async function generateSummaryContentWithAI(params: {
+  subject: string;
+  title: string;
+  topics: Array<{ topic: string; extracted_notes?: string; key_concepts?: string[]; formulas?: string[] }>;
+  sourceImageIds: string[];
+  tone?: string;
+  instructions?: string;
+}) {
+  const imageParts: any[] = [];
+  for (const fileId of params.sourceImageIds.slice(0, 8)) {
+    const f = await resolveFileRecordAsync(fileId);
+    if (f && f.data && f.data.length > 0 && f.content_type?.startsWith('image/')) {
+      imageParts.push({
+        inlineData: {
+          data: f.data.toString('base64'),
+          mimeType: f.content_type,
+        },
+      });
+    }
+  }
+
+  const promptText = `Você é um professor especialista e criador de materiais didáticos do EduTask.
+Elabore um RESUMO DE ESTUDO COMPLETO E COESO para a matéria "${params.subject}", unificando os tópicos selecionados pelo professor abaixo.
+Este resumo será revisado pelo professor e depois disponibilizado para a turma estudar.
+
+Matéria: "${params.subject}"
+Título sugerido do Resumo: "${params.title}"
+Tópicos selecionados para compor este resumo:
+${JSON.stringify(params.topics, null, 2)}
+
+Estilo solicitado pelo professor: ${params.tone || 'completo'}
+Instruções extras do professor: ${params.instructions || 'Seguir didática clara e organizada para Ensino Fundamental/Médio'}
+
+REGRAS OBRIGATÓRIAS DE ESCRITA:
+1. Escreva em Português do Brasil impecável, bem estruturado em Markdown (#, ##, ###, listas com -, **negritos**, blocos > Dica importante).
+2. Se houver matemática, física ou química, use sintaxe LaTeX limpa com $...$ para fórmulas na linha e $$...$$ para equações em destaque.
+3. Organize com: Introdução objetiva, Explicação detalhada interligando todos os tópicos selecionados, Exemplos práticos resolvidos (passo a passo quando aplicável) e Dicas de revisão.
+4. Também refine e consolide "title" (título final didático se aplicável), "key_concepts" (lista curta de termos-chave) e "formulas" (lista de fórmulas).
+
+Retorne EXCLUSIVAMENTE um JSON válido:
+{
+  "title": string,
+  "summary_text": string,
+  "key_concepts": string[],
+  "formulas": string[]
+}`;
+
+  const geminiRes = await callGeminiGenerate({
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: promptText }, ...imageParts],
+      },
+    ],
+    config: {
+      responseMimeType: 'application/json',
+    },
+    preferredModel: db.summary_ai_model || 'gemini-3.8-flash',
+  });
+
+  const responseText = geminiRes?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  let parsed: any = {};
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    parsed = { summary_text: responseText };
+  }
+
+  if (!parsed.summary_text || !String(parsed.summary_text).trim()) {
+    throw new Error('A IA não retornou conteúdo para o resumo. Tente novamente.');
+  }
+
+  return {
+    title: parsed.title ? String(parsed.title).trim() : params.title,
+    summary_text: String(parsed.summary_text).trim(),
+    key_concepts: Array.isArray(parsed.key_concepts) ? parsed.key_concepts.filter(Boolean) : [],
+    formulas: Array.isArray(parsed.formulas) ? parsed.formulas.filter(Boolean) : [],
+  };
+}
+
+// ETAPA 2 (Admin): Escolher 1 ou mais tópicos da matéria e gerar um Resumo (Rascunho ou já Disponibilizado)
+api.post('/admin/summaries/generate-from-topics', requireAdmin, async (req, res) => {
+  try {
+    const {
+      subject,
+      topic_ids,
+      custom_title,
+      tone = 'completo',
+      instructions = '',
+      publish_now = false,
+    } = req.body || {};
+
+    if (!Array.isArray(topic_ids) || topic_ids.length === 0) {
+      return res.status(400).json({ detail: 'Selecione pelo menos um tópico para gerar o resumo.' });
+    }
+
+    const selectedTopics = topic_ids
+      .map((id: string) => db.summary_topics.get(id))
+      .filter((t): t is StudyTopic => Boolean(t));
+
+    if (selectedTopics.length === 0) {
+      return res.status(404).json({ detail: 'Nenhum dos tópicos selecionados foi encontrado.' });
+    }
+
+    const resolvedSubject = (subject && String(subject).trim()) || selectedTopics[0].subject;
+    const defaultTitle = selectedTopics.length === 1
+      ? selectedTopics[0].topic
+      : selectedTopics.map((t) => t.topic).join(' + ');
+    const requestedTitle = custom_title && String(custom_title).trim()
+      ? String(custom_title).trim()
+      : defaultTitle;
+
+    const mergedImages = Array.from(
+      new Set(selectedTopics.flatMap((t) => t.source_image_ids || []))
+    ).filter(Boolean);
+    const mergedConcepts = Array.from(
+      new Set(selectedTopics.flatMap((t) => t.key_concepts || []))
+    ).filter(Boolean);
+    const mergedFormulas = Array.from(
+      new Set(selectedTopics.flatMap((t) => t.formulas || []))
+    ).filter(Boolean);
+
+    const generated = await generateSummaryContentWithAI({
+      subject: resolvedSubject,
+      title: requestedTitle,
+      topics: selectedTopics.map((t) => ({
+        topic: t.topic,
+        extracted_notes: t.extracted_notes || '',
+        key_concepts: t.key_concepts || [],
+        formulas: t.formulas || [],
+      })),
+      sourceImageIds: mergedImages,
+      tone,
+      instructions,
+    });
+
+    const nowIso = new Date().toISOString();
+    const shouldPublish = Boolean(publish_now);
+    const finalTitle = custom_title && String(custom_title).trim()
+      ? String(custom_title).trim()
+      : (generated.title || requestedTitle);
+
+    const newSummary: SummaryTopic = {
+      id: `sum-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      subject: resolvedSubject,
+      topic: finalTitle,
+      extracted_notes: selectedTopics
+        .map((t) => `[${t.topic}] ${t.extracted_notes || ''}`.trim())
+        .filter(Boolean)
+        .join('\n'),
+      summary_text: generated.summary_text,
+      key_concepts: Array.from(new Set([...mergedConcepts, ...generated.key_concepts])).filter(Boolean),
+      formulas: Array.from(new Set([...mergedFormulas, ...generated.formulas])).filter(Boolean),
+      source_image_ids: mergedImages,
+      source_topic_ids: selectedTopics.map((t) => t.id),
+      source_topic_titles: selectedTopics.map((t) => t.topic),
+      status: shouldPublish ? 'published' : 'draft',
+      is_published: shouldPublish,
+      published_at: shouldPublish ? nowIso : null,
+      created_at: nowIso,
+      updated_at: nowIso,
+      created_by: (req as any).user?.id || 'admin',
+    };
+
+    db.summaries.set(newSummary.id, newSummary);
+    db.saveToDisk();
+    await firebaseService.saveSummary(newSummary).catch(console.warn);
+
+    let pushResult = { sent: 0, failed: 0, skipped: !shouldPublish };
+    if (shouldPublish && db.push_settings?.summary_published !== false) {
+      pushResult = {
+        ...(await dispatchWebPushNotifications({
+          title: `Novo resumo disponível: ${newSummary.subject}`,
+          body: `"${newSummary.topic}" já foi liberado pelo professor para estudar!`,
+          url: '/aluno?tab=resumos',
+          tag: `summary-pub-${newSummary.id}`,
+        })),
+        skipped: false,
+      };
+    }
+
+    res.json({ ok: true, summary: newSummary, push: pushResult });
+  } catch (err: any) {
+    console.error('[Resumos AI Generate From Topics Error]', err);
+    res.status(500).json({ detail: err.message || 'Erro ao gerar resumo a partir dos tópicos' });
+  }
+});
+
+// Regerar um resumo existente com IA
+api.post('/admin/summaries/:id/regenerate', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const summaryItem = db.summaries.get(id);
+    if (!summaryItem) {
+      return res.status(404).json({ detail: 'Resumo não encontrado' });
+    }
+
+    const { tone = 'completo', instructions = '' } = req.body || {};
+    const linkedTopics = (summaryItem.source_topic_ids || [])
+      .map((tid) => db.summary_topics.get(tid))
+      .filter((t): t is StudyTopic => Boolean(t));
+
+    const topicsPayload = linkedTopics.length > 0
+      ? linkedTopics.map((t) => ({
+          topic: t.topic,
+          extracted_notes: t.extracted_notes || '',
+          key_concepts: t.key_concepts || [],
+          formulas: t.formulas || [],
+        }))
+      : [{
+          topic: summaryItem.topic,
+          extracted_notes: summaryItem.extracted_notes || '',
+          key_concepts: summaryItem.key_concepts || [],
+          formulas: summaryItem.formulas || [],
+        }];
+
+    const imageIds = Array.from(new Set([
+      ...(summaryItem.source_image_ids || []),
+      ...linkedTopics.flatMap((t) => t.source_image_ids || []),
+    ])).filter(Boolean);
+
+    const generated = await generateSummaryContentWithAI({
+      subject: summaryItem.subject,
+      title: summaryItem.topic,
+      topics: topicsPayload,
+      sourceImageIds: imageIds,
+      tone,
+      instructions,
+    });
+
+    summaryItem.summary_text = generated.summary_text;
+    summaryItem.key_concepts = Array.from(new Set([...(summaryItem.key_concepts || []), ...generated.key_concepts])).filter(Boolean);
+    summaryItem.formulas = Array.from(new Set([...(summaryItem.formulas || []), ...generated.formulas])).filter(Boolean);
+    summaryItem.source_image_ids = imageIds;
+    summaryItem.status = summaryItem.is_published ? 'published' : 'draft';
+    summaryItem.updated_at = new Date().toISOString();
+
+    db.summaries.set(id, summaryItem);
+    db.saveToDisk();
+    await firebaseService.saveSummary(summaryItem).catch(console.warn);
+
+    res.json({ ok: true, summary: summaryItem });
+  } catch (err: any) {
+    console.error('[Resumos AI Regenerate Error]', err);
+    res.status(500).json({ detail: err.message || 'Erro ao regerar resumo' });
+  }
+});
+
+// Criar resumo manual
+api.post('/admin/summaries', requireAdmin, async (req, res) => {
+  const {
+    subject,
+    topic,
+    summary_text,
+    extracted_notes,
+    key_concepts,
+    formulas,
+    source_image_ids,
+    source_topic_ids,
+    source_topic_titles,
+    is_published,
+  } = req.body || {};
+
+  if (!subject || !String(subject).trim() || !topic || !String(topic).trim() || !summary_text || !String(summary_text).trim()) {
+    return res.status(400).json({ detail: 'Matéria, Título e Conteúdo do Resumo são obrigatórios' });
   }
 
   const id = `sum-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
   const nowIso = new Date().toISOString();
-  const newTopic: SummaryTopic = {
+  const publishNow = Boolean(is_published);
+  const newSummary: SummaryTopic = {
     id,
-    subject: subject.trim(),
-    topic: topic.trim(),
-    summary_text: summary_text || '',
-    key_concepts: Array.isArray(key_concepts) ? key_concepts : [],
-    formulas: Array.isArray(formulas) ? formulas : [],
-    source_image_ids: Array.isArray(source_image_ids) ? source_image_ids : [],
+    subject: String(subject).trim(),
+    topic: String(topic).trim(),
+    extracted_notes: typeof extracted_notes === 'string' ? extracted_notes.trim() : '',
+    summary_text: String(summary_text).trim(),
+    key_concepts: Array.isArray(key_concepts) ? key_concepts.filter(Boolean) : [],
+    formulas: Array.isArray(formulas) ? formulas.filter(Boolean) : [],
+    source_image_ids: Array.isArray(source_image_ids) ? source_image_ids.filter(Boolean) : [],
+    source_topic_ids: Array.isArray(source_topic_ids) ? source_topic_ids.filter(Boolean) : [],
+    source_topic_titles: Array.isArray(source_topic_titles) ? source_topic_titles.filter(Boolean) : [],
+    status: publishNow ? 'published' : 'draft',
+    is_published: publishNow,
+    published_at: publishNow ? nowIso : null,
     created_at: nowIso,
     updated_at: nowIso,
     created_by: (req as any).user?.id || 'admin',
   };
 
-  db.summaries.set(id, newTopic);
+  db.summaries.set(id, newSummary);
   db.saveToDisk();
-  await firebaseService.saveSummary(newTopic).catch(console.warn);
+  await firebaseService.saveSummary(newSummary).catch(console.warn);
 
-  res.json(newTopic);
+  let pushResult = { sent: 0, failed: 0, skipped: !publishNow };
+  if (publishNow && db.push_settings?.summary_published !== false) {
+    pushResult = {
+      ...(await dispatchWebPushNotifications({
+        title: `Novo resumo disponível: ${newSummary.subject}`,
+        body: `"${newSummary.topic}" já foi liberado pelo professor para estudar!`,
+        url: '/aluno?tab=resumos',
+        tag: `summary-pub-${newSummary.id}`,
+      })),
+      skipped: false,
+    };
+  }
+
+  res.json({ ...newSummary, ok: true, summary: newSummary, push: pushResult });
 });
 
-api.put('/admin/summaries/topics/:id', requireAdmin, async (req, res) => {
+api.put('/admin/summaries/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const existing = db.summaries.get(id);
-  if (!existing) return res.status(404).json({ detail: 'Assunto de resumo não encontrado' });
+  if (!existing) return res.status(404).json({ detail: 'Resumo não encontrado' });
 
-  const { subject, topic, summary_text, key_concepts, formulas, source_image_ids } = req.body || {};
-  if (subject !== undefined) existing.subject = subject.trim();
-  if (topic !== undefined) existing.topic = topic.trim();
-  if (summary_text !== undefined) existing.summary_text = summary_text;
-  if (key_concepts !== undefined) existing.key_concepts = Array.isArray(key_concepts) ? key_concepts : [];
-  if (formulas !== undefined) existing.formulas = Array.isArray(formulas) ? formulas : [];
-  if (source_image_ids !== undefined) existing.source_image_ids = Array.isArray(source_image_ids) ? source_image_ids : [];
+  const {
+    subject,
+    topic,
+    summary_text,
+    extracted_notes,
+    key_concepts,
+    formulas,
+    source_image_ids,
+    source_topic_ids,
+    source_topic_titles,
+    is_published,
+  } = req.body || {};
+
+  if (subject !== undefined) existing.subject = String(subject).trim();
+  if (topic !== undefined) existing.topic = String(topic).trim();
+  if (extracted_notes !== undefined) existing.extracted_notes = String(extracted_notes).trim();
+  if (summary_text !== undefined) existing.summary_text = String(summary_text);
+  if (key_concepts !== undefined) existing.key_concepts = Array.isArray(key_concepts) ? key_concepts.filter(Boolean) : [];
+  if (formulas !== undefined) existing.formulas = Array.isArray(formulas) ? formulas.filter(Boolean) : [];
+  if (source_image_ids !== undefined) existing.source_image_ids = Array.isArray(source_image_ids) ? source_image_ids.filter(Boolean) : [];
+  if (source_topic_ids !== undefined) existing.source_topic_ids = Array.isArray(source_topic_ids) ? source_topic_ids.filter(Boolean) : [];
+  if (source_topic_titles !== undefined) existing.source_topic_titles = Array.isArray(source_topic_titles) ? source_topic_titles.filter(Boolean) : [];
+
+  if (typeof is_published === 'boolean') {
+    existing.is_published = is_published && Boolean(existing.summary_text?.trim());
+    if (existing.is_published && !existing.published_at) {
+      existing.published_at = new Date().toISOString();
+    }
+  }
+  existing.status = resolveTopicStatus(existing);
   existing.updated_at = new Date().toISOString();
 
   db.summaries.set(id, existing);
@@ -2055,10 +2717,10 @@ api.put('/admin/summaries/topics/:id', requireAdmin, async (req, res) => {
   res.json(existing);
 });
 
-api.delete('/admin/summaries/topics/:id', requireAdmin, async (req, res) => {
+api.delete('/admin/summaries/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   if (!db.summaries.has(id)) {
-    return res.status(404).json({ detail: 'Assunto não encontrado' });
+    return res.status(404).json({ detail: 'Resumo não encontrado' });
   }
 
   db.summaries.delete(id);
@@ -2068,25 +2730,230 @@ api.delete('/admin/summaries/topics/:id', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ETAPA 3 (Admin): Disponibilizar o resumo para os alunos na matéria + disparar notificação Push
+api.post('/admin/summaries/:id/publish', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const summaryItem = db.summaries.get(id);
+  if (!summaryItem) {
+    return res.status(404).json({ detail: 'Resumo não encontrado' });
+  }
+
+  if (!summaryItem.summary_text || !summaryItem.summary_text.trim()) {
+    return res.status(400).json({ detail: 'Escreva ou gere o resumo antes de disponibilizá-lo para os alunos.' });
+  }
+
+  const { notify = true } = req.body || {};
+  const nowIso = new Date().toISOString();
+  const wasAlreadyPublished = Boolean(summaryItem.is_published);
+
+  summaryItem.is_published = true;
+  summaryItem.status = 'published';
+  summaryItem.published_at = summaryItem.published_at || nowIso;
+  summaryItem.updated_at = nowIso;
+
+  db.summaries.set(id, summaryItem);
+  db.saveToDisk();
+  await firebaseService.saveSummary(summaryItem).catch(console.warn);
+
+  let pushResult = { sent: 0, failed: 0, skipped: false };
+  if (notify !== false && db.push_settings?.summary_published !== false) {
+    pushResult = {
+      ...(await dispatchWebPushNotifications({
+        title: `Novo resumo disponível: ${summaryItem.subject}`,
+        body: `"${summaryItem.topic}" já foi liberado pelo professor para estudar!`,
+        url: '/aluno?tab=resumos',
+        tag: `summary-pub-${summaryItem.id}`,
+      })),
+      skipped: false,
+    };
+  } else {
+    pushResult.skipped = true;
+  }
+
+  res.json({
+    ok: true,
+    summary: summaryItem,
+    was_already_published: wasAlreadyPublished,
+    push: pushResult,
+  });
+});
+
+// Reverter disponibilidade (voltar para rascunho privado do Admin)
+api.post('/admin/summaries/:id/unpublish', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const summaryItem = db.summaries.get(id);
+  if (!summaryItem) {
+    return res.status(404).json({ detail: 'Resumo não encontrado' });
+  }
+
+  summaryItem.is_published = false;
+  summaryItem.status = 'draft';
+  summaryItem.updated_at = new Date().toISOString();
+
+  db.summaries.set(id, summaryItem);
+  db.saveToDisk();
+  await firebaseService.saveSummary(summaryItem).catch(console.warn);
+
+  res.json({ ok: true, summary: summaryItem });
+});
+
+// Aliases legados de tópicos para retrocompatibilidade
+api.post('/admin/summaries/topics/:id/generate-summary', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const topicItem = db.summary_topics.get(id);
+    if (!topicItem) {
+      return res.status(404).json({ detail: 'Tópico não encontrado' });
+    }
+    const { instructions, tone = 'completo' } = req.body || {};
+    const generated = await generateSummaryContentWithAI({
+      subject: topicItem.subject,
+      title: topicItem.topic,
+      topics: [{
+        topic: topicItem.topic,
+        extracted_notes: topicItem.extracted_notes || '',
+        key_concepts: topicItem.key_concepts || [],
+        formulas: topicItem.formulas || [],
+      }],
+      sourceImageIds: topicItem.source_image_ids || [],
+      tone,
+      instructions,
+    });
+    const nowIso = new Date().toISOString();
+    const newSummary: SummaryTopic = {
+      id: `sum-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      subject: topicItem.subject,
+      topic: generated.title || topicItem.topic,
+      extracted_notes: topicItem.extracted_notes || '',
+      summary_text: generated.summary_text,
+      key_concepts: Array.from(new Set([...(topicItem.key_concepts || []), ...generated.key_concepts])).filter(Boolean),
+      formulas: Array.from(new Set([...(topicItem.formulas || []), ...generated.formulas])).filter(Boolean),
+      source_image_ids: topicItem.source_image_ids || [],
+      source_topic_ids: [topicItem.id],
+      source_topic_titles: [topicItem.topic],
+      status: 'draft',
+      is_published: false,
+      published_at: null,
+      created_at: nowIso,
+      updated_at: nowIso,
+      created_by: (req as any).user?.id || 'admin',
+    };
+    db.summaries.set(newSummary.id, newSummary);
+    db.saveToDisk();
+    await firebaseService.saveSummary(newSummary).catch(console.warn);
+    res.json({ ok: true, summary: newSummary });
+  } catch (err: any) {
+    res.status(500).json({ detail: err.message || 'Erro ao gerar resumo para o tópico' });
+  }
+});
+
+api.post('/admin/summaries/topics/:id/publish', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const summaryItem = db.summaries.get(id);
+  if (!summaryItem) return res.status(404).json({ detail: 'Resumo não encontrado' });
+  if (!summaryItem.summary_text || !summaryItem.summary_text.trim()) {
+    return res.status(400).json({ detail: 'Escreva ou gere o resumo antes de disponibilizá-lo para os alunos.' });
+  }
+  const { notify = true } = req.body || {};
+  const nowIso = new Date().toISOString();
+  summaryItem.is_published = true;
+  summaryItem.status = 'published';
+  summaryItem.published_at = summaryItem.published_at || nowIso;
+  summaryItem.updated_at = nowIso;
+  db.summaries.set(id, summaryItem);
+  db.saveToDisk();
+  await firebaseService.saveSummary(summaryItem).catch(console.warn);
+
+  let pushResult = { sent: 0, failed: 0, skipped: false };
+  if (notify !== false && db.push_settings?.summary_published !== false) {
+    pushResult = {
+      ...(await dispatchWebPushNotifications({
+        title: `Novo resumo disponível: ${summaryItem.subject}`,
+        body: `"${summaryItem.topic}" já foi liberado pelo professor para estudar!`,
+        url: '/aluno?tab=resumos',
+        tag: `summary-pub-${summaryItem.id}`,
+      })),
+      skipped: false,
+    };
+  } else {
+    pushResult.skipped = true;
+  }
+  res.json({ ok: true, summary: summaryItem, push: pushResult });
+});
+
+api.post('/admin/summaries/topics/:id/unpublish', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const summaryItem = db.summaries.get(id);
+  if (!summaryItem) return res.status(404).json({ detail: 'Resumo não encontrado' });
+  summaryItem.is_published = false;
+  summaryItem.status = 'draft';
+  summaryItem.updated_at = new Date().toISOString();
+  db.summaries.set(id, summaryItem);
+  db.saveToDisk();
+  await firebaseService.saveSummary(summaryItem).catch(console.warn);
+  res.json({ ok: true, summary: summaryItem });
+});
+
+api.post('/admin/summaries/topics', requireAdmin, async (req, res) => {
+  const { subject, topic, extracted_notes, key_concepts, formulas, source_image_ids } = req.body || {};
+  if (!subject || !subject.trim() || !topic || !topic.trim()) {
+    return res.status(400).json({ detail: 'Matéria e Título do Tópico são obrigatórios' });
+  }
+  const id = `top-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+  const nowIso = new Date().toISOString();
+  const newTopic: StudyTopic = {
+    id,
+    subject: subject.trim(),
+    topic: topic.trim(),
+    extracted_notes: typeof extracted_notes === 'string' ? extracted_notes.trim() : '',
+    key_concepts: Array.isArray(key_concepts) ? key_concepts : [],
+    formulas: Array.isArray(formulas) ? formulas : [],
+    source_image_ids: Array.isArray(source_image_ids) ? source_image_ids : [],
+    created_at: nowIso,
+    updated_at: nowIso,
+    created_by: (req as any).user?.id || 'admin',
+  };
+  db.summary_topics.set(id, newTopic);
+  db.saveToDisk();
+  await firebaseService.saveSummaryTopic(newTopic).catch(console.warn);
+  res.json(newTopic);
+});
+
+api.put('/admin/summaries/topics/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const existing = db.summary_topics.get(id);
+  if (!existing) return res.status(404).json({ detail: 'Tópico não encontrado' });
+  const { subject, topic, extracted_notes, key_concepts, formulas, source_image_ids } = req.body || {};
+  if (subject !== undefined) existing.subject = String(subject).trim();
+  if (topic !== undefined) existing.topic = String(topic).trim();
+  if (extracted_notes !== undefined) existing.extracted_notes = String(extracted_notes).trim();
+  if (key_concepts !== undefined) existing.key_concepts = Array.isArray(key_concepts) ? key_concepts : [];
+  if (formulas !== undefined) existing.formulas = Array.isArray(formulas) ? formulas : [];
+  if (source_image_ids !== undefined) existing.source_image_ids = Array.isArray(source_image_ids) ? source_image_ids : [];
+  existing.updated_at = new Date().toISOString();
+  db.summary_topics.set(id, existing);
+  db.saveToDisk();
+  await firebaseService.saveSummaryTopic(existing).catch(console.warn);
+  res.json(existing);
+});
+
+api.delete('/admin/summaries/topics/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  if (!db.summary_topics.has(id)) {
+    return res.status(404).json({ detail: 'Tópico não encontrado' });
+  }
+  db.summary_topics.delete(id);
+  db.saveToDisk();
+  await firebaseService.deleteSummaryTopic(id).catch(console.warn);
+  res.json({ ok: true });
+});
+
 api.put('/admin/summaries/model', requireAdmin, async (req, res) => {
   const { summary_ai_model } = req.body || {};
   if (!summary_ai_model) return res.status(400).json({ detail: 'Modelo obrigatório' });
   db.summary_ai_model = summary_ai_model;
   db.saveToDisk();
-  await firebaseService.saveSettings('system', {
-    monthly_prize: db.monthly_prize,
-    task_cleanup_config: db.task_cleanup_config,
-    whatsapp_config: db.whatsapp_config,
-    app_info: db.app_info,
-    effect_overrides: db.effect_overrides,
-    ai_enabled: db.ai_enabled,
-    ai_hidden: db.ai_hidden,
-    frames_disabled: db.frames_disabled,
-    annual_cycle: db.annual_cycle,
-    annual_history: db.annual_history,
-    ai_model: db.ai_model,
-    summary_ai_model: db.summary_ai_model,
-  }).catch(console.warn);
+  saveSystemSettingsToFirestore();
   res.json({ ok: true, summary_ai_model: db.summary_ai_model });
 });
 
@@ -2094,26 +2961,31 @@ api.get('/summaries/drive', requireAuth, (req, res) => {
   const filesList = Array.from(db.files.values()).filter((f) =>
     f.content_type?.startsWith('image/')
   );
+  const topicsList = Array.from(db.summary_topics.values());
   const summariesList = Array.from(db.summaries.values());
   const driveItems = filesList.map((file) => {
-    const parentSummary = summariesList.find((s) =>
-      s.source_image_ids?.includes(file.id)
-    );
+    const parentTopic = topicsList.find((t) => t.source_image_ids?.includes(file.id));
+    const parentSummary = summariesList.find((s) => s.source_image_ids?.includes(file.id));
+    const parent = parentTopic || parentSummary;
     return {
       id: file.id,
       original_filename: file.original_filename,
       content_type: file.content_type,
       size: file.size,
       created_at: file.created_at,
-      subject: parentSummary ? parentSummary.subject : 'Geral / Fontes',
-      topic: parentSummary ? parentSummary.topic : 'Material de Estudo',
+      subject: parent ? parent.subject : 'Geral / Fontes',
+      topic: parent ? parent.topic : 'Material de Estudo',
     };
   });
   res.json(driveItems);
 });
 
+// Bloqueado para alunos: apenas o admin gera resumos
 api.get('/summaries/history', requireAuth, (req, res) => {
-  const user = (req as any).user;
+  const user = (req as any).user as User;
+  if (user.role !== 'admin') {
+    return res.json([]);
+  }
   const now = Date.now();
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
 
@@ -2127,99 +2999,15 @@ api.get('/summaries/history', requireAuth, (req, res) => {
 });
 
 api.post('/summaries/generate-personalized', requireAuth, async (req, res) => {
-  try {
-    const user = (req as any).user;
-    const { selected_subjects, selected_topic_ids, format = 'pdf', focus_style = 'completo', student_notes } = req.body || {};
-
-    let topicsToSummarize: SummaryTopic[] = [];
-    if (Array.isArray(selected_topic_ids) && selected_topic_ids.length > 0) {
-      topicsToSummarize = selected_topic_ids
-        .map((id) => db.summaries.get(id))
-        .filter((t): t is SummaryTopic => Boolean(t));
-    } else if (Array.isArray(selected_subjects) && selected_subjects.length > 0) {
-      const subSet = new Set(selected_subjects.map((s) => s.toLowerCase()));
-      topicsToSummarize = Array.from(db.summaries.values()).filter((t) =>
-        subSet.has(t.subject.toLowerCase())
-      );
-    } else {
-      topicsToSummarize = Array.from(db.summaries.values());
-    }
-
-    if (topicsToSummarize.length === 0) {
-      return res.status(400).json({ detail: 'Nenhum assunto encontrado para os filtros selecionados.' });
-    }
-
-    const topicsContent = topicsToSummarize.map((t) => ({
-      materia: t.subject,
-      assunto: t.topic,
-      conteudo: t.summary_text,
-      conceitos_chave: t.key_concepts,
-      formulas: t.formulas,
-    }));
-
-    const promptText = `Você é o Gerador Inteligente de Resumos do Edutask.
-O aluno solicitou um resumo personalizado único, perfeitamente acentuado e altamente organizado.
-
-Parâmetros da Solicitação:
-- Formato Escolhido: ${format === 'pdf' ? 'Resumo Completo / PDF de Impressão' : 'Foto / Cartão Visual Infográfico'}
-- Foco do Estudo: ${focus_style}
-- Notas do Aluno: ${student_notes || 'Nenhuma nota adicional'}
-
-Conteúdo Base Selecionado:
-${JSON.stringify(topicsContent, null, 2)}
-
-INSTRUÇÕES OBRIGATÓRIAS DE FORMATO E PORTUGUÊS:
-1. IDIOMA E ACENTUAÇÃO: Escreva em Português do Brasil com ACENTUAÇÃO IMPECÁVEL (utilize todos os caracteres especiais como á, é, í, ó, ú, ã, õ, ç, ê, ô, º, ª e símbolos matemáticos).
-2. ESTRUTURA DE MARKDOWN RICA:
-   - Use # para o Título Principal do Resumo.
-   - Use ## para Seções de Matéria e Tópicos Principais.
-   - Use ### para Subtópicos, Caixas de Fórmulas e Resoluções.
-   - Use negritos **palavra em destaque** em termos essenciais, definições e fórmulas.
-   - Use listas com marcadores - para organizar ideias, passos de resolução e pontos-chave.
-3. ESTILO DE ACORDO COM O FORMATO:
-   - Se formato = 'pdf' (Impressão): Crie um Resumo Completo com Introdução, Sumário de Tópicos, Conceitos Explicados em Detalhes, Tabela/Destaques de Fórmulas, Dicas de Prova e Exercícios Resolvidos Exemplo.
-   - Se formato = 'image' (Ficha Visual): Crie uma Ficha de Estudo Infográfica compacta e objetiva, ideal para memorização rápida antes de provas.
-4. Personalize as explicações focando em clareza pedagógica para alunos do Ensino Fundamental e Médio.`;
-
-    const geminiRes = await callGeminiGenerate({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: promptText }],
-        },
-      ],
-      preferredModel: db.summary_ai_model || 'gemini-3.8-flash',
+  const user = (req as any).user as User;
+  if (user.role !== 'admin') {
+    return res.status(403).json({
+      detail: 'Apenas o administrador pode gerar resumos. Os alunos visualizam apenas os resumos disponibilizados pelo professor.',
     });
-
-    const markdownResult = geminiRes?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const nowIso = new Date().toISOString();
-    const genRecord = {
-      id: `sgen-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      user_id: user.id,
-      subject_names: selected_subjects || topicsToSummarize.map((t) => t.subject),
-      format,
-      focus_style,
-      student_notes: student_notes || '',
-      result_markdown: markdownResult,
-      generated_at: nowIso,
-    };
-
-    db.summary_generations.set(genRecord.id, genRecord);
-    db.saveToDisk();
-    await firebaseService.saveSummaryGeneration(genRecord).catch(console.warn);
-
-    res.json({
-      ok: true,
-      id: genRecord.id,
-      result_markdown: markdownResult,
-      format,
-      generated_at: nowIso,
-      topics_count: topicsToSummarize.length,
-    });
-  } catch (err: any) {
-    console.error('[Personalized Summary Error]', err);
-    res.status(500).json({ detail: err.message || 'Erro ao gerar resumo personalizado' });
   }
+  return res.status(400).json({
+    detail: 'Use o gerador de resumos por tópicos no painel administrativo (/admin/summaries/generate-from-topics).',
+  });
 });
 
 api.post('/admin/clean-test-data', requireAdmin, async (req, res) => {
@@ -2508,6 +3296,8 @@ function buildTaskResponseForAdmin(task: TaskItem) {
     completed_count: progress.filter((p) => p.completed).length,
     total_students: targetStudents.length,
     all_students: !task.assigned_to || task.assigned_to.length === 0,
+    edited_at: task.edited_at || task.last_updated_at || null,
+    was_edited: Boolean(task.was_edited || task.edited_at || task.last_updated_at),
   };
 }
 
@@ -2548,6 +3338,8 @@ function buildTaskResponseForStudent(task: TaskItem, userId: string) {
     completed: Boolean(myCompletion),
     completed_at: myCompletion?.completed_at || null,
     created_at: task.created_at,
+    edited_at: task.edited_at || task.last_updated_at || null,
+    was_edited: Boolean(task.was_edited || task.edited_at || task.last_updated_at),
     last_updated_at: task.last_updated_at || null,
     update_changes: task.update_changes || [],
     has_unread_update: Boolean(
@@ -2618,16 +3410,18 @@ api.post('/tasks', requireAdmin, async (req, res) => {
     console.error('[WhatsApp] Erro no disparo de tarefa:', err);
   });
 
-  // Disparo de Web Push pelo site para os alunos destinatários (não bloqueante)
-  dispatchWebPushNotifications({
-    targetUserIds: newTask.assigned_to,
-    title: `Nova tarefa: ${newTask.title}`,
-    body: `${newTask.subject} • Entrega: ${formatDateForPush(newTask.due_date)} (${newTask.points} pts)`,
-    url: '/aluno',
-    tag: `task-create-${newTask.id}`,
-  }).catch((err) => {
-    console.warn('[WebPush] Erro ao notificar nova tarefa:', err);
-  });
+  // Disparo de Web Push pelo site para os alunos destinatários (respeitando configuração do Admin)
+  if (db.push_settings?.task_created !== false) {
+    dispatchWebPushNotifications({
+      targetUserIds: newTask.assigned_to,
+      title: `Nova tarefa: ${newTask.title}`,
+      body: `${newTask.subject} • Entrega: ${formatDateForPush(newTask.due_date)} (${newTask.points} pts)`,
+      url: '/aluno',
+      tag: `task-create-${newTask.id}`,
+    }).catch((err) => {
+      console.warn('[WebPush] Erro ao notificar nova tarefa:', err);
+    });
+  }
 
   res.json(buildTaskResponseForAdmin(newTask));
 });
@@ -2838,6 +3632,11 @@ api.put('/tasks/:task_id', requireAdmin, async (req, res) => {
     nextAssigned !== null &&
     (nextAssigned.length !== oldAssigned.length || nextAssigned.some((id, idx) => id !== oldAssigned[idx]));
 
+  const prevAnswer = (task.answer || '').trim();
+  const prevAnswerSource = (task.answer_source || '').trim();
+  const answerChanged = answer !== undefined && answer.trim() !== prevAnswer;
+  const answerSourceChanged = answer_source !== undefined && answer_source.trim() !== prevAnswerSource;
+
   // Apply changes
   if (title) task.title = title.trim();
   if (description) task.description = description.trim();
@@ -2852,11 +3651,17 @@ api.put('/tasks/:task_id', requireAdmin, async (req, res) => {
   if (answer !== undefined) task.answer = answer.trim();
   if (answer_source !== undefined) task.answer_source = answer_source.trim();
 
-  // ONLY mark task as updated if there were actual changes made
-  if (changes.length > 0) {
-    task.last_updated_at = new Date().toISOString();
-    task.update_changes = Array.from(new Set(changes));
-    task.update_read_by = []; // reset read list so all assigned students receive highlight until viewed
+  const anyEditMade = changes.length > 0 || pointsChanged || assignedChanged || answerChanged || answerSourceChanged;
+
+  if (anyEditMade) {
+    const editedAtIso = new Date().toISOString();
+    task.was_edited = true;
+    task.edited_at = editedAtIso;
+    if (changes.length > 0) {
+      task.last_updated_at = editedAtIso;
+      task.update_changes = Array.from(new Set(changes));
+      task.update_read_by = []; // reset read list so all assigned students receive highlight until viewed
+    }
   }
 
   db.saveToDisk();
@@ -2866,7 +3671,7 @@ api.put('/tasks/:task_id', requireAdmin, async (req, res) => {
     console.warn(`[Firebase] Erro ao atualizar tarefa ${task_id} no Firestore:`, err);
   });
 
-  if (changes.length > 0 || pointsChanged || assignedChanged) {
+  if (anyEditMade && db.push_settings?.task_edited !== false) {
     const changeSummary = changes.length > 0 ? changes.join(', ') : 'Detalhes da tarefa atualizados';
     dispatchWebPushNotifications({
       targetUserIds: task.assigned_to,
@@ -3433,16 +4238,18 @@ api.post('/announcements', requireAdmin, async (req, res) => {
     console.log(`[WhatsApp] Aviso "${doc.title}" é exclusivo para pessoas específicas (${doc.assigned_to.length}). Envio automático desativado.`);
   }
 
-  // Disparo de Web Push pelo site para os alunos destinatários (não bloqueante)
-  dispatchWebPushNotifications({
-    targetUserIds: doc.assigned_to,
-    title: `${doc.is_special ? 'Aviso especial' : 'Novo aviso'}: ${doc.title}`,
-    body: truncatePushText(doc.message, 120),
-    url: '/aluno?tab=announcements',
-    tag: `ann-create-${doc.id}`,
-  }).catch((err) => {
-    console.warn('[WebPush] Erro ao notificar novo aviso:', err);
-  });
+  // Disparo de Web Push pelo site para os alunos destinatários (respeitando configuração do Admin)
+  if (db.push_settings?.announcement_created !== false) {
+    dispatchWebPushNotifications({
+      targetUserIds: doc.assigned_to,
+      title: `${doc.is_special ? 'Aviso especial' : 'Novo aviso'}: ${doc.title}`,
+      body: truncatePushText(doc.message, 120),
+      url: '/aluno?tab=announcements',
+      tag: `ann-create-${doc.id}`,
+    }).catch((err) => {
+      console.warn('[WebPush] Erro ao notificar novo aviso:', err);
+    });
+  }
 
   res.json(doc);
 });
@@ -3556,10 +4363,15 @@ api.put('/announcements/:ann_id', requireAdmin, async (req, res) => {
     (Array.isArray(assigned_to) &&
       (assigned_to.length !== prevAssigned.length || assigned_to.some((id, idx) => id !== prevAssigned[idx])));
 
+  if (hasChanged) {
+    doc.was_edited = true;
+    doc.edited_at = new Date().toISOString();
+  }
+
   db.saveToDisk();
   await firebaseService.saveAnnouncement(doc);
 
-  if (hasChanged) {
+  if (hasChanged && db.push_settings?.announcement_edited !== false) {
     dispatchWebPushNotifications({
       targetUserIds: doc.assigned_to,
       title: `Aviso editado: ${doc.title}`,
@@ -3781,6 +4593,9 @@ api.get('/app-status', (req, res) => {
     frames_disabled: db.frames_disabled || false,
     frame_rotation_disabled: db.frame_rotation_disabled !== undefined ? db.frame_rotation_disabled : true,
     ai_enabled: db.ai_enabled || false,
+    summary_ai_model: db.summary_ai_model || 'gemini-3.8-flash',
+    env_mode: IS_PREVIEW_ENV ? 'preview' : 'production',
+    collection_prefix: firebaseService.getCollectionPrefix(),
     top3,
   });
 });
@@ -4464,9 +5279,14 @@ function saveSystemSettingsToFirestore() {
     ai_hidden: db.ai_hidden,
     frames_disabled: db.frames_disabled,
     frame_rotation_disabled: db.frame_rotation_disabled,
+    annual_cycle: db.annual_cycle,
+    annual_history: db.annual_history,
     ai_model: db.ai_model,
+    summary_ai_model: db.summary_ai_model,
     push_vapid_keys: db.push_vapid_keys,
-    push_subscriptions: db.push_subscriptions,
+    push_vapid_env: db.push_vapid_env || CURRENT_PUSH_ENV,
+    push_settings: db.push_settings,
+    push_subscriptions: (db.push_subscriptions || []).filter(isSubAllowedInCurrentEnv),
   }).catch((err) => console.warn('[Firebase] Erro ao salvar configurações:', err));
 }
 
@@ -4476,19 +5296,22 @@ function saveSystemSettingsToFirestore() {
 function ensureVapidKeys() {
   const envPublic = process.env.VAPID_PUBLIC_KEY?.trim();
   const envPrivate = process.env.VAPID_PRIVATE_KEY?.trim();
-  if (envPublic && envPrivate) {
+  if (envPublic && envPrivate && !IS_PREVIEW_ENV) {
     webpush.setVapidDetails('mailto:suporte@edutask.app', envPublic, envPrivate);
     return { publicKey: envPublic, privateKey: envPrivate };
   }
 
-  if (!db.push_vapid_keys?.publicKey || !db.push_vapid_keys?.privateKey) {
+  const envMismatch = db.push_vapid_env !== CURRENT_PUSH_ENV;
+  if (!db.push_vapid_keys?.publicKey || !db.push_vapid_keys?.privateKey || envMismatch) {
     const generated = webpush.generateVAPIDKeys();
     db.push_vapid_keys = {
       publicKey: generated.publicKey,
       privateKey: generated.privateKey,
     };
+    db.push_vapid_env = CURRENT_PUSH_ENV;
     db.saveToDisk();
     saveSystemSettingsToFirestore();
+    console.log(`[WebPush] Chaves VAPID isoladas geradas para ambiente: ${CURRENT_PUSH_ENV}`);
   }
 
   webpush.setVapidDetails(
@@ -4528,7 +5351,8 @@ async function dispatchWebPushNotifications({
   tag?: string;
 }) {
   try {
-    if (!db.push_subscriptions || db.push_subscriptions.length === 0) {
+    const envSubs = (db.push_subscriptions || []).filter(isSubAllowedInCurrentEnv);
+    if (envSubs.length === 0) {
       return { sent: 0, failed: 0 };
     }
 
@@ -4539,7 +5363,7 @@ async function dispatchWebPushNotifications({
       : [];
     const hasSpecificTargets = specificIds.length > 0;
 
-    const recipients = db.push_subscriptions.filter((sub) => {
+    const recipients = envSubs.filter((sub) => {
       if (!sub?.endpoint || !sub?.subscription) return false;
       const u = db.users.get(sub.user_id);
       if (!u || u.status === 'blocked') return false;
@@ -4599,14 +5423,15 @@ async function dispatchWebPushNotifications({
 
 api.get('/push/public-key', requireAuth, (_req, res) => {
   const keys = ensureVapidKeys();
-  res.json({ publicKey: keys.publicKey, supported: true });
+  res.json({ publicKey: keys.publicKey, supported: true, env_mode: CURRENT_PUSH_ENV });
 });
 
 api.get('/push/status', requireAuth, (req, res) => {
   const user = (req as any).user as User;
   const keys = ensureVapidKeys();
-  const userSubs = (db.push_subscriptions || []).filter((s) => s.user_id === user.id);
-  const totalStudentDevices = (db.push_subscriptions || []).filter((s) => {
+  const envSubs = (db.push_subscriptions || []).filter(isSubAllowedInCurrentEnv);
+  const userSubs = envSubs.filter((s) => s.user_id === user.id);
+  const totalStudentDevices = envSubs.filter((s) => {
     const u = db.users.get(s.user_id);
     return u && u.role === 'aluno' && u.status === 'active';
   }).length;
@@ -4615,12 +5440,13 @@ api.get('/push/status', requireAuth, (req, res) => {
     device_count: userSubs.length,
     total_student_devices: totalStudentDevices,
     publicKey: keys.publicKey,
+    env_mode: CURRENT_PUSH_ENV,
   });
 });
 
 api.post('/push/subscribe', requireAuth, (req, res) => {
   const user = (req as any).user as User;
-  const { subscription, user_agent } = req.body || {};
+  const { subscription, user_agent, origin_host: bodyOrigin } = req.body || {};
 
   if (
     !subscription ||
@@ -4631,11 +5457,23 @@ api.post('/push/subscribe', requireAuth, (req, res) => {
     return res.status(400).json({ detail: 'Inscrição push inválida' });
   }
 
+  const originHost = String(
+    bodyOrigin || req.headers.origin || req.headers.referer || req.headers.host || ''
+  ).slice(0, 200);
+
+  if (!IS_PREVIEW_ENV && isPreviewOriginHost(originHost)) {
+    return res.status(403).json({
+      detail: 'Inscrição originada de ambiente Preview não é permitida no servidor de Produção.',
+    });
+  }
+
   ensureVapidKeys();
   const nowIso = new Date().toISOString();
   const endpoint = subscription.endpoint.trim();
 
-  // Um mesmo navegador/aparelho aponta para o perfil ativo no momento
+  // Mantém apenas inscrições válidas para este ambiente
+  db.push_subscriptions = (db.push_subscriptions || []).filter(isSubAllowedInCurrentEnv);
+
   const existingIdx = db.push_subscriptions.findIndex((s) => s.endpoint === endpoint);
   const record = {
     id: existingIdx >= 0 ? db.push_subscriptions[existingIdx].id : `push-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -4644,6 +5482,8 @@ api.post('/push/subscribe', requireAuth, (req, res) => {
     endpoint,
     subscription,
     user_agent: typeof user_agent === 'string' ? user_agent.slice(0, 200) : '',
+    env: CURRENT_PUSH_ENV,
+    origin_host: originHost,
     created_at: existingIdx >= 0 ? db.push_subscriptions[existingIdx].created_at : nowIso,
     updated_at: nowIso,
   };
@@ -4657,7 +5497,7 @@ api.post('/push/subscribe', requireAuth, (req, res) => {
   db.saveToDisk();
   saveSystemSettingsToFirestore();
 
-  res.json({ ok: true, subscribed: true });
+  res.json({ ok: true, subscribed: true, env_mode: CURRENT_PUSH_ENV });
 });
 
 api.post('/push/unsubscribe', requireAuth, (req, res) => {
@@ -4681,7 +5521,9 @@ api.post('/push/unsubscribe', requireAuth, (req, res) => {
 
 api.post('/push/test', requireAuth, async (req, res) => {
   const user = (req as any).user as User;
-  const userSubs = (db.push_subscriptions || []).filter((s) => s.user_id === user.id);
+  const userSubs = (db.push_subscriptions || []).filter(
+    (s) => isSubAllowedInCurrentEnv(s) && s.user_id === user.id
+  );
   if (userSubs.length === 0) {
     return res.status(400).json({ detail: 'Ative as notificações neste dispositivo antes de testar.' });
   }
@@ -4689,7 +5531,7 @@ api.post('/push/test', requireAuth, async (req, res) => {
   ensureVapidKeys();
   const payload = JSON.stringify({
     title: 'EduTask IA — Notificação ativa!',
-    body: 'Você receberá avisos aqui sempre que uma tarefa ou comunicado for criado ou editado.',
+    body: 'Você receberá avisos aqui sempre que uma tarefa, comunicado ou resumo for liberado.',
     url: user.role === 'admin' ? '/admin' : '/aluno',
     tag: `push-test-${user.id}`,
     icon: '/pwa-192x192.png',
@@ -4723,6 +5565,79 @@ api.post('/push/test', requireAuth, async (req, res) => {
   }
 
   res.json({ ok: true, sent });
+});
+
+// Admin Push Notification Controls
+api.get('/admin/push-settings', requireAdmin, (_req, res) => {
+  ensureVapidKeys();
+  const subs = (db.push_subscriptions || []).filter(isSubAllowedInCurrentEnv);
+  const activeStudentSubs = subs.filter((s) => {
+    const u = db.users.get(s.user_id);
+    return u && u.role === 'aluno' && u.status === 'active';
+  });
+  const adminSubs = subs.filter((s) => {
+    const u = db.users.get(s.user_id);
+    return u && u.role === 'admin';
+  });
+  const recentSubscribers = subs
+    .slice()
+    .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))
+    .slice(0, 12)
+    .map((s) => {
+      const u = db.users.get(s.user_id);
+      return {
+        id: s.id,
+        user_id: s.user_id,
+        user_name: u?.name || 'Usuário',
+        role: u?.role || s.role || 'aluno',
+        updated_at: s.updated_at,
+        user_agent: s.user_agent || '',
+        env: s.env || CURRENT_PUSH_ENV,
+      };
+    });
+
+  res.json({
+    env_mode: CURRENT_PUSH_ENV,
+    settings: db.push_settings,
+    stats: {
+      total_subscriptions: subs.length,
+      active_student_devices: activeStudentSubs.length,
+      admin_devices: adminSubs.length,
+      recent_subscribers: recentSubscribers,
+    },
+  });
+});
+
+api.put('/admin/push-settings', requireAdmin, (req, res) => {
+  const {
+    task_created,
+    task_edited,
+    announcement_created,
+    announcement_edited,
+    summary_published,
+  } = req.body || {};
+
+  if (typeof task_created === 'boolean') db.push_settings.task_created = task_created;
+  if (typeof task_edited === 'boolean') db.push_settings.task_edited = task_edited;
+  if (typeof announcement_created === 'boolean') db.push_settings.announcement_created = announcement_created;
+  if (typeof announcement_edited === 'boolean') db.push_settings.announcement_edited = announcement_edited;
+  if (typeof summary_published === 'boolean') db.push_settings.summary_published = summary_published;
+
+  db.saveToDisk();
+  saveSystemSettingsToFirestore();
+
+  res.json({ ok: true, settings: db.push_settings });
+});
+
+api.post('/admin/push/broadcast-test', requireAdmin, async (req, res) => {
+  const { title, body } = req.body || {};
+  const result = await dispatchWebPushNotifications({
+    title: (title || 'EduTask IA — Teste do Professor').trim(),
+    body: (body || 'As notificações da turma estão funcionando corretamente!').trim(),
+    url: '/aluno',
+    tag: `admin-broadcast-test-${Date.now()}`,
+  });
+  res.json({ ok: true, ...result });
 });
 
 api.put('/monthly-prize', requireAdmin, (req, res) => {

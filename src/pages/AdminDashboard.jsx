@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot, Rocket, Zap, BookOpen, FileText, Settings, Image as ImageIcon, Crown, Palette, Loader2, Check, Scissors, Target } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot, Rocket, Zap, BookOpen, FileText, Settings, Image as ImageIcon, Crown, Palette, Loader2, Check, Scissors, Target, Bell } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import AppHeader from "@/components/AppHeader";
@@ -23,6 +23,7 @@ import ZipDataTransferPanel from "@/components/ZipDataTransferPanel";
 import StudentButtonsPanel from "@/components/StudentButtonsPanel";
 import AnnualRankingPanel from "@/components/AnnualRankingPanel";
 import AdminResumosPanel from "@/components/AdminResumosPanel";
+import NotificationsAdminPanel from "@/components/NotificationsAdminPanel";
 import { useAIStatus } from "@/context/AIStatusContext";
 import { effectClass, pullScreenToStore } from "@/lib/effects";
 import { getPriority, formatDateBR } from "@/lib/priority";
@@ -54,6 +55,9 @@ export default function AdminDashboard() {
         api.get("/app-status").catch(() => null),
       ]);
       setGlobalCleanupData(data);
+      if (statusRes?.data?.collection_prefix !== undefined) {
+        firebaseService.setCollectionPrefix(statusRes.data.collection_prefix);
+      }
       if (statusRes?.data?.annual_cycle) {
         setAnnualCycle(statusRes.data.annual_cycle);
       }
@@ -160,7 +164,7 @@ export default function AdminDashboard() {
             type="button"
             onClick={() => {
               setMainSection("configuracoes");
-              if (!["students", "logs", "stats", "firmware", "ai", "whatsapp", "zip_transfer"].includes(tab)) {
+              if (!["students", "logs", "stats", "firmware", "ai", "whatsapp", "notifications", "zip_transfer"].includes(tab)) {
                 setTab("students");
               }
             }}
@@ -182,7 +186,7 @@ export default function AdminDashboard() {
                   Configurações
                 </div>
                 <div className="text-[11px] sm:text-xs text-neutral-700 font-bold truncate">
-                  Alunos, IA, WhatsApp, logs e sistema
+                  Alunos, IA, notificações, WhatsApp e sistema
                 </div>
               </div>
             </div>
@@ -303,6 +307,13 @@ export default function AdminDashboard() {
                 <MessageSquare className="w-4 h-4 inline mr-1.5 sm:mr-2 text-emerald-950" /> WhatsApp
               </button>
               <button
+                onClick={() => setTab("notifications")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "notifications" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-notifications"
+              >
+                <Bell className="w-4 h-4 inline mr-1.5 sm:mr-2 text-amber-950" /> Notificações
+              </button>
+              <button
                 onClick={() => setTab("zip_transfer")}
                 className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "zip_transfer" ? "bg-sky-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
                 data-testid="tab-zip-transfer"
@@ -339,6 +350,7 @@ export default function AdminDashboard() {
         {tab === "ranking_annual" && <AnnualRankingPanel />}
         {tab === "store" && !framesDisabled && <StoreEffects user={user} refresh={refresh} />}
         {tab === "whatsapp" && <WhatsAppConfigPanel />}
+        {tab === "notifications" && <NotificationsAdminPanel />}
         {tab === "buttons" && <StudentButtonsPanel annualCycle={annualCycle} />}
         {tab === "zip_transfer" && <ZipDataTransferPanel />}
 
@@ -399,6 +411,10 @@ function TasksPanel({ annualCycle }) {
       setConfirmDelete(null);
       load();
     } catch (e) {
+      if (e?.response) {
+        toast.error(formatApiError(e?.response?.data?.detail) || "Erro ao excluir tarefa");
+        return;
+      }
       try {
         await firebaseService.deleteTask(confirmDelete.id);
         toast.success("Tarefa excluída");
@@ -549,6 +565,16 @@ function AdminTaskCard({ task, onDelete, onEdit, onCopy, onSendWhatsApp, isSendi
             <Users className="w-3 h-3 inline mr-1 -mt-0.5" />
             {task.all_students ? "Todos" : `${task.total_students} aluno${task.total_students === 1 ? "" : "s"}`}
           </span>
+          {(task.was_edited || task.edited_at || task.last_updated_at) && (
+            <span
+              className="nb-badge bg-amber-200 text-amber-950 border border-black inline-flex items-center gap-1"
+              data-testid={`admin-task-edited-${task.id}`}
+              title={`Editada em ${formatDateBR(task.edited_at || task.last_updated_at, true)}`}
+            >
+              <Pencil className="w-3 h-3" />
+              <span>Editada</span>
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <button
@@ -888,6 +914,11 @@ function TaskDialog({ task, onClose, onSaved }) {
       setSaveState("saved");
       setTimeout(() => onSaved(), 360);
     } catch (err) {
+      if (err?.response) {
+        setSaveState("idle");
+        toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao salvar tarefa");
+        return;
+      }
       try {
         const taskId = currentTask?.id || `task-${Date.now()}`;
         const taskDoc = {
@@ -2127,6 +2158,16 @@ function AnnouncementsPanel({ annualCycle }) {
                     : `${(a.recipients || []).length} aluno${(a.recipients || []).length === 1 ? "" : "s"}`}
                 </span>
                 <span className="text-neutral-500">{formatDateBR(a.created_at)}</span>
+                {(a.was_edited || a.edited_at) && (
+                  <span
+                    className="nb-badge bg-amber-200 text-amber-950 border border-black inline-flex items-center gap-1"
+                    data-testid={`admin-announcement-edited-${a.id}`}
+                    title={a.edited_at ? `Editado em ${formatDateBR(a.edited_at, true)}` : "Aviso editado"}
+                  >
+                    <Pencil className="w-3 h-3" />
+                    <span>Editado{a.edited_at ? ` • ${formatDateBR(a.edited_at, true)}` : ""}</span>
+                  </span>
+                )}
               </div>
               {!a.all_students && (a.recipients || []).length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
@@ -2267,6 +2308,11 @@ function AnnouncementDialog({ announcement, students, onClose, onSaved }) {
       setSaveState("saved");
       setTimeout(() => onSaved(), 360);
     } catch (err) {
+      if (err?.response) {
+        setSaveState("idle");
+        toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao salvar aviso");
+        return;
+      }
       try {
         const annId = announcement?.id || `ann-${Date.now()}`;
         await firebaseService.saveAnnouncement({

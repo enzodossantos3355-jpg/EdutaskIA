@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Sparkles, Star, Megaphone, X, CheckCircle2, Bell, Calendar, Pin } from "lucide-react";
+import { Sparkles, Star, Megaphone, X, CheckCircle2, Bell, Calendar, Pin, Pencil } from "lucide-react";
 import { formatDateBR } from "@/lib/priority";
 import ModalPortal from "@/components/ModalPortal";
 
@@ -70,9 +70,23 @@ export default function SpecialAnnouncementModal({
         {/* Modal Body */}
         <div className="p-5 sm:p-7 overflow-y-auto space-y-4">
           <div className="flex items-center justify-between gap-2 flex-wrap text-xs font-bold text-neutral-700 bg-amber-50/90 p-2.5 rounded-xl border border-amber-300">
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-amber-700" />
-              <span>Publicado em {formatDateBR(announcement.created_at)}</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-amber-700" />
+                <span>Publicado em {formatDateBR(announcement.created_at)}</span>
+              </div>
+              {(announcement.was_edited || announcement.edited_at) && (
+                <span
+                  className="inline-flex items-center gap-1 bg-amber-300 text-black px-2 py-0.5 rounded border border-black text-[11px] font-black uppercase"
+                  data-testid="special-modal-edited-badge"
+                  title={announcement.edited_at ? `Editado em ${formatDateBR(announcement.edited_at, true)}` : "Aviso editado"}
+                >
+                  <Pencil className="w-3 h-3" />
+                  <span>
+                    Editado{announcement.edited_at ? ` em ${formatDateBR(announcement.edited_at, true)}` : ""}
+                  </span>
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1 text-amber-950 font-black">
               <Megaphone className="w-3.5 h-3.5 text-amber-600" /> Leitura Recomendada
