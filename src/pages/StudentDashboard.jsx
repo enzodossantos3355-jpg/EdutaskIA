@@ -347,6 +347,8 @@ export default function StudentDashboard() {
     }
   }, [tab, hasUnreadAnnouncements, markAnnouncementsAsSeen]);
 
+  const [activeCollectionPrefix, setActiveCollectionPrefix] = useState(() => firebaseService.getCollectionPrefix());
+
   const load = useCallback(async ({ silent = false } = {}) => {
     if (!user?.id) return; // Prevent race condition when auth profile is not yet loaded
     if (!silent) setLoading(true);
@@ -367,6 +369,7 @@ export default function StudentDashboard() {
       }
       if (statusRes?.data?.collection_prefix !== undefined) {
         firebaseService.setCollectionPrefix(statusRes.data.collection_prefix);
+        setActiveCollectionPrefix(statusRes.data.collection_prefix);
       }
       if (statusRes?.data?.annual_cycle) {
         setAnnualCycle(statusRes.data.annual_cycle);
@@ -418,7 +421,7 @@ export default function StudentDashboard() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Subscrições em Tempo Real (ignora snapshots em cache local para evitar exibir tarefas antigas/incompletas)
+  // Subscrições em Tempo Real (ignora snapshots em cache local e sempre usa o prefixo do ambiente confirmado)
   useEffect(() => {
     if (!user?.id) return;
 
@@ -436,6 +439,7 @@ export default function StudentDashboard() {
     };
 
     try {
+      firebaseService.setCollectionPrefix(activeCollectionPrefix);
       unsubTasks = firebaseService.subscribeToTasks(
         user.id,
         (_remoteTasks, fromCache) => {
@@ -474,7 +478,7 @@ export default function StudentDashboard() {
       if (unsubTasks) unsubTasks();
       if (unsubAnnouncements) unsubAnnouncements();
     };
-  }, [user?.id, load]);
+  }, [user?.id, load, activeCollectionPrefix]);
 
   // Listener para auto-atualização de tarefas quando criadas/modificadas pelo professor ou ao focar a aba
   const lastFocusRefreshRef = useRef(0);

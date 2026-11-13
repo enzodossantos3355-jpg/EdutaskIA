@@ -40,12 +40,17 @@ function detectInitialCollectionPrefix(): string {
   if (typeof window === 'undefined' && typeof process !== 'undefined' && process.env) {
     const kService = (process.env.K_SERVICE || '').toLowerCase();
     const isAiStudioServer = kService.startsWith('ais-') || Boolean(process.env.AI_STUDIO_APP_ID);
-    const isRenderOrVercel = Boolean(process.env.RENDER || process.env.VERCEL);
+    const isRenderOrVercel = Boolean(
+      process.env.RENDER ||
+      process.env.RENDER_SERVICE_ID ||
+      process.env.RENDER_EXTERNAL_URL ||
+      process.env.VERCEL
+    );
     const isPreviewServer =
       process.env.EDUTASK_ENV === 'preview' ||
       process.env.IS_PREVIEW === 'true' ||
       isAiStudioServer ||
-      (!isRenderOrVercel && process.env.NODE_ENV !== 'production');
+      (!isRenderOrVercel && process.env.EDUTASK_ENV !== 'production');
     return isPreviewServer ? 'preview_' : '';
   }
 
@@ -61,7 +66,7 @@ function detectInitialCollectionPrefix(): string {
       host.includes('aistudio') ||
       host.startsWith('ais-dev-') ||
       host.startsWith('ais-pre-') ||
-      (host.includes('ais-') && host.includes('.run.app'));
+      host.endsWith('.run.app');
     if (isViteDev || isPreviewHost) {
       return 'preview_';
     }
@@ -783,6 +788,24 @@ export const firebaseService = {
           errorMsg: err?.message || String(err),
         });
         onError(err);
+      }
+    );
+  },
+
+  subscribeToSystemSettings(
+    onNext: (data: any | null) => void,
+    onError?: (err: any) => void
+  ): Unsubscribe {
+    const col = colPath('settings');
+    const docRef = doc(db, col, 'system');
+    return onSnapshot(
+      docRef,
+      (snap) => {
+        onNext(snap.exists() ? snap.data() : null);
+      },
+      (err) => {
+        console.warn(`[Firebase] Erro ao escutar ${col}/system:`, err?.message || err);
+        if (onError) onError(err);
       }
     );
   },

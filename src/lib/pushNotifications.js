@@ -79,6 +79,16 @@ export async function getCurrentPushSubscription() {
   }
 }
 
+function uint8ArraysEqual(a, b) {
+  if (!a || !b || a.byteLength !== b.byteLength) return false;
+  const va = new Uint8Array(a);
+  const vb = new Uint8Array(b);
+  for (let i = 0; i < va.length; i++) {
+    if (va[i] !== vb[i]) return false;
+  }
+  return true;
+}
+
 export async function subscribeDeviceToPush() {
   if (!isPushSupportedInBrowser()) {
     throw new Error("Este navegador não suporta notificações Web Push.");
@@ -100,11 +110,19 @@ export async function subscribeDeviceToPush() {
     throw new Error("Chave pública VAPID indisponível no servidor.");
   }
 
+  const expectedKeyBytes = urlBase64ToUint8Array(publicKey);
   let sub = await reg.pushManager.getSubscription();
+  if (sub && sub.options?.applicationServerKey && !uint8ArraysEqual(sub.options.applicationServerKey, expectedKeyBytes)) {
+    try {
+      await sub.unsubscribe();
+    } catch {}
+    sub = null;
+  }
+
   if (!sub) {
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
+      applicationServerKey: expectedKeyBytes,
     });
   }
 
@@ -112,6 +130,7 @@ export async function subscribeDeviceToPush() {
   await api.post("/push/subscribe", {
     subscription: subJson,
     user_agent: navigator.userAgent,
+    origin_host: typeof window !== "undefined" ? window.location.origin : "",
   });
 
   try {
@@ -147,12 +166,32 @@ export async function syncPushSubscriptionIfGranted() {
   } catch {}
 
   try {
-    const sub = await getCurrentPushSubscription();
+    const reg = await ensurePushServiceWorker();
+    const { data } = await api.get("/push/public-key");
+    const publicKey = data?.publicKey;
+    if (!publicKey) return false;
+
+    const expectedKeyBytes = urlBase64ToUint8Array(publicKey);
+    let sub = await reg.pushManager.getSubscription();
     if (!sub) return false;
+
+    if (sub.options?.applicationServerKey && !uint8ArraysEqual(sub.options.applicationServerKey, expectedKeyBytes)) {
+      try {
+        await sub.unsubscribe();
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: expectedKeyBytes,
+        });
+      } catch {
+        return false;
+      }
+    }
+
     const subJson = typeof sub.toJSON === "function" ? sub.toJSON() : JSON.parse(JSON.stringify(sub));
     await api.post("/push/subscribe", {
       subscription: subJson,
       user_agent: navigator.userAgent,
+      origin_host: typeof window !== "undefined" ? window.location.origin : "",
     });
     return true;
   } catch {

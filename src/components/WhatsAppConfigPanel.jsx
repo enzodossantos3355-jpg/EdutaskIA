@@ -553,6 +553,21 @@ export default function WhatsAppConfigPanel() {
         </div>
       </div>
 
+      {statusData?.isPreviewBlocked && (
+        <div
+          className="nb-card bg-sky-100 border-2 border-black p-4 flex items-start gap-3 text-sky-950"
+          data-testid="whatsapp-preview-blocked-banner"
+        >
+          <ShieldCheck className="w-5 h-5 text-sky-800 shrink-0 mt-0.5" />
+          <div className="text-xs leading-relaxed">
+            <span className="font-heading font-black uppercase block">
+              WhatsApp Isolado no Ambiente Preview
+            </span>
+            A conexão e os disparos automáticos/manuais para grupos do WhatsApp ficam bloqueados neste Preview para nunca desconectar ou enviar mensagens de teste para a turma oficial no Render.
+          </div>
+        </div>
+      )}
+
       {/* Grid: Conexão e Grupos */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Coluna 1: Status & QR Code */}

@@ -11,9 +11,31 @@ type ConnectionState = any;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BASE_DIR = process.env.VERCEL || process.env.NODE_ENV === 'production' ? os.tmpdir() : __dirname;
-const AUTH_DIR = path.resolve(BASE_DIR, 'data/baileys_auth');
-const DETECTED_GROUPS_FILE = path.resolve(BASE_DIR, 'data/detected_whatsapp_groups.json');
+const K_SERVICE_NAME = (process.env.K_SERVICE || '').toLowerCase();
+const IS_AI_STUDIO_RUNTIME =
+  K_SERVICE_NAME.startsWith('ais-') || Boolean(process.env.AI_STUDIO_APP_ID);
+const IS_DEPLOYED_HOST_ENV = Boolean(
+  process.env.RENDER ||
+  process.env.RENDER_SERVICE_ID ||
+  process.env.RENDER_EXTERNAL_URL ||
+  process.env.VERCEL
+);
+const IS_PREVIEW_ENV =
+  process.env.EDUTASK_ENV === 'preview' ||
+  process.env.IS_PREVIEW === 'true' ||
+  IS_AI_STUDIO_RUNTIME ||
+  (!IS_DEPLOYED_HOST_ENV && process.env.EDUTASK_ENV !== 'production');
+
+const BASE_DIR =
+  process.env.VERCEL ||
+  process.env.RENDER ||
+  process.env.RENDER_SERVICE_ID ||
+  process.env.RENDER_EXTERNAL_URL ||
+  process.env.NODE_ENV === 'production'
+    ? os.tmpdir()
+    : __dirname;
+const AUTH_DIR = path.resolve(BASE_DIR, IS_PREVIEW_ENV ? 'data/baileys_preview_auth' : 'data/baileys_auth');
+const DETECTED_GROUPS_FILE = path.resolve(BASE_DIR, IS_PREVIEW_ENV ? 'data/preview_detected_whatsapp_groups.json' : 'data/detected_whatsapp_groups.json');
 
 export type WhatsAppConnectionStatus = 'disconnected' | 'connecting' | 'qr_ready' | 'connected';
 
@@ -64,6 +86,7 @@ export interface WhatsAppServiceStatus {
   activeDurationMinutes?: number | null;
   activeReason?: string | null;
   detectedGroupsCount?: number;
+  isPreviewBlocked?: boolean;
 }
 
 export interface TaskNotificationPayload {
@@ -199,7 +222,12 @@ class WhatsAppService {
   }
 
   public initAutoConnect() {
-    if (process.env.VERCEL) return;
+    if (process.env.VERCEL || IS_PREVIEW_ENV) {
+      if (IS_PREVIEW_ENV) {
+        console.log('[WhatsApp] Auto-conexão desativada no ambiente Preview (isolado da Produção).');
+      }
+      return;
+    }
     try {
       if (this.hasSavedAuth()) {
         console.log('[WhatsApp] Credenciais encontradas em disco. Iniciando conexão persistente...');
@@ -269,6 +297,11 @@ class WhatsAppService {
   }
 
   public async activateForDuration(durationMinutes: number = 20, reason: string = 'manual'): Promise<WhatsAppServiceStatus> {
+    if (IS_PREVIEW_ENV) {
+      this.status = 'disconnected';
+      this.lastError = 'WhatsApp bloqueado no ambiente Preview para não interferir nos grupos de Produção.';
+      return this.getStatus();
+    }
     // Garante que o tempo mínimo ativo seja de pelo menos 20 minutos conforme requisito
     const validMinutes = Math.max(20, durationMinutes || 20);
     const now = Date.now();
@@ -285,6 +318,11 @@ class WhatsAppService {
   }
 
   public extendActiveDuration(addMinutes: number = 20): WhatsAppServiceStatus {
+    if (IS_PREVIEW_ENV) {
+      this.status = 'disconnected';
+      this.lastError = 'WhatsApp bloqueado no ambiente Preview.';
+      return this.getStatus();
+    }
     const validAdd = Math.max(5, addMinutes || 20);
     const now = Date.now();
     const currentBase = (this.activeUntil && this.activeUntil > now) ? this.activeUntil : now;
@@ -353,10 +391,16 @@ class WhatsAppService {
       activeDurationMinutes,
       activeReason: this.activeReason,
       detectedGroupsCount: this.detectedGroupsMap.size,
+      isPreviewBlocked: IS_PREVIEW_ENV,
     };
   }
 
   public async connect(): Promise<WhatsAppServiceStatus> {
+    if (IS_PREVIEW_ENV) {
+      this.status = 'disconnected';
+      this.lastError = 'WhatsApp desativado no ambiente Preview para não interferir com os grupos da turma em Produção.';
+      return this.getStatus();
+    }
     if (process.env.VERCEL) {
       this.status = 'disconnected';
       this.lastError = 'WhatsApp não é executado no ambiente serverless Vercel.';
@@ -787,6 +831,10 @@ class WhatsAppService {
   }
 
   public async sendMessage(jid: string, text: string): Promise<boolean> {
+    if (IS_PREVIEW_ENV) {
+      console.warn('[WhatsApp] Bloqueado sendMessage no ambiente Preview.');
+      return false;
+    }
     if (this.status !== 'connected' || !this.sock || !jid) {
       return false;
     }
@@ -801,6 +849,10 @@ class WhatsAppService {
   }
 
   public async sendImage(jid: string, imageBuffer: Buffer, caption = '', mimetype = 'image/png'): Promise<boolean> {
+    if (IS_PREVIEW_ENV) {
+      console.warn('[WhatsApp] Bloqueado sendImage no ambiente Preview.');
+      return false;
+    }
     if (this.status !== 'connected' || !this.sock || !jid) {
       return false;
     }
@@ -829,6 +881,11 @@ class WhatsAppService {
       group2Sent: false,
       errors: [] as string[],
     };
+
+    if (IS_PREVIEW_ENV) {
+      results.errors.push('WhatsApp bloqueado no ambiente Preview.');
+      return results;
+    }
 
     if (this.status !== 'connected' || !this.sock) {
       results.errors.push('WhatsApp não está conectado.');
@@ -970,6 +1027,11 @@ class WhatsAppService {
       errors: [] as string[],
     };
 
+    if (IS_PREVIEW_ENV) {
+      results.errors.push('WhatsApp bloqueado no ambiente Preview.');
+      return results;
+    }
+
     if (this.status !== 'connected' || !this.sock) {
       results.errors.push('WhatsApp não está conectado.');
       return results;
@@ -1091,6 +1153,11 @@ class WhatsAppService {
       group2Sent: false,
       errors: [] as string[],
     };
+
+    if (IS_PREVIEW_ENV) {
+      results.errors.push('WhatsApp bloqueado no ambiente Preview.');
+      return results;
+    }
 
     if (this.status !== 'connected' || !this.sock) {
       results.errors.push('WhatsApp não está conectado.');

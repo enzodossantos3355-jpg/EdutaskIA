@@ -16,6 +16,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Radio,
+  Trash2,
 } from "lucide-react";
 
 const TRIGGER_ITEMS = [
@@ -72,6 +73,7 @@ export default function NotificationsAdminPanel() {
   const [bulkSaving, setBulkSaving] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
   const [sendingSelfTest, setSendingSelfTest] = useState(false);
+  const [deletingSubId, setDeletingSubId] = useState(null);
 
   const [settings, setSettings] = useState({
     task_created: true,
@@ -193,6 +195,20 @@ export default function NotificationsAdminPanel() {
       toast.error(formatApiError(err?.response?.data?.detail) || "Falha no teste local");
     } finally {
       setSendingSelfTest(false);
+    }
+  };
+
+  const handleRemoveSubscriber = async (sub) => {
+    if (!sub?.id) return;
+    setDeletingSubId(sub.id);
+    try {
+      await api.delete(`/admin/push-subscriptions/${sub.id}`);
+      toast.success(`Dispositivo de ${sub.user_name} removido!`);
+      await loadSettings();
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail) || "Erro ao remover inscrição");
+    } finally {
+      setDeletingSubId(null);
     }
   };
 
@@ -495,33 +511,70 @@ export default function NotificationsAdminPanel() {
             </div>
           ) : (
             <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-              {stats.recent_subscribers.map((sub) => (
-                <div
-                  key={sub.id}
-                  className="p-3 rounded-xl border-2 border-black bg-neutral-50 flex items-center justify-between gap-3"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-heading font-black text-sm text-black truncate">
-                        {sub.user_name}
-                      </span>
-                      <span
-                        className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded border border-black ${
-                          sub.role === "admin" ? "bg-amber-300 text-black" : "bg-sky-200 text-sky-950"
-                        }`}
+              {stats.recent_subscribers.map((sub) => {
+                const subEnvLabel =
+                  sub.env === "preview"
+                    ? "Preview"
+                    : sub.env === "production"
+                    ? "Produção"
+                    : "Legado";
+                const subEnvClass =
+                  sub.env === "preview"
+                    ? "bg-sky-200 text-sky-950"
+                    : sub.env === "production"
+                    ? "bg-emerald-200 text-emerald-950"
+                    : "bg-neutral-200 text-neutral-800";
+                return (
+                  <div
+                    key={sub.id}
+                    className="p-3 rounded-xl border-2 border-black bg-neutral-50 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-heading font-black text-sm text-black truncate">
+                          {sub.user_name}
+                        </span>
+                        <span
+                          className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded border border-black ${
+                            sub.role === "admin" ? "bg-amber-300 text-black" : "bg-sky-200 text-sky-950"
+                          }`}
+                        >
+                          {sub.role === "admin" ? "Admin" : "Aluno"}
+                        </span>
+                        <span
+                          className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded border border-black ${subEnvClass}`}
+                          title={sub.origin_host || "Sem registro de origem"}
+                        >
+                          {subEnvLabel}
+                        </span>
+                      </div>
+                      <div className="text-[11px] font-bold text-neutral-600 mt-0.5 truncate">
+                        {detectDeviceLabel(sub.user_agent)}
+                        {sub.origin_host ? ` • ${sub.origin_host.replace(/^https?:\/\//, "")}` : ""}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="text-[11px] font-mono font-bold text-neutral-700 tabular-nums">
+                        {sub.updated_at ? new Date(sub.updated_at).toLocaleDateString("pt-BR") : "—"}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSubscriber(sub)}
+                        disabled={deletingSubId === sub.id}
+                        className="p-1.5 rounded-lg border-2 border-black bg-white hover:bg-rose-100 text-rose-700 disabled:opacity-50"
+                        title="Remover dispositivo"
+                        data-testid={`delete-push-sub-${sub.id}`}
                       >
-                        {sub.role === "admin" ? "Admin" : "Aluno"}
-                      </span>
-                    </div>
-                    <div className="text-[11px] font-bold text-neutral-600 mt-0.5">
-                      {detectDeviceLabel(sub.user_agent)}
+                        {deletingSubId === sub.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                      </button>
                     </div>
                   </div>
-                  <div className="text-[11px] font-mono font-bold text-neutral-700 shrink-0 tabular-nums">
-                    {sub.updated_at ? new Date(sub.updated_at).toLocaleDateString("pt-BR") : "—"}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

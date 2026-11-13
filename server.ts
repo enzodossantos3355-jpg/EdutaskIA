@@ -24,13 +24,18 @@ const HOST = '0.0.0.0';
 const K_SERVICE_NAME = (process.env.K_SERVICE || '').toLowerCase();
 const IS_AI_STUDIO_RUNTIME =
   K_SERVICE_NAME.startsWith('ais-') || Boolean(process.env.AI_STUDIO_APP_ID);
-const IS_DEPLOYED_HOST_ENV = Boolean(process.env.RENDER || process.env.VERCEL);
+const IS_DEPLOYED_HOST_ENV = Boolean(
+  process.env.RENDER ||
+  process.env.RENDER_SERVICE_ID ||
+  process.env.RENDER_EXTERNAL_URL ||
+  process.env.VERCEL
+);
 
 export const IS_PREVIEW_ENV =
   process.env.EDUTASK_ENV === 'preview' ||
   process.env.IS_PREVIEW === 'true' ||
   IS_AI_STUDIO_RUNTIME ||
-  (!IS_DEPLOYED_HOST_ENV && process.env.NODE_ENV !== 'production');
+  (!IS_DEPLOYED_HOST_ENV && process.env.EDUTASK_ENV !== 'production');
 
 export const CURRENT_PUSH_ENV: 'preview' | 'production' = IS_PREVIEW_ENV ? 'preview' : 'production';
 
@@ -45,7 +50,7 @@ function isPreviewOriginHost(originOrHost?: string): boolean {
     s.includes('aistudio') ||
     s.includes('ais-dev-') ||
     s.includes('ais-pre-') ||
-    (s.includes('ais-') && s.includes('.run.app'))
+    s.includes('.run.app')
   );
 }
 
@@ -541,7 +546,14 @@ export interface StudentButton {
   created_by?: string;
 }
 
-const BASE_DIR = process.env.VERCEL || process.env.NODE_ENV === 'production' ? os.tmpdir() : __dirname;
+const BASE_DIR =
+  process.env.VERCEL ||
+  process.env.RENDER ||
+  process.env.RENDER_SERVICE_ID ||
+  process.env.RENDER_EXTERNAL_URL ||
+  process.env.NODE_ENV === 'production'
+    ? os.tmpdir()
+    : __dirname;
 const DATA_DIR = path.resolve(BASE_DIR, 'data');
 const DB_FILE = path.resolve(DATA_DIR, IS_PREVIEW_ENV ? 'preview_db.json' : 'db.json');
 const UPLOAD_DIR = path.resolve(BASE_DIR, 'uploads');
@@ -758,7 +770,7 @@ class Database {
   }> = [];
 
   private firebaseSynced: boolean = false;
-  private syncPromise: Promise<void> | null = null;
+  private syncPromise: Promise<boolean> | null = null;
 
   constructor() {
     if (!this.loadFromDisk()) {
@@ -766,7 +778,12 @@ class Database {
       this.saveToDisk();
     }
     whatsappService.setConfig(this.whatsapp_config);
-    if (!process.env.VERCEL && !process.env.VERCEL_ENV && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    if (
+      !IS_PREVIEW_ENV &&
+      !process.env.VERCEL &&
+      !process.env.VERCEL_ENV &&
+      !process.env.AWS_LAMBDA_FUNCTION_NAME
+    ) {
       whatsappService.initAutoConnect();
     }
     this.ensureSynced().catch((err) => {
@@ -777,18 +794,28 @@ class Database {
   async ensureSynced() {
     if (this.firebaseSynced) return;
     if (!this.syncPromise) {
-      this.syncPromise = this.syncWithFirebase().finally(() => {
-        this.firebaseSynced = true;
-      });
+      this.syncPromise = this.syncWithFirebase()
+        .then((ok) => {
+          this.firebaseSynced = ok;
+          if (!ok) {
+            this.syncPromise = null;
+          }
+          return ok;
+        })
+        .catch(() => {
+          this.firebaseSynced = false;
+          this.syncPromise = null;
+          return false;
+        });
     }
     await this.syncPromise;
   }
 
-  async syncWithFirebase() {
+  async syncWithFirebase(): Promise<boolean> {
     try {
       const prefix = firebaseService.getCollectionPrefix() || '(produção)';
       console.log(`[Firebase] Sincronizando coleções do Firestore [${prefix}]...`);
-      const [tasks, users, announcements, completions, subjects, comments, settings, studentAnswers, remoteFiles, remoteSummaryTopics, remoteSummaries, remoteSummaryGens] = await Promise.all([
+      const results = await Promise.allSettled([
         firebaseService.getAllTasks(),
         firebaseService.getAllUsers(),
         firebaseService.getAllAnnouncements(),
@@ -802,6 +829,32 @@ class Database {
         firebaseService.getAllSummaries(),
         firebaseService.getAllSummaryGenerations(),
       ]);
+
+      const pick = <T,>(idx: number, label: string): T | null => {
+        const r = results[idx];
+        if (r && r.status === 'fulfilled') return r.value as T;
+        console.warn(`[Firebase] Falha parcial ao sincronizar "${label}" [${prefix}]:`, r?.status === 'rejected' ? r.reason?.message || r.reason : 'erro desconhecido');
+        return null;
+      };
+
+      const coreSyncOk =
+        results[0]?.status === 'fulfilled' &&
+        results[1]?.status === 'fulfilled' &&
+        results[2]?.status === 'fulfilled' &&
+        results[6]?.status === 'fulfilled';
+
+      const tasks = pick<any[]>(0, 'tasks');
+      const users = pick<any[]>(1, 'users');
+      const announcements = pick<any[]>(2, 'announcements');
+      const completions = pick<any[]>(3, 'completions');
+      const subjects = pick<any[]>(4, 'subjects');
+      const comments = pick<any[]>(5, 'comments');
+      const settings = pick<any>(6, 'settings');
+      const studentAnswers = pick<any[]>(7, 'student_answers');
+      const remoteFiles = pick<any[]>(8, 'files');
+      const remoteSummaryTopics = pick<any[]>(9, 'summary_topics');
+      const remoteSummaries = pick<any[]>(10, 'summaries');
+      const remoteSummaryGens = pick<any[]>(11, 'summary_generations');
 
       // Tarefas: Firestore é a fonte autoritativa (inclusive quando vazio após exclusões)
       if (Array.isArray(tasks)) {
@@ -1012,9 +1065,11 @@ class Database {
       }
 
       this.saveToDisk();
-      console.log(`[Firebase] Sincronização concluída [${prefix}] (${this.tasks.size} tarefas, ${this.announcements.size} avisos, ${this.summary_topics.size} tópicos, ${this.summaries.size} resumos).`);
+      console.log(`[Firebase] Sincronização concluída [${prefix}] (${this.tasks.size} tarefas, ${this.announcements.size} avisos, ${this.summary_topics.size} tópicos, ${this.summaries.size} resumos | coreOk=${coreSyncOk}).`);
+      return coreSyncOk;
     } catch (e: any) {
       console.warn('[Firebase] Falha na sincronização:', e?.message || e);
+      return false;
     }
   }
 
@@ -3043,13 +3098,7 @@ api.post('/admin/clean-test-data', requireAdmin, async (req, res) => {
     db.monthly_prize = null;
     db.saveToDisk();
 
-    await firebaseService.saveSettings('system', {
-      monthly_prize: null,
-      task_cleanup_config: db.task_cleanup_config,
-      whatsapp_config: db.whatsapp_config,
-      app_info: db.app_info,
-      effect_overrides: db.effect_overrides,
-    }).catch(console.warn);
+    await saveSystemSettingsToFirestore();
 
     res.json({ ok: true, message: 'Todos os vestígios de testes foram removidos com sucesso!' });
   } catch (err: any) {
@@ -3405,10 +3454,12 @@ api.post('/tasks', requireAdmin, async (req, res) => {
     console.warn('[Firebase] Erro ao salvar tarefa no Firestore:', err);
   });
 
-  // Disparo automático e independente para os 2 grupos do WhatsApp configurados (não bloqueante)
-  dispatchTaskWhatsAppNotifications(newTask).catch((err) => {
-    console.error('[WhatsApp] Erro no disparo de tarefa:', err);
-  });
+  // Disparo automático e independente para os 2 grupos do WhatsApp configurados (somente Produção)
+  if (!IS_PREVIEW_ENV) {
+    dispatchTaskWhatsAppNotifications(newTask).catch((err) => {
+      console.error('[WhatsApp] Erro no disparo de tarefa:', err);
+    });
+  }
 
   // Disparo de Web Push pelo site para os alunos destinatários (respeitando configuração do Admin)
   if (db.push_settings?.task_created !== false) {
@@ -3427,6 +3478,7 @@ api.post('/tasks', requireAdmin, async (req, res) => {
 });
 
 async function dispatchTaskWhatsAppNotifications(task: TaskItem) {
+  if (IS_PREVIEW_ENV) return;
   try {
     const status = whatsappService.getStatus();
     if (status.status !== 'connected' || !status.enabled) {
@@ -3484,6 +3536,11 @@ async function dispatchTaskWhatsAppNotifications(task: TaskItem) {
 }
 
 api.post('/tasks/:task_id/send-whatsapp', requireAdmin, async (req, res) => {
+  if (IS_PREVIEW_ENV) {
+    return res.status(403).json({
+      detail: 'Envio de mensagens no WhatsApp está bloqueado no ambiente Preview para proteger os grupos da turma.',
+    });
+  }
   const { task_id } = req.params;
   const {
     group1_enabled = true,
@@ -4209,9 +4266,9 @@ api.post('/announcements', requireAdmin, async (req, res) => {
 
   await firebaseService.saveAnnouncement(doc);
 
-  // Disparo automático no WhatsApp (somente para avisos gerais para todos os alunos)
+  // Disparo automático no WhatsApp (somente Produção e somente para avisos gerais para todos os alunos)
   const isSpecificAnnouncement = Array.isArray(doc.assigned_to) && doc.assigned_to.length > 0;
-  if (!isSpecificAnnouncement) {
+  if (!IS_PREVIEW_ENV && !isSpecificAnnouncement) {
     let recipientsLabel = 'Todos os alunos';
     let photoBuffer: Buffer | null = null;
     let photoContentType: string | null = null;
@@ -4234,7 +4291,7 @@ api.post('/announcements', requireAdmin, async (req, res) => {
     }).catch((err) => {
       console.error('[WhatsApp] Erro no disparo de aviso:', err);
     });
-  } else {
+  } else if (isSpecificAnnouncement) {
     console.log(`[WhatsApp] Aviso "${doc.title}" é exclusivo para pessoas específicas (${doc.assigned_to.length}). Envio automático desativado.`);
   }
 
@@ -4255,6 +4312,11 @@ api.post('/announcements', requireAdmin, async (req, res) => {
 });
 
 api.post('/announcements/:ann_id/send-whatsapp', requireAdmin, async (req, res) => {
+  if (IS_PREVIEW_ENV) {
+    return res.status(403).json({
+      detail: 'Envio de mensagens no WhatsApp está bloqueado no ambiente Preview para proteger os grupos da turma.',
+    });
+  }
   const { ann_id } = req.params;
   const {
     group1_enabled = true,
@@ -4667,20 +4729,7 @@ api.post('/ranking/annual/close', requireAdmin, async (req, res) => {
   db.annual_cycle.closed_at = getSystemClock().iso;
   db.saveToDisk();
 
-  await firebaseService.saveSettings('system', {
-    monthly_prize: db.monthly_prize,
-    task_cleanup_config: db.task_cleanup_config,
-    whatsapp_config: db.whatsapp_config,
-    app_info: db.app_info,
-    effect_overrides: db.effect_overrides,
-    ai_enabled: db.ai_enabled,
-    ai_hidden: db.ai_hidden,
-    frames_disabled: db.frames_disabled,
-    frame_rotation_disabled: db.frame_rotation_disabled,
-    annual_cycle: db.annual_cycle,
-    annual_history: db.annual_history,
-    ai_model: db.ai_model,
-  }).catch(console.warn);
+  await saveSystemSettingsToFirestore();
 
   res.json({ ok: true, annual_cycle: db.annual_cycle });
 });
@@ -4751,20 +4800,7 @@ api.post('/ranking/annual/start-next-year', requireAdmin, async (req, res) => {
 
   db.saveToDisk();
 
-  await firebaseService.saveSettings('system', {
-    monthly_prize: db.monthly_prize,
-    task_cleanup_config: db.task_cleanup_config,
-    whatsapp_config: db.whatsapp_config,
-    app_info: db.app_info,
-    effect_overrides: db.effect_overrides,
-    ai_enabled: db.ai_enabled,
-    ai_hidden: db.ai_hidden,
-    frames_disabled: db.frames_disabled,
-    frame_rotation_disabled: db.frame_rotation_disabled,
-    annual_cycle: db.annual_cycle,
-    annual_history: db.annual_history,
-    ai_model: db.ai_model,
-  }).catch(console.warn);
+  await saveSystemSettingsToFirestore();
 
   res.json({ ok: true, annual_cycle: db.annual_cycle, annual_history: db.annual_history });
 });
@@ -5267,7 +5303,7 @@ api.get('/monthly-prize', requireAuth, (req, res) => {
 });
 
 function saveSystemSettingsToFirestore() {
-  firebaseService.saveSettings('system', {
+  return firebaseService.saveSettings('system', {
     monthly_prize: db.monthly_prize,
     active_month_key: db.active_month_key,
     monthly_history: db.monthly_history,
@@ -5399,7 +5435,7 @@ async function dispatchWebPushNotifications({
         } catch (err: any) {
           failed += 1;
           const status = err?.statusCode;
-          if (status === 404 || status === 410) {
+          if (status === 401 || status === 403 || status === 404 || status === 410) {
             expiredEndpoints.add(item.endpoint);
           } else {
             console.warn(`[WebPush] Falha ao enviar para ${item.user_id}:`, err?.message || status || err);
@@ -5458,7 +5494,7 @@ api.post('/push/subscribe', requireAuth, (req, res) => {
   }
 
   const originHost = String(
-    bodyOrigin || req.headers.origin || req.headers.referer || req.headers.host || ''
+    bodyOrigin || req.headers.origin || req.headers.referer || req.headers['x-forwarded-host'] || req.headers.host || ''
   ).slice(0, 200);
 
   if (!IS_PREVIEW_ENV && isPreviewOriginHost(originHost)) {
@@ -5547,7 +5583,8 @@ api.post('/push/test', requireAuth, async (req, res) => {
         await webpush.sendNotification(item.subscription, payload);
         sent += 1;
       } catch (err: any) {
-        if (err?.statusCode === 404 || err?.statusCode === 410) {
+        const status = err?.statusCode;
+        if (status === 401 || status === 403 || status === 404 || status === 410) {
           expired.add(item.endpoint);
         }
       }
@@ -5592,7 +5629,8 @@ api.get('/admin/push-settings', requireAdmin, (_req, res) => {
         role: u?.role || s.role || 'aluno',
         updated_at: s.updated_at,
         user_agent: s.user_agent || '',
-        env: s.env || CURRENT_PUSH_ENV,
+        env: s.env || 'legacy',
+        origin_host: s.origin_host || '',
       };
     });
 
@@ -5606,6 +5644,18 @@ api.get('/admin/push-settings', requireAdmin, (_req, res) => {
       recent_subscribers: recentSubscribers,
     },
   });
+});
+
+api.delete('/admin/push-subscriptions/:sub_id', requireAdmin, (req, res) => {
+  const { sub_id } = req.params;
+  const before = (db.push_subscriptions || []).length;
+  db.push_subscriptions = (db.push_subscriptions || []).filter((s) => s.id !== sub_id);
+  if (db.push_subscriptions.length === before) {
+    return res.status(404).json({ detail: 'Inscrição de dispositivo não encontrada.' });
+  }
+  db.saveToDisk();
+  saveSystemSettingsToFirestore();
+  res.json({ ok: true });
 });
 
 api.put('/admin/push-settings', requireAdmin, (req, res) => {
@@ -5804,6 +5854,11 @@ api.get('/whatsapp/config', requireAdmin, (req, res) => {
 });
 
 api.post('/whatsapp/connect', requireAdmin, async (req, res) => {
+  if (IS_PREVIEW_ENV) {
+    return res.status(403).json({
+      detail: 'Conexão com o WhatsApp está bloqueada no ambiente Preview para não desconectar ou interferir na Produção.',
+    });
+  }
   const status = await whatsappService.connect();
   res.json({
     ...status,
@@ -5812,6 +5867,11 @@ api.post('/whatsapp/connect', requireAdmin, async (req, res) => {
 });
 
 api.post('/whatsapp/activate-timer', requireAdmin, async (req, res) => {
+  if (IS_PREVIEW_ENV) {
+    return res.status(403).json({
+      detail: 'Ativação do WhatsApp está bloqueada no ambiente Preview para proteger a Produção.',
+    });
+  }
   const { duration_minutes = 20, reason = 'manual_trigger' } = req.body || {};
   const minutes = Math.max(20, parseInt(duration_minutes) || 20);
   const status = await whatsappService.activateForDuration(minutes, reason);
@@ -5824,6 +5884,11 @@ api.post('/whatsapp/activate-timer', requireAdmin, async (req, res) => {
 });
 
 api.post('/whatsapp/extend-timer', requireAdmin, (req, res) => {
+  if (IS_PREVIEW_ENV) {
+    return res.status(403).json({
+      detail: 'WhatsApp bloqueado no ambiente Preview.',
+    });
+  }
   const { add_minutes = 20 } = req.body || {};
   const minutes = Math.max(5, parseInt(add_minutes) || 20);
   const status = whatsappService.extendActiveDuration(minutes);
@@ -5846,6 +5911,11 @@ api.post('/whatsapp/pause', requireAdmin, async (req, res) => {
 });
 
 api.post('/whatsapp/disconnect', requireAdmin, async (req, res) => {
+  if (IS_PREVIEW_ENV) {
+    return res.status(403).json({
+      detail: 'Desconexão do WhatsApp bloqueada no ambiente Preview.',
+    });
+  }
   const status = await whatsappService.disconnect();
   res.json({
     ...status,
@@ -5912,6 +5982,9 @@ api.get('/whatsapp/groups', requireAdmin, async (req, res) => {
 });
 
 api.post('/whatsapp/sync-groups', requireAdmin, async (req, res) => {
+  if (IS_PREVIEW_ENV) {
+    return res.status(403).json({ detail: 'Sincronização de grupos do WhatsApp bloqueada no ambiente Preview.' });
+  }
   try {
     const groups = await whatsappService.fetchParticipatingGroups();
     res.json({
@@ -5933,6 +6006,9 @@ api.post('/whatsapp/sync-groups', requireAdmin, async (req, res) => {
 });
 
 api.post('/whatsapp/detect-group', requireAdmin, async (req, res) => {
+  if (IS_PREVIEW_ENV) {
+    return res.status(403).json({ detail: 'Detecção de grupo WhatsApp bloqueada no ambiente Preview.' });
+  }
   const { input } = req.body || {};
   if (!input || !String(input).trim()) {
     return res.status(400).json({ detail: 'Informe um link de convite (chat.whatsapp.com/...) ou ID do grupo para detecção.' });
@@ -5950,6 +6026,9 @@ api.post('/whatsapp/detect-group', requireAdmin, async (req, res) => {
 });
 
 api.post('/whatsapp/test-message', requireAdmin, async (req, res) => {
+  if (IS_PREVIEW_ENV) {
+    return res.status(403).json({ detail: 'Envio de mensagens no WhatsApp está bloqueado no ambiente Preview para proteger os grupos da turma.' });
+  }
   const { jid, text } = req.body || {};
   const targetJid = (jid || db.whatsapp_config.group_1_jid || db.whatsapp_config.group_2_jid || '').trim();
   if (!targetJid) {
@@ -5964,6 +6043,9 @@ api.post('/whatsapp/test-message', requireAdmin, async (req, res) => {
 });
 
 api.post(['/whatsapp/send-firmware', '/firmware/send-whatsapp'], requireAdmin, upload.single('image'), async (req, res) => {
+  if (IS_PREVIEW_ENV) {
+    return res.status(403).json({ detail: 'Envio de mensagens no WhatsApp está bloqueado no ambiente Preview para proteger os grupos da turma.' });
+  }
   const status = whatsappService.getStatus();
   if (status.status !== 'connected') {
     return res.status(400).json({ detail: 'WhatsApp não está conectado. Conecte na aba "WhatsApp" primeiro.' });
@@ -6034,6 +6116,9 @@ api.post(['/whatsapp/send-firmware', '/firmware/send-whatsapp'], requireAdmin, u
 });
 
 api.post(['/whatsapp/test-tomorrow-reminder', '/whatsapp/dispatch-reminders', '/whatsapp/dispatch-tomorrow-reminder'], requireAdmin, async (req, res) => {
+  if (IS_PREVIEW_ENV) {
+    return res.status(403).json({ detail: 'Envio de lembretes no WhatsApp está bloqueado no ambiente Preview para proteger os grupos da turma.' });
+  }
   const { group1_extra, tomorrow_caption } = req.body || {};
   const status = whatsappService.getStatus();
   if (status.status !== 'connected') {
@@ -6125,6 +6210,7 @@ async function executeTomorrowTasksDispatch(isTest = false, overrideExtra?: stri
 
 // Background scheduler para auto-ativação programada e controle de tempo ativo (mínimo 20 min)
 async function checkWhatsAppAutoActivationScheduler() {
+  if (IS_PREVIEW_ENV) return;
   try {
     const config = db.whatsapp_config;
     if (!config || !config.enabled) return;
@@ -6165,6 +6251,7 @@ async function checkWhatsAppAutoActivationScheduler() {
 // Background scheduler para lembrete diário de tarefas
 let lastDailyReminderRunMinuteKey = '';
 async function checkDailyTomorrowReminder() {
+  if (IS_PREVIEW_ENV) return;
   try {
     const config = db.whatsapp_config;
     if (!config || !config.enabled || !config.daily_reminder?.enabled) return;
@@ -6189,8 +6276,8 @@ async function checkDailyTomorrowReminder() {
   }
 }
 
-// Rodar verificação a cada 20 segundos
-if (!process.env.VERCEL) {
+// Rodar verificação a cada 20 segundos (apenas em Produção; Preview nunca aciona WhatsApp automático)
+if (!process.env.VERCEL && !IS_PREVIEW_ENV) {
   setInterval(checkWhatsAppAutoActivationScheduler, 20000);
   setInterval(checkDailyTomorrowReminder, 30000);
 }
@@ -7821,6 +7908,16 @@ if (!process.env.VERCEL) {
 // Mount /api router with Firestore sync guarantee for Serverless environments
 // ---------------------------------------------------------------------------
 app.use('/api', async (req, res, next) => {
+  if (!IS_PREVIEW_ENV && req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
+    const reqOriginOrHost = String(
+      req.headers['x-forwarded-host'] || req.headers.origin || req.headers.referer || ''
+    );
+    if (isPreviewOriginHost(reqOriginOrHost)) {
+      return res.status(403).json({
+        detail: 'Requisição originada de ambiente Preview bloqueada no servidor de Produção.',
+      });
+    }
+  }
   try {
     await db.ensureSynced();
   } catch (err) {

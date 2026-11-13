@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import api from "@/lib/api";
+import { firebaseService } from "@/lib/firebaseService";
 import { useAuth } from "@/context/AuthContext";
 import { setGlobalFramesDisabled, setGlobalFrameRotationDisabled } from "@/lib/effects";
 
@@ -45,7 +44,13 @@ export function AIStatusProvider({ children }) {
 
   const refresh = useCallback(async () => {
     try {
-      const { data } = await api.get("/ai/status");
+      const [{ data }, statusRes] = await Promise.all([
+        api.get("/ai/status"),
+        api.get("/app-status").catch(() => ({ data: null })),
+      ]);
+      if (statusRes?.data?.collection_prefix !== undefined) {
+        firebaseService.setCollectionPrefix(statusRes.data.collection_prefix);
+      }
       if (data) {
         if (typeof data.enabled === "boolean") {
           setEnabledState(data.enabled);
@@ -76,40 +81,45 @@ export function AIStatusProvider({ children }) {
 
   useEffect(() => {
     let unsubscribeSystem = null;
+    let cancelled = false;
 
-    try {
-      const systemDocRef = doc(db, "settings", "system");
-      unsubscribeSystem = onSnapshot(
-        systemDocRef,
-        (snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data();
-            if (data) {
-              if (typeof data.ai_enabled === "boolean") {
-                setEnabledState(data.ai_enabled);
-              }
-              if (typeof data.ai_hidden === "boolean") {
-                setHiddenState(data.ai_hidden);
-              }
-              if (typeof data.frames_disabled === "boolean") {
-                applyFramesDisabled(data.frames_disabled);
-              }
-              if (typeof data.frame_rotation_disabled === "boolean") {
-                applyFrameRotationDisabled(data.frame_rotation_disabled);
-              }
-              if (data.ai_model) {
-                setModelState(data.ai_model);
-              }
+    const attach = async () => {
+      try {
+        const statusRes = await api.get("/app-status").catch(() => null);
+        if (cancelled) return;
+        if (statusRes?.data?.collection_prefix !== undefined) {
+          firebaseService.setCollectionPrefix(statusRes.data.collection_prefix);
+        }
+        unsubscribeSystem = firebaseService.subscribeToSystemSettings(
+          (data) => {
+            if (!data) return;
+            if (typeof data.ai_enabled === "boolean") {
+              setEnabledState(data.ai_enabled);
             }
-          }
-        },
-        () => {}
-      );
-    } catch (e) {
-      console.warn("[AIStatusContext] Firestore snapshot skipped:", e);
-    }
+            if (typeof data.ai_hidden === "boolean") {
+              setHiddenState(data.ai_hidden);
+            }
+            if (typeof data.frames_disabled === "boolean") {
+              applyFramesDisabled(data.frames_disabled);
+            }
+            if (typeof data.frame_rotation_disabled === "boolean") {
+              applyFrameRotationDisabled(data.frame_rotation_disabled);
+            }
+            if (data.ai_model) {
+              setModelState(data.ai_model);
+            }
+          },
+          () => {}
+        );
+      } catch (e) {
+        console.warn("[AIStatusContext] Firestore snapshot skipped:", e);
+      }
+    };
+
+    attach();
 
     return () => {
+      cancelled = true;
       if (unsubscribeSystem) unsubscribeSystem();
     };
   }, [applyFramesDisabled, applyFrameRotationDisabled]);
