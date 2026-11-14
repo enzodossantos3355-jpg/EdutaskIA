@@ -7,7 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import AdmZip from 'adm-zip';
 import sharp from 'sharp';
 import { whatsappService } from './whatsapp-service';
@@ -193,7 +193,65 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 45000): Promise<T
 
 const quotaExhaustedModels = new Map<string, number>();
 
-// Robust Gemini invocation with automatic model fallbacks (gemini-3.1-flash-lite as primary)
+const LEGACY_GEMINI_MODEL_ALIASES: Record<string, string> = {
+  'gemini-3.8-flash': 'gemini-4-hydrogen',
+  'gemini-3.6-flash': 'gemini-4-hydrogen',
+  'gemini-3.5-flash-lite': 'gemini-3.1-flash-lite',
+  'gemini-3-flash': 'gemini-4-hydrogen',
+  'gemini-flash-latest': 'gemini-4-hydrogen',
+  'gemini-1.5-flash': 'gemini-4-hydrogen',
+  'gemini-1.5-pro': 'gemini-4-hydrogen',
+  'gemini-2.0-flash': 'gemini-4-hydrogen',
+  'gemini-2.0-pro': 'gemini-4-hydrogen',
+  'gemini-2-flash-lite': 'gemini-3.1-flash-lite',
+};
+
+const PAID_GEMINI_MODELS = new Set([
+  'gemini-4-carbon',
+  'gemini-4-argon',
+  'gemini-3-pro-image',
+  'gemini-nano-banana-2.1',
+  'gemini-3.1-flash-lite-image',
+  'gemini-omni-1.2-flash',
+]);
+
+export function normalizeGeminiModelId(model?: string | null): string {
+  const raw = (model || '').trim();
+  if (!raw) return 'gemini-4-hydrogen';
+  if (LEGACY_GEMINI_MODEL_ALIASES[raw]) return LEGACY_GEMINI_MODEL_ALIASES[raw];
+  if (PAID_GEMINI_MODELS.has(raw)) return 'gemini-4-hydrogen';
+  return raw;
+}
+
+function parseAiJsonSafe<T = any>(rawText: string, fallback: T): T {
+  const cleaned = String(rawText || '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  if (!cleaned) return fallback;
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      const slice = cleaned.slice(firstBrace, lastBrace + 1);
+      try {
+        return JSON.parse(slice) as T;
+      } catch {
+        // Attempt repair for unescaped LaTeX backslashes inside JSON strings
+        try {
+          const repaired = slice.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+          return JSON.parse(repaired) as T;
+        } catch {}
+      }
+    }
+    return fallback;
+  }
+}
+
+// Robust Gemini invocation with automatic model fallbacks (gemini-4-hydrogen as primary)
 async function callGeminiGenerate(params: {
   contents: any;
   config?: any;
@@ -208,21 +266,16 @@ async function callGeminiGenerate(params: {
   }
 
   const defaultModels = [
-    'gemini-3.8-flash',
-    'gemini-3.6-flash',
-    'gemini-3.5-flash-lite',
+    'gemini-4-hydrogen',
     'gemini-3.1-flash-lite',
-    'gemini-3-flash',
-    'gemini-flash-latest',
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
-    'gemini-2-flash-lite',
     'gemini-2.5-pro',
-    'gemini-1.5-flash',
   ];
 
+  const resolvedPreferred = normalizeGeminiModelId(params.preferredModel || db.ai_model);
   const candidateModels = [
-    params.preferredModel || db.ai_model || 'gemini-3.8-flash',
+    resolvedPreferred,
     ...defaultModels,
   ];
 
@@ -239,7 +292,7 @@ async function callGeminiGenerate(params: {
           contents: params.contents,
           ...(params.config ? { config: params.config } : {}),
         }),
-        params.timeoutMs || 45000
+        params.timeoutMs || 60000
       );
       return response;
     } catch (err: any) {
@@ -269,6 +322,14 @@ function resolveImageMime(file?: Express.Multer.File): string {
   }
   const ext = path.extname(file.originalname || '').toLowerCase();
   switch (ext) {
+    case '.pdf':
+      return 'application/pdf';
+    case '.txt':
+      return 'text/plain';
+    case '.md':
+      return 'text/markdown';
+    case '.csv':
+      return 'text/csv';
     case '.jpg':
     case '.jpeg':
     case '.jfif':
@@ -425,6 +486,13 @@ export interface StudyTopic {
   created_by?: string;
 }
 
+export interface AttachmentMeta {
+  id: string;
+  original_filename: string;
+  content_type?: string;
+  size?: number;
+}
+
 export interface SummaryTopic {
   id: string;
   subject: string;
@@ -436,6 +504,9 @@ export interface SummaryTopic {
   source_image_ids: string[];
   source_topic_ids?: string[];
   source_topic_titles?: string[];
+  is_ready_made?: boolean;
+  attachment_ids?: string[];
+  attachments?: AttachmentMeta[];
   status?: 'topic_only' | 'draft' | 'published';
   is_published?: boolean;
   published_at?: string | null;
@@ -480,6 +551,8 @@ interface Announcement {
   title: string;
   message: string;
   assigned_to: string[];
+  attachments?: string[];
+  attachment_files?: AttachmentMeta[];
   is_special?: boolean;
   created_by: string;
   created_at: string;
@@ -805,8 +878,8 @@ class Database {
     closed_at: string;
     rankings: any[];
   }> = [];
-  ai_model: string = 'gemini-3.8-flash';
-  summary_ai_model: string = 'gemini-3.8-flash';
+  ai_model: string = 'gemini-4-hydrogen';
+  summary_ai_model: string = 'gemini-4-hydrogen';
   webhook_logs: any[] = [];
   task_student_answers: Map<string, GeneratedTaskAnswer> = new Map();
   summary_generations: Map<string, any> = new Map();
@@ -1139,6 +1212,8 @@ class Database {
           if (a?.id) {
             this.announcements.set(a.id, {
               ...a,
+              attachments: Array.isArray(a.attachments) ? a.attachments : [],
+              attachment_files: Array.isArray(a.attachment_files) ? a.attachment_files : [],
               edited_at: a.edited_at || undefined,
               was_edited: Boolean(a.was_edited || a.edited_at),
             });
@@ -1187,8 +1262,8 @@ class Database {
         }
         if (settings.app_info) this.app_info = settings.app_info;
         if (settings.effect_overrides) this.effect_overrides = settings.effect_overrides;
-        if (settings.ai_model) this.ai_model = settings.ai_model;
-        if (settings.summary_ai_model) this.summary_ai_model = settings.summary_ai_model;
+        if (settings.ai_model) this.ai_model = normalizeGeminiModelId(settings.ai_model);
+        if (settings.summary_ai_model) this.summary_ai_model = normalizeGeminiModelId(settings.summary_ai_model);
         if (settings.ai_enabled !== undefined) this.ai_enabled = settings.ai_enabled;
         if (settings.ai_hidden !== undefined) this.ai_hidden = settings.ai_hidden;
         if (settings.frames_disabled !== undefined) this.frames_disabled = settings.frames_disabled;
@@ -1261,8 +1336,10 @@ class Database {
         remoteSummaries.forEach((s) => {
           if (!s?.id) return;
           const hasText = Boolean(s.summary_text && String(s.summary_text).trim().length > 0);
-          if (!hasText || s.status === 'topic_only') {
-            // Migração automática: itens antigos sem texto de resumo vão para summary_topics
+          const hasFiles = (Array.isArray(s.attachment_ids) && s.attachment_ids.length > 0) ||
+            (Array.isArray(s.attachments) && s.attachments.length > 0);
+          if ((!hasText && !hasFiles) || s.status === 'topic_only') {
+            // Migração automática: itens antigos sem texto e sem anexo vão para summary_topics
             if (!this.summary_topics.has(s.id)) {
               const migratedTopic: StudyTopic = {
                 id: s.id,
@@ -1376,15 +1453,17 @@ class Database {
         if (data.frame_rotation_disabled !== undefined) this.frame_rotation_disabled = data.frame_rotation_disabled;
         if (data.annual_cycle) this.annual_cycle = data.annual_cycle;
         if (data.annual_history) this.annual_history = data.annual_history;
-        if (data.ai_model) this.ai_model = data.ai_model;
-        if (data.summary_ai_model) this.summary_ai_model = data.summary_ai_model;
+        if (data.ai_model) this.ai_model = normalizeGeminiModelId(data.ai_model);
+        if (data.summary_ai_model) this.summary_ai_model = normalizeGeminiModelId(data.summary_ai_model);
         if (data.task_student_answers) this.task_student_answers = new Map(data.task_student_answers);
         if (data.summary_topics) this.summary_topics = new Map(data.summary_topics);
         if (data.summaries) {
           const loadedSummaries = new Map<string, SummaryTopic>(data.summaries);
           for (const [sid, item] of loadedSummaries.entries()) {
             const hasText = Boolean(item?.summary_text && String(item.summary_text).trim().length > 0);
-            if (!hasText || item?.status === 'topic_only') {
+            const hasFiles = (Array.isArray(item?.attachment_ids) && item.attachment_ids.length > 0) ||
+              (Array.isArray(item?.attachments) && item.attachments.length > 0);
+            if ((!hasText && !hasFiles) || item?.status === 'topic_only') {
               if (!this.summary_topics.has(sid)) {
                 this.summary_topics.set(sid, {
                   id: sid,
@@ -2257,13 +2336,61 @@ export function deduplicateSummaries(): { merged_count: number } {
   return { merged_count: mergedCount };
 }
 
+function hasSummaryContent(s?: Partial<SummaryTopic> | null): boolean {
+  if (!s) return false;
+  const hasText = Boolean(s.summary_text && String(s.summary_text).trim().length > 0);
+  const hasFiles = (Array.isArray(s.attachment_ids) && s.attachment_ids.length > 0) ||
+    (Array.isArray(s.attachments) && s.attachments.length > 0);
+  return hasText || hasFiles;
+}
+
+function resolveAttachmentMetaList(
+  ids: any[] = [],
+  existingMeta: AttachmentMeta[] = []
+): AttachmentMeta[] {
+  const existingMap = new Map<string, AttachmentMeta>();
+  for (const m of existingMeta || []) {
+    if (m && typeof m === 'object' && m.id) {
+      existingMap.set(m.id, m);
+    }
+  }
+  const normalizedIds: string[] = [];
+  for (const item of ids || []) {
+    if (typeof item === 'string' && item.trim()) {
+      normalizedIds.push(item.trim());
+    } else if (item && typeof item === 'object' && item.id) {
+      normalizedIds.push(String(item.id));
+      if (!existingMap.has(String(item.id))) {
+        existingMap.set(String(item.id), {
+          id: String(item.id),
+          original_filename: String(item.original_filename || item.filename || item.id),
+          content_type: item.content_type,
+          size: item.size,
+        });
+      }
+    }
+  }
+  return Array.from(new Set(normalizedIds)).map((id) => {
+    const f = db.files.get(id);
+    if (f) {
+      return {
+        id: f.id,
+        original_filename: f.original_filename,
+        size: f.size,
+        content_type: f.content_type,
+      };
+    }
+    const cached = existingMap.get(id);
+    return cached || { id, original_filename: id };
+  });
+}
+
 function isSummaryVisibleToStudent(s: SummaryTopic): boolean {
   if (!s) return false;
-  const hasText = Boolean(s.summary_text && s.summary_text.trim().length > 0);
-  if (!hasText) return false;
+  if (!hasSummaryContent(s)) return false;
   if (s.is_published === true) return true;
   if (s.is_published === false || s.status === 'topic_only' || s.status === 'draft') return false;
-  return s.is_published === undefined && s.status === undefined && hasText;
+  return s.is_published === undefined && s.status === undefined && hasSummaryContent(s);
 }
 
 function resolveTopicStatus(s: SummaryTopic): 'draft' | 'published' {
@@ -2280,7 +2407,11 @@ api.get('/admin/summary-topics', requireAdmin, (req, res) => {
     allTopics = allTopics.filter((t) => t.subject.toLowerCase() === subject.trim().toLowerCase());
   }
   allTopics.sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''));
-  res.json(allTopics);
+  const enriched = allTopics.map((t) => ({
+    ...t,
+    source_files: resolveAttachmentMetaList(t.source_image_ids || []),
+  }));
+  res.json(enriched);
 });
 
 api.post('/admin/summary-topics/deduplicate', requireAdmin, (_req, res) => {
@@ -2376,11 +2507,18 @@ api.post('/admin/summaries/process-source', requireAdmin, upload.array('images',
       }
 
       const savedFileIds: string[] = [];
-      const imageParts: any[] = [];
+      const multimodalParts: any[] = [];
+      const extractedTextSnippets: string[] = [];
 
       for (const file of files) {
         const mime = resolveImageMime(file);
-        const ext = path.extname(file.originalname || '.jpg') || '.jpg';
+        const fallbackExt = mime === 'application/pdf' ? '.pdf' : mime.startsWith('text/') ? '.txt' : '.jpg';
+        const ext = path.extname(file.originalname || fallbackExt) || fallbackExt;
+        if ((mime === 'application/pdf' || mime.startsWith('image/')) && file.buffer.length > 18 * 1024 * 1024) {
+          return res.status(400).json({
+            detail: `O arquivo "${file.originalname}" excede 18 MB para leitura pela IA. Para PDFs maiores, use "Colocar Resumo Pronto".`,
+          });
+        }
         const fileId = `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const diskPath = path.resolve(UPLOAD_DIR, `${fileId}${ext}`);
 
@@ -2393,7 +2531,7 @@ api.post('/admin/summaries/process-source', requireAdmin, upload.array('images',
         const base64Data = file.buffer.toString('base64');
         db.files.set(fileId, {
           id: fileId,
-          original_filename: file.originalname || 'imagem_resumo.jpg',
+          original_filename: file.originalname || `material_resumo${fallbackExt}`,
           content_type: mime,
           size: file.size,
           data: file.buffer,
@@ -2403,7 +2541,7 @@ api.post('/admin/summaries/process-source', requireAdmin, upload.array('images',
 
         await firebaseService.saveFile({
           id: fileId,
-          original_filename: file.originalname || 'imagem_resumo.jpg',
+          original_filename: file.originalname || `material_resumo${fallbackExt}`,
           content_type: mime,
           size: file.size,
           base64: base64Data,
@@ -2412,12 +2550,19 @@ api.post('/admin/summaries/process-source', requireAdmin, upload.array('images',
         }).catch(() => {});
 
         savedFileIds.push(fileId);
-        imageParts.push({
-          inlineData: {
-            data: base64Data,
-            mimeType: mime,
-          },
-        });
+        if (mime.startsWith('image/') || mime === 'application/pdf') {
+          multimodalParts.push({
+            inlineData: {
+              data: base64Data,
+              mimeType: mime,
+            },
+          });
+        } else if (mime.startsWith('text/') || /\.(txt|md|csv)$/i.test(file.originalname || '')) {
+          const decoded = file.buffer.toString('utf8').slice(0, 30000);
+          if (decoded.trim()) {
+            extractedTextSnippets.push(`--- Arquivo: ${file.originalname} ---\n${decoded}`);
+          }
+        }
       }
 
       const existingTopics = Array.from(db.summary_topics.values()).filter(
@@ -2431,64 +2576,69 @@ api.post('/admin/summaries/process-source', requireAdmin, upload.array('images',
         formulas: t.formulas,
       }));
 
-      const promptText = `Você é um organizador curricular especialista do Edutask.
-Analise com atenção o material enviado (imagens e/ou anotações) da matéria "${subject.trim()}" e EXTRAIA OS TÓPICOS DE ESTUDO presentes no conteúdo para o professor selecionar depois quais deseja transformar em resumo.
+      const combinedNotes = [extraNotes, ...extractedTextSnippets].filter(Boolean).join('\n\n');
 
-Tópicos já cadastrados nesta matéria:
+      const promptText = `Analise TODO o material fornecido (imagens, PDFs e/ou anotações) da matéria "${subject.trim()}" e extraia os tópicos curriculares reais presentes no conteúdo.
+
+Tópicos já cadastrados nesta matéria (reutilize "existing_topic_id" SOMENTE se o conteúdo tratar do mesmo tema):
 ${JSON.stringify(existingTopicsOverview, null, 2)}
 
-Anotações do professor (se houver):
-${extraNotes || 'Nenhuma anotação extra'}
+Anotações / textos enviados pelo professor:
+${combinedNotes || 'Nenhuma anotação em texto adicional — leia o conteúdo das imagens/PDFs.'}
 
-INSTRUÇÕES:
-1. Identifique de 1 a 6 tópicos claros e distintos presentes no material.
-2. Se um assunto das fotos já corresponder a um tópico existente acima, aponte "existing_topic_id" com o ID correspondente para apenas adicionar as novas imagens e notas sem duplicar.
-3. Para cada tópico novo ou atualizado, NÃO escreva ainda o resumo completo — extraia apenas:
-   - "topic_title": Nome didático e objetivo do tópico (ex: "Frações e Operações Básicas")
-   - "extracted_notes": Breve descrição do que aparece no material sobre esse tópico (2 a 4 linhas objetivas para orientar o professor)
-   - "key_concepts": Lista curta de conceitos/palavras-chave detectados
-   - "formulas": Lista de fórmulas ou equações encontradas (use sintaxe LaTeX se houver matemática)
-
-Retorne EXCLUSIVAMENTE um JSON válido:
-{
-  "topics": [
-    {
-      "existing_topic_id": string | null,
-      "topic_title": string,
-      "extracted_notes": string,
-      "key_concepts": string[],
-      "formulas": string[]
-    }
-  ]
-}`;
+REGRAS DE EXTRAÇÃO:
+1. Leia fielmente o texto das imagens/quadro/livro/PDF sem inventar assuntos ausentes.
+2. Separe em 1 a 6 tópicos claros e objetivos.
+3. Para cada tópico:
+   - "topic_title": Título didático preciso (ex: "Equação do 2º Grau e Fórmula de Bhaskara").
+   - "extracted_notes": Síntese fiel de 3 a 6 frases com os pontos exatos, definições, propriedades e observações presentes no material sobre esse tópico.
+   - "key_concepts": Termos-chave e definições essenciais realmente presentes no material.
+   - "formulas": Fórmulas ou equações presentes no material em sintaxe LaTeX limpa com $...$ (ou lista vazia [] se não houver fórmulas).`;
 
       const geminiRes = await callGeminiGenerate({
         contents: [
           {
             role: 'user',
-            parts: [{ text: promptText }, ...imageParts],
+            parts: [{ text: promptText }, ...multimodalParts],
           },
         ],
         config: {
+          systemInstruction:
+            'Você é um coordenador pedagógico especialista em análise de materiais escolares brasileiros. Extraia tópicos precisos, fiéis ao conteúdo anexado, sem alucinações e bem organizados.',
           responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              topics: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    existing_topic_id: { type: Type.STRING, nullable: true },
+                    topic_title: { type: Type.STRING },
+                    extracted_notes: { type: Type.STRING },
+                    key_concepts: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    formulas: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  },
+                  required: ['topic_title', 'extracted_notes', 'key_concepts', 'formulas'],
+                },
+              },
+            },
+            required: ['topics'],
+          },
         },
-        preferredModel: db.summary_ai_model || 'gemini-3.8-flash',
+        preferredModel: normalizeGeminiModelId(db.summary_ai_model),
       });
 
-      const responseText = geminiRes?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      let aiParsed: any = {};
-      try {
-        aiParsed = JSON.parse(responseText);
-      } catch (e) {
-        console.warn('Erro ao parsear tópicos extraídos pela IA:', responseText);
-      }
+      const responseText = geminiRes?.text || geminiRes?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      const aiParsed: any = parseAiJsonSafe(responseText, {});
 
       const rawTopics: any[] = Array.isArray(aiParsed.topics) && aiParsed.topics.length > 0
         ? aiParsed.topics
         : [{
             existing_topic_id: aiParsed.topic_id || null,
             topic_title: aiParsed.topic_title || `Tópico ${new Date().toLocaleDateString('pt-BR')}`,
-            extracted_notes: aiParsed.extracted_notes || extraNotes || 'Material anexado pelo professor.',
+            extracted_notes: aiParsed.extracted_notes || combinedNotes || 'Material anexado pelo professor.',
             key_concepts: Array.isArray(aiParsed.key_concepts) ? aiParsed.key_concepts : [],
             formulas: Array.isArray(aiParsed.formulas) ? aiParsed.formulas : [],
           }];
@@ -2587,12 +2737,27 @@ api.get('/summaries', requireAuth, (req, res) => {
   const user = (req as any).user as User;
   const { subject } = req.query;
   let allSummaries = Array.from(db.summaries.values())
-    .filter((s) => Boolean(s.summary_text && s.summary_text.trim().length > 0))
-    .map((s) => ({
-      ...s,
-      status: resolveTopicStatus(s),
-      is_published: Boolean(s.is_published ?? (s.status === undefined && s.summary_text?.trim())),
-    }));
+    .filter((s) => hasSummaryContent(s))
+    .map((s) => {
+      const attachmentIds = Array.isArray(s.attachment_ids)
+        ? s.attachment_ids
+        : Array.isArray(s.attachments)
+        ? s.attachments.map((a: any) => (typeof a === 'string' ? a : a?.id)).filter(Boolean)
+        : [];
+      const attachmentsMeta = resolveAttachmentMetaList(
+        attachmentIds,
+        Array.isArray(s.attachments) ? s.attachments : []
+      );
+      return {
+        ...s,
+        is_ready_made: Boolean(s.is_ready_made),
+        attachment_ids: attachmentIds,
+        attachments: attachmentsMeta,
+        source_files: resolveAttachmentMetaList(s.source_image_ids || []),
+        status: resolveTopicStatus(s),
+        is_published: Boolean(s.is_published ?? (s.status === undefined && hasSummaryContent(s))),
+      };
+    });
 
   if (user.role !== 'admin') {
     allSummaries = allSummaries.filter((s) => isSummaryVisibleToStudent(s));
@@ -2625,73 +2790,134 @@ async function generateSummaryContentWithAI(params: {
   tone?: string;
   instructions?: string;
 }) {
-  const imageParts: any[] = [];
-  for (const fileId of params.sourceImageIds.slice(0, 8)) {
+  const multimodalParts: any[] = [];
+  const textDocsContext: string[] = [];
+
+  for (const fileId of params.sourceImageIds.slice(0, 10)) {
     const f = await resolveFileRecordAsync(fileId);
-    if (f && f.data && f.data.length > 0 && f.content_type?.startsWith('image/')) {
-      imageParts.push({
+    if (!f || !f.data || f.data.length === 0) continue;
+    const mime = f.content_type || '';
+    if (mime.startsWith('image/') || mime === 'application/pdf') {
+      multimodalParts.push({
         inlineData: {
           data: f.data.toString('base64'),
-          mimeType: f.content_type,
+          mimeType: mime,
         },
       });
+    } else if (mime.startsWith('text/') || /\.(txt|md|csv)$/i.test(f.original_filename || '')) {
+      const txt = f.data.toString('utf8').slice(0, 25000);
+      if (txt.trim()) {
+        textDocsContext.push(`--- Material (${f.original_filename}) ---\n${txt}`);
+      }
     }
   }
 
-  const promptText = `Você é um professor especialista e criador de materiais didáticos do EduTask.
-Elabore um RESUMO DE ESTUDO COMPLETO E COESO para a matéria "${params.subject}", unificando os tópicos selecionados pelo professor abaixo.
-Este resumo será revisado pelo professor e depois disponibilizado para a turma estudar.
+  const toneGuideMap: Record<string, string> = {
+    completo: `Modo APOSTILA COMPLETA E DIDÁTICA:
+- Comece com "## 🎯 Visão Geral e Ideia Principal" explicando o porquê do assunto com uma analogia simples do dia a dia (sem frases clichês como "Neste resumo vamos ver...").
+- Crie seções claras com "## 📖 Explicação Detalhada" divididas em "### Subtópicos" aprofundando CADA conceito com clareza, causa e efeito, e exemplos concretos.
+- Inclua pelo menos uma tabela comparativa em Markdown (| Conceito | O que é | Exemplo / Quando usar |) sempre que houver classificações, tipos, regras ou diferenças importantes.
+- Se houver fórmulas ou cálculos, inclua "## 🧮 Fórmulas e Regras Essenciais" com blocos $$...$$ e explique o significado de cada letra/unidade, além de "## ✏️ Exemplos Resolvidos" usando "Passo 1:", "Passo 2:", "Passo 3:".
+- Se for matéria de humanas/linguagens/biológicas, substitua a seção de cálculos por "## 🔍 Conexões e Exemplos Práticos" com casos reais, linha do tempo ou análise comentada.
+- Inclua ao menos um bloco "> Atenção! ..." destacando erros comuns e pegadinhas de prova.
+- Termine com "## ✅ Revisão Rápida (Teste seus Conhecimentos)" contendo 3 perguntas curtas de fixação com as respostas objetivas logo abaixo.`,
+    objetivo: `Modo DIRETO PARA REVISÃO RÁPIDA:
+- Vá direto ao ponto em tópicos escaneáveis e tabelas-resumo sem perder profundidade técnica.
+- Estruture com: "## ⚡ Ideia Central em 1 Minuto", "## 📌 Pontos Essenciais da Matéria" (bullets em negrito), uma tabela comparativa Markdown se aplicável, "## 🧮 Fórmulas / Regras de Ouro" (ou "Regras Fundamentais"), 1 exemplo comentado curto, um bloco "> Pegadinha de Prova!" e 3 flashcards rápidos de pergunta e resposta.`,
+    formulas: `Modo FOCO EM FÓRMULAS, CÁLCULOS E RESOLUÇÃO:
+- Comece com "## 📐 Grandezas, Símbolos e Unidades" (tabela Markdown | Símbolo | Significado | Unidade no SI |).
+- Apresente todas as fórmulas em destaque $$...$$ explicando quando usar e como isolar cada variável.
+- Inclua bloco "> Cuidado com as Unidades e Sinais!" com conversões frequentes (km/h <-> m/s, cm <-> m, regras de sinal).
+- Resolva 2 a 3 exercícios modelo completos (do nível básico ao nível prova) numerando claramente "Passo 1:", "Passo 2:", "Passo 3:" até a resposta final destacada.`,
+    prova: `Modo PREPARAÇÃO INTENSIVA PARA PROVA:
+- Estruture pensando no que mais cai em avaliações escolares: "## 🎯 O que Você Precisa Dominar", "## 📚 Teoria Essencial Sem Enrolação", tabela comparativa dos pontos que mais geram confusão, "## ⚠️ Erros Mais Comuns e Pegadinhas" (> ...), "## ✏️ Questões Modelo Comentadas" (2 questões resolvidas passo a passo) e "## ✅ Checklist Final Antes da Prova".`,
+  };
+
+  const selectedToneGuide = toneGuideMap[params.tone || 'completo'] || toneGuideMap.completo;
+
+  const promptText = `Elabore um material de estudo excepcional para alunos do Ensino Fundamental II / Ensino Médio sobre os tópicos abaixo.
 
 Matéria: "${params.subject}"
-Título sugerido do Resumo: "${params.title}"
-Tópicos selecionados para compor este resumo:
+Título base: "${params.title}"
+
+Tópicos e anotações de referência:
 ${JSON.stringify(params.topics, null, 2)}
 
-Estilo solicitado pelo professor: ${params.tone || 'completo'}
-Instruções extras do professor: ${params.instructions || 'Seguir didática clara e organizada para Ensino Fundamental/Médio'}
+${textDocsContext.length > 0 ? `Materiais textuais anexados:\n${textDocsContext.join('\n\n')}\n` : ''}
+ESTILO SOLICITADO PELO PROFESSOR:
+${selectedToneGuide}
 
-REGRAS OBRIGATÓRIAS DE ESCRITA:
-1. Escreva em Português do Brasil impecável, bem estruturado em Markdown (#, ##, ###, listas com -, **negritos**, blocos > Dica importante).
-2. Se houver matemática, física ou química, use sintaxe LaTeX limpa com $...$ para fórmulas na linha e $$...$$ para equações em destaque.
-3. Organize com: Introdução objetiva, Explicação detalhada interligando todos os tópicos selecionados, Exemplos práticos resolvidos (passo a passo quando aplicável) e Dicas de revisão.
-4. Também refine e consolide "title" (título final didático se aplicável), "key_concepts" (lista curta de termos-chave) e "formulas" (lista de fórmulas).
+INSTRUÇÕES ADICIONAIS DO PROFESSOR:
+${params.instructions || 'Nenhuma instrução adicional.'}
 
-Retorne EXCLUSIVAMENTE um JSON válido:
-{
-  "title": string,
-  "summary_text": string,
-  "key_concepts": string[],
-  "formulas": string[]
-}`;
+REGRAS CRÍTICAS DE FORMATAÇÃO MARKDOWN + LATEX:
+1. Separe SEMPRE cada título (#, ##, ###), parágrafo, tabela, lista e equação $$...$$ com UMA linha em branco antes e depois (nunca cole uma lista ou parágrafo imediatamente na linha abaixo de ## sem linha em branco).
+2. Use Markdown limpo: ## para seções, ### para subtópicos, - para listas com marcador, 1. 2. 3. para listas ordenadas, | col | col | para tabelas, > para dicas importantes, **negrito** para termos-chave.
+3. NÃO use cercas de código \`\`\`markdown nem escreva comentários introdutórios tipo "Aqui está o resumo". Comece direto pelo conteúdo do resumo.
+4. Para matemática/física/química, use exclusivamente $...$ na linha e $$...$$ em linha isolada (sem envolver equações em crases \`).
+5. Nunca invente informações que contradigam as imagens/anotações fornecidas pelo professor; aprofunde e explique com clareza didática real.`;
 
   const geminiRes = await callGeminiGenerate({
     contents: [
       {
         role: 'user',
-        parts: [{ text: promptText }, ...imageParts],
+        parts: [{ text: promptText }, ...multimodalParts],
       },
     ],
     config: {
+      systemInstruction:
+        'Você é um professor brasileiro premiado por criar apostilas de estudo cristalinas, completas, envolventes e visualmente impecáveis em Markdown e LaTeX. Seus resumos fazem qualquer aluno entender o conteúdo de verdade, com exemplos concretos, linguagem acessível mas rigorosa e formatação perfeita.',
       responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          title: {
+            type: Type.STRING,
+            description: 'Título didático claro e atrativo para o resumo.',
+          },
+          summary_text: {
+            type: Type.STRING,
+            description: 'Conteúdo completo e aprofundado do resumo formatado em Markdown limpo (com linhas em branco entre blocos) e LaTeX $...$ / $$...$$.',
+          },
+          key_concepts: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: 'Lista de 4 a 10 conceitos-chave curtos e objetivos.',
+          },
+          formulas: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: 'Lista das principais fórmulas em LaTeX $...$ (ou array vazio se não houver).',
+          },
+        },
+        required: ['title', 'summary_text', 'key_concepts', 'formulas'],
+      },
     },
-    preferredModel: db.summary_ai_model || 'gemini-3.8-flash',
+    preferredModel: normalizeGeminiModelId(db.summary_ai_model),
   });
 
-  const responseText = geminiRes?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  let parsed: any = {};
-  try {
-    parsed = JSON.parse(responseText);
-  } catch {
-    parsed = { summary_text: responseText };
+  const responseText = geminiRes?.text || geminiRes?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const parsed: any = parseAiJsonSafe(responseText, {});
+
+  // Fallback only if response wasn't JSON at all and isn't a raw JSON dump
+  let finalSummaryText = parsed?.summary_text ? String(parsed.summary_text).trim() : '';
+  if (!finalSummaryText && responseText && !responseText.trim().startsWith('{')) {
+    finalSummaryText = responseText.trim();
   }
 
-  if (!parsed.summary_text || !String(parsed.summary_text).trim()) {
-    throw new Error('A IA não retornou conteúdo para o resumo. Tente novamente.');
+  if (!finalSummaryText) {
+    throw new Error('A IA não retornou conteúdo válido para o resumo. Tente novamente.');
   }
+
+  // Strip stray outer markdown fences if any
+  finalSummaryText = finalSummaryText
+    .replace(/^```(?:markdown|md)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
 
   return {
     title: parsed.title ? String(parsed.title).trim() : params.title,
-    summary_text: String(parsed.summary_text).trim(),
+    summary_text: finalSummaryText,
     key_concepts: Array.isArray(parsed.key_concepts) ? parsed.key_concepts.filter(Boolean) : [],
     formulas: Array.isArray(parsed.formulas) ? parsed.formulas.filter(Boolean) : [],
   };
@@ -2865,7 +3091,7 @@ api.post('/admin/summaries/:id/regenerate', requireAdmin, async (req, res) => {
   }
 });
 
-// Criar resumo manual
+// Criar resumo manual ou colocar Resumo Pronto (texto e/ou arquivos anexos, sem passar pela IA)
 api.post('/admin/summaries', requireAdmin, async (req, res) => {
   const {
     subject,
@@ -2877,11 +3103,29 @@ api.post('/admin/summaries', requireAdmin, async (req, res) => {
     source_image_ids,
     source_topic_ids,
     source_topic_titles,
+    attachment_ids,
+    attachments,
+    is_ready_made,
     is_published,
   } = req.body || {};
 
-  if (!subject || !String(subject).trim() || !topic || !String(topic).trim() || !summary_text || !String(summary_text).trim()) {
-    return res.status(400).json({ detail: 'Matéria, Título e Conteúdo do Resumo são obrigatórios' });
+  const normalizedIds: string[] = Array.from(new Set([
+    ...(Array.isArray(attachment_ids) ? attachment_ids : []),
+    ...(Array.isArray(attachments)
+      ? attachments.map((a: any) => (typeof a === 'string' ? a : a?.id)).filter(Boolean)
+      : []),
+  ].map(String).filter(Boolean)));
+
+  const resolvedAttachments = resolveAttachmentMetaList(
+    normalizedIds,
+    Array.isArray(attachments) ? attachments : []
+  );
+
+  const hasText = Boolean(summary_text && String(summary_text).trim().length > 0);
+  const hasAttachments = normalizedIds.length > 0;
+
+  if (!subject || !String(subject).trim() || !topic || !String(topic).trim() || (!hasText && !hasAttachments)) {
+    return res.status(400).json({ detail: 'Matéria, Título e Conteúdo (texto ou arquivo do resumo pronto) são obrigatórios' });
   }
 
   const id = `sum-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
@@ -2892,12 +3136,15 @@ api.post('/admin/summaries', requireAdmin, async (req, res) => {
     subject: String(subject).trim(),
     topic: String(topic).trim(),
     extracted_notes: typeof extracted_notes === 'string' ? extracted_notes.trim() : '',
-    summary_text: String(summary_text).trim(),
+    summary_text: typeof summary_text === 'string' ? summary_text.trim() : '',
     key_concepts: Array.isArray(key_concepts) ? key_concepts.filter(Boolean) : [],
     formulas: Array.isArray(formulas) ? formulas.filter(Boolean) : [],
     source_image_ids: Array.isArray(source_image_ids) ? source_image_ids.filter(Boolean) : [],
     source_topic_ids: Array.isArray(source_topic_ids) ? source_topic_ids.filter(Boolean) : [],
     source_topic_titles: Array.isArray(source_topic_titles) ? source_topic_titles.filter(Boolean) : [],
+    is_ready_made: Boolean(is_ready_made),
+    attachment_ids: normalizedIds,
+    attachments: resolvedAttachments,
     status: publishNow ? 'published' : 'draft',
     is_published: publishNow,
     published_at: publishNow ? nowIso : null,
@@ -2941,6 +3188,9 @@ api.put('/admin/summaries/:id', requireAdmin, async (req, res) => {
     source_image_ids,
     source_topic_ids,
     source_topic_titles,
+    attachment_ids,
+    attachments,
+    is_ready_made,
     is_published,
   } = req.body || {};
 
@@ -2953,9 +3203,24 @@ api.put('/admin/summaries/:id', requireAdmin, async (req, res) => {
   if (source_image_ids !== undefined) existing.source_image_ids = Array.isArray(source_image_ids) ? source_image_ids.filter(Boolean) : [];
   if (source_topic_ids !== undefined) existing.source_topic_ids = Array.isArray(source_topic_ids) ? source_topic_ids.filter(Boolean) : [];
   if (source_topic_titles !== undefined) existing.source_topic_titles = Array.isArray(source_topic_titles) ? source_topic_titles.filter(Boolean) : [];
+  if (typeof is_ready_made === 'boolean') existing.is_ready_made = is_ready_made;
+
+  if (attachment_ids !== undefined || attachments !== undefined) {
+    const normalizedIds: string[] = Array.from(new Set([
+      ...(Array.isArray(attachment_ids) ? attachment_ids : []),
+      ...(Array.isArray(attachments)
+        ? attachments.map((a: any) => (typeof a === 'string' ? a : a?.id)).filter(Boolean)
+        : []),
+    ].map(String).filter(Boolean)));
+    existing.attachment_ids = normalizedIds;
+    existing.attachments = resolveAttachmentMetaList(
+      normalizedIds,
+      Array.isArray(attachments) ? attachments : (existing.attachments || [])
+    );
+  }
 
   if (typeof is_published === 'boolean') {
-    existing.is_published = is_published && Boolean(existing.summary_text?.trim());
+    existing.is_published = is_published && hasSummaryContent(existing);
     if (existing.is_published && !existing.published_at) {
       existing.published_at = new Date().toISOString();
     }
@@ -2991,8 +3256,8 @@ api.post('/admin/summaries/:id/publish', requireAdmin, async (req, res) => {
     return res.status(404).json({ detail: 'Resumo não encontrado' });
   }
 
-  if (!summaryItem.summary_text || !summaryItem.summary_text.trim()) {
-    return res.status(400).json({ detail: 'Escreva ou gere o resumo antes de disponibilizá-lo para os alunos.' });
+  if (!hasSummaryContent(summaryItem)) {
+    return res.status(400).json({ detail: 'Escreva o texto, gere o conteúdo ou anexe um arquivo antes de disponibilizar para os alunos.' });
   }
 
   const { notify = true } = req.body || {};
@@ -3104,8 +3369,8 @@ api.post('/admin/summaries/topics/:id/publish', requireAdmin, async (req, res) =
   const { id } = req.params;
   const summaryItem = db.summaries.get(id);
   if (!summaryItem) return res.status(404).json({ detail: 'Resumo não encontrado' });
-  if (!summaryItem.summary_text || !summaryItem.summary_text.trim()) {
-    return res.status(400).json({ detail: 'Escreva ou gere o resumo antes de disponibilizá-lo para os alunos.' });
+  if (!hasSummaryContent(summaryItem)) {
+    return res.status(400).json({ detail: 'Escreva ou anexe o conteúdo do resumo antes de disponibilizá-lo para os alunos.' });
   }
   const { notify = true } = req.body || {};
   const nowIso = new Date().toISOString();
@@ -3204,7 +3469,7 @@ api.delete('/admin/summaries/topics/:id', requireAdmin, async (req, res) => {
 api.put('/admin/summaries/model', requireAdmin, async (req, res) => {
   const { summary_ai_model } = req.body || {};
   if (!summary_ai_model) return res.status(400).json({ detail: 'Modelo obrigatório' });
-  db.summary_ai_model = summary_ai_model;
+  db.summary_ai_model = normalizeGeminiModelId(summary_ai_model);
   db.saveToDisk();
   saveSystemSettingsToFirestore();
   res.json({ ok: true, summary_ai_model: db.summary_ai_model });
@@ -3459,6 +3724,11 @@ export function getFileRecord(fileId: string | null | undefined): FileRecord | n
         else if (ext === '.gif') mime = 'image/gif';
         else if (ext === '.svg') mime = 'image/svg+xml';
         else if (ext === '.pdf') mime = 'application/pdf';
+        else if (ext === '.txt') mime = 'text/plain';
+        else if (ext === '.md') mime = 'text/markdown';
+        else if (ext === '.csv') mime = 'text/csv';
+        else if (ext === '.doc') mime = 'application/msword';
+        else if (ext === '.docx') mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
         const record: FileRecord = {
           id: fileId,
@@ -4431,24 +4701,36 @@ api.post('/tasks/:task_id/uncomplete', requireAuth, async (req, res) => {
 // ---------------------------------------------------------------------------
 // Announcements & Comments
 // ---------------------------------------------------------------------------
+function buildAnnouncementResponse(a: Announcement, studentsMap?: Map<string, string>) {
+  const attachmentIds = Array.isArray(a.attachments)
+    ? a.attachments.map((x: any) => (typeof x === 'string' ? x : x?.id)).filter(Boolean)
+    : [];
+  const attachmentsMeta = resolveAttachmentMetaList(attachmentIds, a.attachment_files || []);
+  const base: any = {
+    ...a,
+    attachments: attachmentsMeta,
+    attachment_ids: attachmentIds,
+  };
+  if (studentsMap) {
+    const assigned = a.assigned_to || [];
+    base.all_students = assigned.length === 0;
+    base.recipients = assigned.map((sid) => ({ id: sid, name: studentsMap.get(sid) || 'Aluno' }));
+  }
+  return base;
+}
+
 api.get('/announcements', requireAuth, (req, res) => {
   const user = (req as any).user as User;
   const items = Array.from(db.announcements.values()).sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   if (user.role === 'admin') {
     const studentsMap = new Map(Array.from(db.users.values()).map((s) => [s.id, s.name]));
-    const enriched = items.map((a) => {
-      const assigned = a.assigned_to || [];
-      return {
-        ...a,
-        all_students: assigned.length === 0,
-        recipients: assigned.map((sid) => ({ id: sid, name: studentsMap.get(sid) || 'Aluno' })),
-      };
-    });
-    return res.json(enriched);
+    return res.json(items.map((a) => buildAnnouncementResponse(a, studentsMap)));
   }
 
-  const filtered = items.filter((a) => !a.assigned_to || a.assigned_to.length === 0 || a.assigned_to.includes(user.id));
+  const filtered = items
+    .filter((a) => !a.assigned_to || a.assigned_to.length === 0 || a.assigned_to.includes(user.id))
+    .map((a) => buildAnnouncementResponse(a));
   res.json(filtered);
 });
 
@@ -4456,8 +4738,16 @@ api.post('/announcements', requireAdmin, async (req, res) => {
   if (db.annual_cycle?.is_closed) {
     return res.status(403).json({ detail: "O Ano Letivo / Ranking Anual está encerrado. Não é possível publicar avisos até que o novo ano seja iniciado na aba Ranking Anual." });
   }
-  const { title, message, assigned_to, is_special } = req.body || {};
+  const { title, message, assigned_to, is_special, attachments, attachment_files } = req.body || {};
   if (!title || !message) return res.status(400).json({ detail: 'Título e mensagem obrigatórios' });
+
+  const normalizedAttIds: string[] = Array.isArray(attachments)
+    ? Array.from(new Set(attachments.map((a: any) => (typeof a === 'string' ? a : a?.id)).filter(Boolean).map(String)))
+    : [];
+  const resolvedAttMeta = resolveAttachmentMetaList(
+    normalizedAttIds,
+    Array.isArray(attachment_files) ? attachment_files : (Array.isArray(attachments) ? attachments : [])
+  );
 
   const id = `ann-${Date.now()}`;
   const doc: Announcement = {
@@ -4465,6 +4755,8 @@ api.post('/announcements', requireAdmin, async (req, res) => {
     title: title.trim(),
     message: message.trim(),
     assigned_to: Array.isArray(assigned_to) ? assigned_to : [],
+    attachments: normalizedAttIds,
+    attachment_files: resolvedAttMeta,
     is_special: Boolean(is_special),
     created_by: (req as any).user.id,
     created_at: new Date().toISOString(),
@@ -4517,7 +4809,7 @@ api.post('/announcements', requireAdmin, async (req, res) => {
     });
   }
 
-  res.json(doc);
+  res.json(buildAnnouncementResponse(doc));
 });
 
 api.post('/announcements/:ann_id/send-whatsapp', requireAdmin, async (req, res) => {
@@ -4616,21 +4908,44 @@ api.put('/announcements/:ann_id', requireAdmin, async (req, res) => {
   const doc = db.announcements.get(ann_id);
   if (!doc) return res.status(404).json({ detail: 'Aviso não encontrado' });
 
-  const { title, message, assigned_to, is_special } = req.body || {};
+  const { title, message, assigned_to, is_special, attachments, attachment_files } = req.body || {};
   const prevTitle = doc.title;
   const prevMessage = doc.message;
   const prevSpecial = Boolean(doc.is_special);
   const prevAssigned = Array.isArray(doc.assigned_to) ? doc.assigned_to : [];
+  const prevAttachments = Array.isArray(doc.attachments) ? doc.attachments : [];
+
+  const nextAttachments: string[] | null = Array.isArray(attachments)
+    ? Array.from(new Set(attachments.map((a: any) => (typeof a === 'string' ? a : a?.id)).filter(Boolean).map(String)))
+    : null;
 
   if (title) doc.title = title.trim();
   if (message) doc.message = message.trim();
   if (Array.isArray(assigned_to)) doc.assigned_to = assigned_to;
   if (typeof is_special === 'boolean') doc.is_special = is_special;
+  if (nextAttachments !== null) {
+    doc.attachments = nextAttachments;
+    doc.attachment_files = resolveAttachmentMetaList(
+      nextAttachments,
+      Array.isArray(attachment_files)
+        ? attachment_files
+        : [
+            ...(Array.isArray(attachments) ? attachments : []),
+            ...(doc.attachment_files || []),
+          ]
+    );
+  }
+
+  const attachmentsChanged =
+    nextAttachments !== null &&
+    (nextAttachments.length !== prevAttachments.length ||
+      nextAttachments.some((id, idx) => id !== prevAttachments[idx]));
 
   const hasChanged =
     doc.title !== prevTitle ||
     doc.message !== prevMessage ||
     Boolean(doc.is_special) !== prevSpecial ||
+    attachmentsChanged ||
     (Array.isArray(assigned_to) &&
       (assigned_to.length !== prevAssigned.length || assigned_to.some((id, idx) => id !== prevAssigned[idx])));
 
@@ -4654,7 +4969,7 @@ api.put('/announcements/:ann_id', requireAdmin, async (req, res) => {
     });
   }
 
-  res.json(doc);
+  res.json(buildAnnouncementResponse(doc));
 });
 
 api.delete('/announcements/:ann_id', requireAdmin, async (req, res) => {
@@ -4933,8 +5248,8 @@ api.get('/app-status', (req, res) => {
     frame_rotation_disabled: db.frame_rotation_disabled !== undefined ? db.frame_rotation_disabled : true,
     ai_enabled: db.ai_enabled || false,
     ai_hidden: db.ai_hidden || false,
-    ai_model: db.ai_model || 'gemini-3.8-flash',
-    summary_ai_model: db.summary_ai_model || 'gemini-3.8-flash',
+    ai_model: normalizeGeminiModelId(db.ai_model),
+    summary_ai_model: normalizeGeminiModelId(db.summary_ai_model),
     env_mode: IS_PREVIEW_ENV ? 'preview' : 'production',
     collection_prefix: firebaseService.getCollectionPrefix(),
     firebase_synced: db.isFirebaseSynced(),
@@ -7273,7 +7588,16 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
           db.announcements.clear();
         }
         annList.forEach((a) => {
-          if (a && a.id) db.announcements.set(a.id, a);
+          if (a && a.id) {
+            const attIds = Array.isArray(a.attachments)
+              ? a.attachments.map((x: any) => (typeof x === 'string' ? x : x?.id)).filter(Boolean)
+              : [];
+            db.announcements.set(a.id, {
+              ...a,
+              attachments: attIds,
+              attachment_files: Array.isArray(a.attachment_files) ? a.attachment_files : [],
+            });
+          }
         });
       }
 

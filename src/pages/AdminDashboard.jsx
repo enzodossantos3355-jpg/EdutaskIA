@@ -2079,17 +2079,52 @@ function AnnouncementsPanel({ annualCycle }) {
     }
   };
 
+  const normalizeAnnAtt = (item) => {
+    if (!item) return null;
+    if (typeof item === "string") return { id: item, original_filename: item, content_type: "" };
+    if (typeof item === "object" && item.id) {
+      return {
+        id: String(item.id),
+        original_filename: String(item.original_filename || item.filename || item.id),
+        content_type: item.content_type || "",
+        size: item.size,
+      };
+    }
+    return null;
+  };
+
+  const getAnnAttachments = (a) => {
+    const raw =
+      Array.isArray(a?.attachment_files) && a.attachment_files.length > 0
+        ? a.attachment_files
+        : Array.isArray(a?.attachments)
+        ? a.attachments
+        : [];
+    return raw.map(normalizeAnnAtt).filter(Boolean);
+  };
+
+  const isImgAtt = (att) => {
+    const ct = String(att?.content_type || "").toLowerCase();
+    const name = String(att?.original_filename || "").toLowerCase();
+    return ct.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|svg|avif)$/i.test(name);
+  };
+
   const copyAnnouncement = async (a) => {
     const recipients = a.all_students
       ? "Todos os alunos"
       : (a.recipients || []).map((r) => r.name).join(", ") || "—";
-    const text = [
+    const atts = getAnnAttachments(a);
+    const lines = [
       `📣 ${a.title}`,
       `👥 Destinatários: ${recipients}`,
       `📅 ${formatDateBR(a.created_at)}`,
       "",
       a.message,
-    ].join("\n");
+    ];
+    if (atts.length > 0) {
+      lines.push("", `📎 Anexos: ${atts.map((x) => x.original_filename).join(", ")}`);
+    }
+    const text = lines.join("\n");
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
@@ -2192,6 +2227,41 @@ function AnnouncementsPanel({ annualCycle }) {
               </div>
               <h3 className="font-heading font-bold text-lg leading-tight mb-1">{a.title}</h3>
               <p className="text-sm text-neutral-700 whitespace-pre-wrap mb-3">{a.message}</p>
+              {(() => {
+                const annsAtts = getAnnAttachments(a);
+                if (annsAtts.length === 0) return null;
+                const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : "";
+                return (
+                  <div className="mb-3 space-y-2">
+                    <div className="text-[11px] font-heading font-black uppercase tracking-wide text-neutral-700 flex items-center gap-1">
+                      <Paperclip className="w-3.5 h-3.5" />
+                      <span>Anexos ({annsAtts.length})</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {annsAtts.map((att) =>
+                        isImgAtt(att) ? (
+                          <a
+                            key={att.id}
+                            href={`${API}/files/${att.id}/download?auth=${encodeURIComponent(token || "")}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="group relative w-20 h-20 rounded-xl border-2 border-black overflow-hidden bg-white shadow-[2px_2px_0_0_#000]"
+                            title={att.original_filename}
+                          >
+                            <img
+                              src={`/api/files/${att.id}`}
+                              alt={att.original_filename}
+                              className="w-full h-full object-cover group-hover:opacity-80"
+                            />
+                          </a>
+                        ) : (
+                          <FileLink key={att.id} file={att} />
+                        )
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="nb-badge bg-white">
                   <Users className="w-3 h-3 inline mr-1 -mt-0.5" />
@@ -2274,6 +2344,30 @@ function AnnouncementDialog({ announcement, students, onClose, onSaved }) {
   const [message, setMessage] = useState(announcement?.message || "");
   const [assignedTo, setAssignedTo] = useState(announcement?.assigned_to || []);
   const [isSpecial, setIsSpecial] = useState(Boolean(announcement?.is_special));
+  const [attachments, setAttachments] = useState(() => {
+    const raw =
+      Array.isArray(announcement?.attachment_files) && announcement.attachment_files.length > 0
+        ? announcement.attachment_files
+        : Array.isArray(announcement?.attachments)
+        ? announcement.attachments
+        : [];
+    return raw
+      .map((item) =>
+        typeof item === "string"
+          ? { id: item, filename: item, original_filename: item, content_type: "" }
+          : item?.id
+          ? {
+              id: String(item.id),
+              filename: String(item.original_filename || item.filename || item.id),
+              original_filename: String(item.original_filename || item.filename || item.id),
+              content_type: item.content_type || "",
+              size: item.size,
+            }
+          : null
+      )
+      .filter(Boolean);
+  });
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [saveState, setSaveState] = useState("idle"); // "idle" | "saving" | "saved"
   const submitting = saveState === "saving";
 
@@ -2333,11 +2427,56 @@ function AnnouncementDialog({ announcement, students, onClose, onSaved }) {
     setDraftData(null);
   };
 
+  const handleUploadAttachment = async (e) => {
+    const list = Array.from(e.target.files || []);
+    if (list.length === 0) return;
+    setUploadingAttachments(true);
+    try {
+      for (const f of list) {
+        const fd = new FormData();
+        fd.append("file", f);
+        const { data } = await api.post("/files/upload", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        setAttachments((prev) => [
+          ...prev,
+          {
+            id: data.id,
+            filename: data.filename || f.name,
+            original_filename: data.filename || f.name,
+            content_type: data.content_type || f.type || "",
+            size: data.size || f.size,
+          },
+        ]);
+      }
+      toast.success("Anexo enviado!");
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail) || "Falha ao enviar anexo");
+    } finally {
+      setUploadingAttachments(false);
+      e.target.value = "";
+    }
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     if (saveState !== "idle") return;
     setSaveState("saving");
-    const payload = { title, message, assigned_to: assignedTo, is_special: isSpecial };
+    const attachmentIds = attachments.map((f) => f.id);
+    const attachmentFilesMeta = attachments.map((f) => ({
+      id: f.id,
+      original_filename: f.original_filename || f.filename || f.id,
+      content_type: f.content_type || "",
+      size: f.size,
+    }));
+    const payload = {
+      title,
+      message,
+      assigned_to: assignedTo,
+      is_special: isSpecial,
+      attachments: attachmentIds,
+      attachment_files: attachmentFilesMeta,
+    };
     try {
       if (isEdit) {
         await api.put(`/announcements/${announcement.id}`, payload);
@@ -2363,6 +2502,8 @@ function AnnouncementDialog({ announcement, students, onClose, onSaved }) {
           message,
           assigned_to: assignedTo,
           is_special: isSpecial,
+          attachments: attachmentIds,
+          attachment_files: attachmentFilesMeta,
           created_at: announcement?.created_at || new Date().toISOString(),
         });
         toast.success(isEdit ? "Aviso atualizado!" : "Aviso publicado!");
@@ -2456,6 +2597,44 @@ function AnnouncementDialog({ announcement, students, onClose, onSaved }) {
             <textarea required rows={4} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Detalhes do aviso..." className="nb-input resize-y" data-testid="announcement-message-input" />
           </div>
           <div>
+            <label className="block text-sm font-bold mb-1.5">Anexos (Opcional)</label>
+            <label className="block w-full border-2 border-dashed border-black rounded-xl bg-sky-50 hover:bg-sky-100 p-4 cursor-pointer transition-colors text-center" data-testid="announcement-file-upload-zone">
+              <Upload className="w-5 h-5 mx-auto mb-1" />
+              <span className="text-xs sm:text-sm font-bold">
+                {uploadingAttachments ? "Enviando anexo..." : "Clique para anexar arquivos no aviso"}
+              </span>
+              <p className="text-[11px] text-neutral-600">PDF, imagens, documentos ou comunicados</p>
+              <input
+                type="file"
+                multiple
+                onChange={handleUploadAttachment}
+                className="hidden"
+                disabled={uploadingAttachments}
+                data-testid="announcement-file-input"
+              />
+            </label>
+            {attachments.length > 0 && (
+              <div className="mt-2.5 space-y-1.5">
+                {attachments.map((f) => (
+                  <div key={f.id} className="flex items-center justify-between nb-card bg-amber-50 px-3 py-2 text-xs sm:text-sm">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Paperclip className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="truncate font-bold">{f.original_filename || f.filename}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAttachments((p) => p.filter((x) => x.id !== f.id))}
+                      className="text-red-700 hover:text-red-900"
+                      title="Remover anexo"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
             <label className="block text-sm font-bold mb-1.5">Destinatários</label>
             <RecipientSelector
               students={students}
@@ -2489,7 +2668,7 @@ function AnnouncementDialog({ announcement, students, onClose, onSaved }) {
             <button type="button" onClick={onClose} disabled={submitting} className="nb-btn bg-white px-5 py-2.5">Cancelar</button>
             <button
               type="submit"
-              disabled={saveState !== "idle"}
+              disabled={saveState !== "idle" || uploadingAttachments}
               className={`nb-btn px-5 py-2.5 flex items-center gap-2 transition-colors duration-200 ${saveState === "saved" ? "bg-emerald-300" : "bg-violet-300"}`}
               data-testid="submit-announcement-button"
             >

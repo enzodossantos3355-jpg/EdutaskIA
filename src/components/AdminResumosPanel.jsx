@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { api, formatApiError } from "@/lib/api";
+import { api, API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import { toast } from "sonner";
 import ModalPortal from "@/components/ModalPortal";
@@ -46,21 +46,69 @@ import {
   Search,
   Square,
   CheckSquare,
+  Paperclip,
+  Download,
 } from "lucide-react";
 
 const SUMMARY_MODEL_OPTIONS = [
-  { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (Recomendado)", desc: "Velocidade máxima e precisão multimodal avançada." },
-  { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", desc: "Desempenho estável para análise de documentos e imagens." },
-  { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", desc: "Modelo ultra rápido para síntese instantânea." },
-  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", desc: "Excelente para leitura de tabelas e fórmulas." },
-  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", desc: "Análise profunda e raciocínio pedagógico avançado." },
+  { id: "gemini-4-hydrogen", name: "Gemini 4 Hydrogen / Flash (Recomendado)", desc: "Alta precisão pedagógica, leitura de PDFs e fotos." },
+  { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash-Lite", desc: "Modelo ultra rápido para extração e resumos ágeis." },
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", desc: "Estável para tabelas, fórmulas e leitura multimodal." },
+  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", desc: "Raciocínio aprofundado para matérias complexas." },
 ];
 
 const TONE_OPTIONS = [
   { id: "completo", label: "Completo & Didático" },
   { id: "objetivo", label: "Direto para Revisão" },
   { id: "formulas", label: "Foco em Fórmulas & Exemplos" },
+  { id: "prova", label: "Foco em Prova & Pegadinhas" },
 ];
+
+function normalizeModelChoice(modelId) {
+  const m = String(modelId || "").trim();
+  const valid = new Set(SUMMARY_MODEL_OPTIONS.map((o) => o.id));
+  if (valid.has(m)) return m;
+  if (m.includes("lite")) return "gemini-3.1-flash-lite";
+  if (m.includes("2.5-pro")) return "gemini-2.5-pro";
+  if (m.includes("2.5-flash")) return "gemini-2.5-flash";
+  return "gemini-4-hydrogen";
+}
+
+function normalizeAttachmentItem(a) {
+  if (!a) return null;
+  if (typeof a === "string") {
+    return { id: a, original_filename: a, content_type: "" };
+  }
+  if (typeof a === "object" && a.id) {
+    return {
+      id: String(a.id),
+      original_filename: String(a.original_filename || a.filename || a.id),
+      content_type: a.content_type || "",
+      size: a.size,
+    };
+  }
+  return null;
+}
+
+function isImageAttachment(att) {
+  if (!att) return false;
+  const ct = String(att.content_type || "").toLowerCase();
+  const name = String(att.original_filename || "").toLowerCase();
+  return ct.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|svg|avif)$/i.test(name);
+}
+
+function getFileDownloadUrl(fileId) {
+  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : "";
+  return `${API}/files/${fileId}/download?auth=${encodeURIComponent(token || "")}`;
+}
+
+function hasSummaryContent(s) {
+  if (!s) return false;
+  const hasText = Boolean(s.summary_text && String(s.summary_text).trim().length > 0);
+  const hasFiles = (Array.isArray(s.attachments) && s.attachments.length > 0) ||
+    (Array.isArray(s.attachment_ids) && s.attachment_ids.length > 0);
+  return hasText || hasFiles;
+}
 
 export default function AdminResumosPanel() {
   const [subjects, setSubjects] = useState([]);
@@ -86,7 +134,7 @@ export default function AdminResumosPanel() {
 
   // AI Model & Google Drive drawer
   const [showInfraConfig, setShowInfraConfig] = useState(false);
-  const [summaryModel, setSummaryModel] = useState("gemini-3.8-flash");
+  const [summaryModel, setSummaryModel] = useState("gemini-4-hydrogen");
   const [savingModel, setSavingModel] = useState(false);
 
   // Extração de Tópicos por Matéria
@@ -121,7 +169,7 @@ export default function AdminResumosPanel() {
     formulas: "",
   });
 
-  // Modal de Resumo (Criar Manual / Editar / Preview KaTeX)
+  // Modal de Resumo (Criar Manual / Resumo Pronto / Editar / Preview KaTeX)
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [editingSummaryItem, setEditingSummaryItem] = useState(null);
   const [editorViewTab, setEditorViewTab] = useState("edit"); // 'edit' | 'preview'
@@ -129,6 +177,7 @@ export default function AdminResumosPanel() {
   const [editorAiInstructions, setEditorAiInstructions] = useState("");
   const [regeneratingInEditor, setRegeneratingInEditor] = useState(false);
   const [savingSummaryEditor, setSavingSummaryEditor] = useState(false);
+  const [uploadingSummaryFiles, setUploadingSummaryFiles] = useState(false);
   const [summaryForm, setSummaryForm] = useState({
     subject: "",
     topic: "",
@@ -137,6 +186,8 @@ export default function AdminResumosPanel() {
     key_concepts: "",
     formulas: "",
     is_published: false,
+    is_ready_made: false,
+    attachments: [],
   });
 
   // Leitura / Preview e Lightbox
@@ -152,7 +203,7 @@ export default function AdminResumosPanel() {
     try {
       const { data } = await api.get("/app-status");
       if (data?.summary_ai_model) {
-        setSummaryModel(data.summary_ai_model);
+        setSummaryModel(normalizeModelChoice(data.summary_ai_model));
       }
     } catch {}
   };
@@ -568,8 +619,8 @@ export default function AdminResumosPanel() {
     }
   };
 
-  // CRUD, Regeração & Disponibilização de Resumos (Aba 2)
-  const openCreateSummaryModal = () => {
+  // CRUD, Resumos Prontos, Regeração & Disponibilização de Resumos (Aba 2)
+  const openCreateSummaryModal = ({ readyMade = false } = {}) => {
     setEditingSummaryItem(null);
     setEditorViewTab("edit");
     setEditorAiInstructions("");
@@ -580,7 +631,9 @@ export default function AdminResumosPanel() {
       summary_text: "",
       key_concepts: "",
       formulas: "",
-      is_published: false,
+      is_published: Boolean(readyMade),
+      is_ready_made: Boolean(readyMade),
+      attachments: [],
     });
     setShowSummaryModal(true);
   };
@@ -589,6 +642,12 @@ export default function AdminResumosPanel() {
     setEditingSummaryItem(summaryItem);
     setEditorViewTab("edit");
     setEditorAiInstructions("");
+    const rawAttachments =
+      Array.isArray(summaryItem.attachments) && summaryItem.attachments.length > 0
+        ? summaryItem.attachments
+        : Array.isArray(summaryItem.attachment_ids)
+        ? summaryItem.attachment_ids
+        : [];
     setSummaryForm({
       subject: summaryItem.subject || selectedSubject || "",
       topic: summaryItem.topic || "",
@@ -597,8 +656,61 @@ export default function AdminResumosPanel() {
       key_concepts: (summaryItem.key_concepts || []).join(", "),
       formulas: (summaryItem.formulas || []).join(", "),
       is_published: Boolean(summaryItem.is_published),
+      is_ready_made: Boolean(summaryItem.is_ready_made),
+      attachments: rawAttachments.map(normalizeAttachmentItem).filter(Boolean),
     });
     setShowSummaryModal(true);
+  };
+
+  const handleUploadSummaryFiles = async (e) => {
+    const fileList = Array.from(e.target.files || []);
+    if (fileList.length === 0) return;
+    setUploadingSummaryFiles(true);
+    try {
+      let autoLoadedText = "";
+      const uploadedItems = [];
+      for (const f of fileList) {
+        const fd = new FormData();
+        fd.append("file", f);
+        const { data } = await api.post("/files/upload", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        uploadedItems.push({
+          id: data.id,
+          original_filename: data.filename || f.name,
+          content_type: data.content_type || f.type || "",
+          size: data.size || f.size,
+        });
+        if (!autoLoadedText && /\.(txt|md)$/i.test(f.name) && f.size <= 250000) {
+          try {
+            const raw = await f.text();
+            if (raw && raw.trim()) autoLoadedText = raw.trim().slice(0, 40000);
+          } catch {}
+        }
+      }
+      setSummaryForm((prev) => ({
+        ...prev,
+        is_ready_made: true,
+        attachments: [...(prev.attachments || []), ...uploadedItems],
+        summary_text: prev.summary_text.trim() ? prev.summary_text : autoLoadedText || prev.summary_text,
+        topic:
+          prev.topic.trim() ||
+          (uploadedItems[0]?.original_filename || "").replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " "),
+      }));
+      toast.success(`${uploadedItems.length} arquivo(s) anexado(s) ao resumo pronto!`);
+    } catch (err) {
+      toast.error(formatApiError(err));
+    } finally {
+      setUploadingSummaryFiles(false);
+      e.target.value = "";
+    }
+  };
+
+  const removeSummaryAttachment = (fileId) => {
+    setSummaryForm((prev) => ({
+      ...prev,
+      attachments: (prev.attachments || []).filter((a) => a.id !== fileId),
+    }));
   };
 
   const handleRegenerateSummary = async (summaryItem, { tone = "completo", instructions = "" } = {}) => {
@@ -663,8 +775,11 @@ export default function AdminResumosPanel() {
 
   const handleSaveSummaryModal = async (e, { publishAfterSave = false } = {}) => {
     if (e) e.preventDefault();
-    if (!summaryForm.subject.trim() || !summaryForm.topic.trim() || !summaryForm.summary_text.trim()) {
-      toast.error("Matéria, Título e Conteúdo do Resumo são obrigatórios.");
+    const hasText = Boolean(summaryForm.summary_text && summaryForm.summary_text.trim());
+    const hasFiles = Array.isArray(summaryForm.attachments) && summaryForm.attachments.length > 0;
+
+    if (!summaryForm.subject.trim() || !summaryForm.topic.trim() || (!hasText && !hasFiles)) {
+      toast.error("Matéria, Título e Conteúdo (texto ou arquivo do resumo pronto) são obrigatórios.");
       return;
     }
 
@@ -680,6 +795,9 @@ export default function AdminResumosPanel() {
       formulas: summaryForm.formulas
         ? summaryForm.formulas.split(",").map((s) => s.trim()).filter(Boolean)
         : [],
+      is_ready_made: Boolean(summaryForm.is_ready_made),
+      attachment_ids: (summaryForm.attachments || []).map((a) => a.id),
+      attachments: summaryForm.attachments || [],
       is_published: publishAfterSave ? true : summaryForm.is_published,
     };
 
@@ -712,6 +830,25 @@ export default function AdminResumosPanel() {
       setActiveSection("resumos");
       await reloadTopicsAndSummaries();
     } catch (err) {
+      if (!err?.response) {
+        try {
+          const nowIso = new Date().toISOString();
+          const summaryId = editingSummaryItem?.id || `sum-${Date.now()}`;
+          await firebaseService.saveSummary({
+            id: summaryId,
+            ...payload,
+            status: payload.is_published ? "published" : "draft",
+            published_at: payload.is_published ? (editingSummaryItem?.published_at || nowIso) : null,
+            created_at: editingSummaryItem?.created_at || nowIso,
+            updated_at: nowIso,
+          });
+          toast.success(publishAfterSave ? "Resumo disponibilizado!" : "Resumo salvo!");
+          setShowSummaryModal(false);
+          setActiveSection("resumos");
+          await reloadTopicsAndSummaries();
+          return;
+        } catch {}
+      }
       toast.error(formatApiError(err));
     } finally {
       setSavingSummaryEditor(false);
@@ -719,8 +856,8 @@ export default function AdminResumosPanel() {
   };
 
   const handlePublishSummary = async (summaryItem, { isRebroadcast = false } = {}) => {
-    if (!summaryItem.summary_text || !summaryItem.summary_text.trim()) {
-      toast.error("Escreva o conteúdo do resumo antes de disponibilizar para os alunos.");
+    if (!hasSummaryContent(summaryItem)) {
+      toast.error("Escreva o conteúdo ou anexe um arquivo antes de disponibilizar para os alunos.");
       return;
     }
     setPublishingSummaryId(summaryItem.id);
@@ -887,8 +1024,18 @@ export default function AdminResumosPanel() {
 
           <button
             type="button"
-            onClick={openCreateSummaryModal}
-            className="nb-btn px-3.5 py-2 bg-emerald-300 hover:bg-emerald-400 text-black font-heading font-black rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5 text-xs uppercase"
+            onClick={() => openCreateSummaryModal({ readyMade: true })}
+            className="nb-btn px-3.5 py-2 bg-emerald-400 hover:bg-emerald-300 text-black font-heading font-black rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5 text-xs uppercase"
+            data-testid="open-ready-summary-btn"
+          >
+            <Upload className="w-4 h-4 stroke-[2.5]" />
+            <span>Colocar Resumo Pronto</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateSummaryModal({ readyMade: false })}
+            className="nb-btn px-3.5 py-2 bg-white hover:bg-emerald-100 text-black font-heading font-black rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5 text-xs uppercase"
             data-testid="create-manual-summary-btn"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
@@ -1115,7 +1262,7 @@ export default function AdminResumosPanel() {
                     Extrair Tópicos de "{selectedSubject}"
                   </h2>
                   <p className="text-xs font-bold text-neutral-600">
-                    Envie fotos do quadro/caderno ou anotações. A IA identifica os tópicos e salva nesta aba (separado dos resumos e invisível aos alunos).
+                    Envie fotos do quadro/caderno, arquivos PDF ou anotações. A IA lê o material, identifica os tópicos e salva nesta aba (separado dos resumos e invisível aos alunos).
                   </p>
                 </div>
               </div>
@@ -1127,7 +1274,7 @@ export default function AdminResumosPanel() {
                   type="file"
                   id="resumo-source-files"
                   multiple
-                  accept="image/*"
+                  accept="image/*,application/pdf,.txt,.md,.csv"
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -1138,9 +1285,9 @@ export default function AdminResumosPanel() {
                   >
                     <Upload className="w-5 h-5 text-sky-600 mb-1" />
                     <span className="font-heading font-black text-xs text-black uppercase">
-                      Anexar Fotos do Conteúdo
+                      Anexar Fotos, PDF ou Texto
                     </span>
-                    <span className="text-[11px] font-bold text-neutral-500">PNG, JPG, WEBP</span>
+                    <span className="text-[11px] font-bold text-neutral-500">PNG, JPG, WEBP, PDF, TXT, MD</span>
                   </label>
 
                   {googleDriveConnected && (
@@ -1160,22 +1307,29 @@ export default function AdminResumosPanel() {
 
                 {selectedFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-1">
-                    {selectedFiles.map((file, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-2 px-2.5 py-1 bg-amber-200 text-black border-2 border-black rounded-lg text-xs font-bold shadow-[1.5px_1.5px_0_0_#000]"
-                      >
-                        <ImageIcon className="w-3.5 h-3.5" />
-                        <span className="max-w-[140px] truncate">{file.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeSelectedFile(idx)}
-                          className="text-rose-700 hover:text-black font-black"
+                    {selectedFiles.map((file, idx) => {
+                      const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+                      const isTxt = file.type?.startsWith("text/") || /\.(txt|md|csv)$/i.test(file.name || "");
+                      return (
+                        <div
+                          key={idx}
+                          className={`flex items-center gap-2 px-2.5 py-1 text-black border-2 border-black rounded-lg text-xs font-bold shadow-[1.5px_1.5px_0_0_#000] ${
+                            isPdf ? "bg-rose-200" : isTxt ? "bg-sky-200" : "bg-amber-200"
+                          }`}
                         >
-                          ×
-                        </button>
-                      </div>
-                    ))}
+                          {isPdf || isTxt ? <FileText className="w-3.5 h-3.5 shrink-0" /> : <ImageIcon className="w-3.5 h-3.5 shrink-0" />}
+                          <span className="max-w-[160px] truncate">{file.name}</span>
+                          {isPdf && <span className="px-1 py-0.5 bg-white border border-black rounded text-[9px] font-black">PDF</span>}
+                          <button
+                            type="button"
+                            onClick={() => removeSelectedFile(idx)}
+                            className="text-rose-700 hover:text-black font-black"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1492,22 +1646,41 @@ export default function AdminResumosPanel() {
                       {topicItem.source_image_ids && topicItem.source_image_ids.length > 0 && (
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[11px] font-heading font-black uppercase text-neutral-600 flex items-center gap-1">
-                            <ImageIcon className="w-3.5 h-3.5" /> Fontes ({topicItem.source_image_ids.length}):
+                            <Paperclip className="w-3.5 h-3.5" /> Fontes ({topicItem.source_image_ids.length}):
                           </span>
-                          {topicItem.source_image_ids.map((imgId) => (
-                            <button
-                              key={imgId}
-                              type="button"
-                              onClick={() => setPreviewImageId(imgId)}
-                              className="group relative w-11 h-11 rounded-lg border-2 border-black overflow-hidden cursor-pointer bg-black"
-                            >
-                              <img
-                                src={`/api/files/${imgId}`}
-                                alt="Fonte"
-                                className="w-full h-full object-cover group-hover:opacity-75"
-                              />
-                            </button>
-                          ))}
+                          {topicItem.source_image_ids.map((srcId) => {
+                            const meta = (topicItem.source_files || []).find((f) => f.id === srcId) || { id: srcId, original_filename: srcId, content_type: "" };
+                            const isImg = meta.content_type ? isImageAttachment(meta) : !/\.(pdf|txt|md|csv)$/i.test(meta.original_filename || "");
+                            if (isImg) {
+                              return (
+                                <button
+                                  key={srcId}
+                                  type="button"
+                                  onClick={() => setPreviewImageId(srcId)}
+                                  className="group relative w-11 h-11 rounded-lg border-2 border-black overflow-hidden cursor-pointer bg-black"
+                                  title={meta.original_filename}
+                                >
+                                  <img
+                                    src={`/api/files/${srcId}`}
+                                    alt={meta.original_filename || "Fonte"}
+                                    className="w-full h-full object-cover group-hover:opacity-75"
+                                  />
+                                </button>
+                              );
+                            }
+                            return (
+                              <a
+                                key={srcId}
+                                href={getFileDownloadUrl(srcId)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-100 hover:bg-rose-200 border-2 border-black rounded-lg text-[11px] font-black text-black"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-rose-700" />
+                                <span className="max-w-[160px] truncate">{meta.original_filename}</span>
+                              </a>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -1528,14 +1701,24 @@ export default function AdminResumosPanel() {
             <div>
               <h2 className="text-lg sm:text-xl font-heading font-black text-black uppercase flex items-center gap-2">
                 <FileText className="w-5 h-5 text-emerald-700" />
-                <span>Resumos Gerados — {selectedSubject}</span>
+                <span>Resumos de {selectedSubject}</span>
               </h2>
               <p className="text-xs font-bold text-neutral-600 mt-0.5">
-                Revise o texto, regere se precisar e clique em "Disponibilizar para Alunos" para liberar na matéria e enviar notificação.
+                Revise resumos gerados com IA ou coloque um resumo pronto (PDF, imagem, arquivo ou texto) para disponibilizar direto aos alunos.
               </p>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => openCreateSummaryModal({ readyMade: true })}
+                className="nb-btn px-3 py-1.5 bg-emerald-400 hover:bg-emerald-300 text-black font-heading font-black text-xs uppercase rounded-lg border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5"
+                data-testid="section-ready-summary-btn"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Colocar Resumo Pronto</span>
+              </button>
+
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-600" />
                 <input
@@ -1575,24 +1758,34 @@ export default function AdminResumosPanel() {
               <span>Carregando resumos...</span>
             </div>
           ) : filteredSummaries.length === 0 ? (
-            <div className="p-10 text-center bg-emerald-50/60 rounded-xl border-2 border-dashed border-black space-y-2">
+            <div className="p-10 text-center bg-emerald-50/60 rounded-xl border-2 border-dashed border-black space-y-3">
               <FileText className="w-10 h-10 text-emerald-700 mx-auto" />
               <p className="font-heading font-black text-black text-base uppercase">
                 {subjectSummaries.length === 0
-                  ? `Nenhum resumo gerado ainda em ${selectedSubject}`
+                  ? `Nenhum resumo cadastrado ainda em ${selectedSubject}`
                   : "Nenhum resumo neste filtro"}
               </p>
               <p className="text-xs font-bold text-neutral-600 max-w-md mx-auto">
-                Vá até a aba "1. Tópicos de {selectedSubject}", marque os tópicos desejados e clique em "Gerar Resumo", ou crie um manualmente.
+                Você pode colocar um resumo já pronto (PDF, foto ou texto) agora mesmo ou gerar a partir dos tópicos extraídos pela IA.
               </p>
-              <button
-                type="button"
-                onClick={() => setActiveSection("topics")}
-                className="nb-btn px-4 py-2 bg-sky-300 hover:bg-sky-400 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black inline-flex items-center gap-1.5 mt-2"
-              >
-                <ListChecks className="w-4 h-4" />
-                <span>Ir para Tópicos de {selectedSubject}</span>
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => openCreateSummaryModal({ readyMade: true })}
+                  className="nb-btn px-4 py-2 bg-emerald-400 hover:bg-emerald-300 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black inline-flex items-center gap-1.5 shadow-[2px_2px_0_0_#000]"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Colocar Resumo Pronto</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection("topics")}
+                  className="nb-btn px-4 py-2 bg-sky-300 hover:bg-sky-400 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black inline-flex items-center gap-1.5 shadow-[2px_2px_0_0_#000]"
+                >
+                  <ListChecks className="w-4 h-4" />
+                  <span>Ir para Tópicos de {selectedSubject}</span>
+                </button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-5">
@@ -1603,6 +1796,15 @@ export default function AdminResumosPanel() {
                 const includedTopics = Array.isArray(sumItem.source_topic_titles)
                   ? sumItem.source_topic_titles
                   : [];
+                const sumAttachments = (
+                  Array.isArray(sumItem.attachments) && sumItem.attachments.length > 0
+                    ? sumItem.attachments
+                    : Array.isArray(sumItem.attachment_ids)
+                    ? sumItem.attachment_ids
+                    : []
+                )
+                  .map(normalizeAttachmentItem)
+                  .filter(Boolean);
 
                 return (
                   <div
@@ -1635,6 +1837,25 @@ export default function AdminResumosPanel() {
                               </>
                             )}
                           </span>
+
+                          {sumItem.is_ready_made ? (
+                            <span className="nb-badge bg-amber-200 text-amber-950 text-[10px] font-heading font-black uppercase border-2 border-black inline-flex items-center gap-1">
+                              <Upload className="w-3 h-3" />
+                              <span>Resumo Pronto</span>
+                            </span>
+                          ) : (
+                            <span className="nb-badge bg-violet-200 text-violet-950 text-[10px] font-heading font-black uppercase border-2 border-black inline-flex items-center gap-1">
+                              <Sparkles className="w-3 h-3" />
+                              <span>Gerado por IA</span>
+                            </span>
+                          )}
+
+                          {sumAttachments.length > 0 && (
+                            <span className="nb-badge bg-white text-black text-[10px] font-heading font-black uppercase border-2 border-black inline-flex items-center gap-1 tabular-nums">
+                              <Paperclip className="w-3 h-3" />
+                              <span>{sumAttachments.length} arquivo(s)</span>
+                            </span>
+                          )}
 
                           {isPublished && sumItem.published_at && (
                             <span className="text-[11px] font-bold text-emerald-900 tabular-nums">
@@ -1696,43 +1917,86 @@ export default function AdminResumosPanel() {
                       </div>
                     </div>
 
-                    {/* Preview text */}
-                    <div className="bg-white p-4 rounded-xl border-2 border-black space-y-2">
+                    {/* Preview text & attachments */}
+                    <div className="bg-white p-4 rounded-xl border-2 border-black space-y-3">
                       <div className="flex items-center justify-between text-[11px] font-heading font-black uppercase text-neutral-600">
-                        <span>Conteúdo do Resumo</span>
+                        <span>{sumItem.summary_text?.trim() ? "Conteúdo do Resumo" : "Arquivos do Resumo Pronto"}</span>
                         <button
                           type="button"
                           onClick={() => setPreviewSummary(sumItem)}
                           className="text-sky-700 hover:underline flex items-center gap-1"
                         >
-                          <Eye className="w-3.5 h-3.5" /> Abrir leitura completa
+                          <Eye className="w-3.5 h-3.5" /> Abrir visualização completa
                         </button>
                       </div>
-                      <div className="text-xs sm:text-sm font-body text-neutral-800 whitespace-pre-line line-clamp-4 leading-relaxed">
-                        {sumItem.summary_text}
-                      </div>
+
+                      {sumItem.summary_text?.trim() ? (
+                        <div className="text-xs sm:text-sm font-body text-neutral-800 whitespace-pre-line line-clamp-4 leading-relaxed">
+                          {sumItem.summary_text}
+                        </div>
+                      ) : null}
+
+                      {sumAttachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {sumAttachments.map((att) =>
+                            isImageAttachment(att) ? (
+                              <button
+                                key={att.id}
+                                type="button"
+                                onClick={() => setPreviewImageId(att.id)}
+                                className="group relative w-16 h-16 rounded-xl border-2 border-black overflow-hidden bg-neutral-100 shadow-[2px_2px_0_0_#000]"
+                                title={att.original_filename}
+                              >
+                                <img
+                                  src={`/api/files/${att.id}`}
+                                  alt={att.original_filename}
+                                  className="w-full h-full object-cover group-hover:opacity-80"
+                                />
+                              </button>
+                            ) : (
+                              <a
+                                key={att.id}
+                                href={getFileDownloadUrl(att.id)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 border-2 border-black rounded-lg text-xs font-black text-black shadow-[2px_2px_0_0_#000]"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-amber-800 shrink-0" />
+                                <span className="max-w-[180px] truncate">{att.original_filename}</span>
+                                <Download className="w-3 h-3 shrink-0" />
+                              </a>
+                            )
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions Footer */}
                     <div className="pt-3 border-t-2 border-black/15 flex flex-wrap items-center justify-between gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => handleRegenerateSummary(sumItem)}
-                        disabled={isRegenerating}
-                        className="nb-btn px-4 py-2 bg-violet-200 hover:bg-violet-300 text-violet-950 font-heading font-black text-xs uppercase rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5"
-                      >
-                        {isRegenerating ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>Regerando...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Wand2 className="w-4 h-4" />
-                            <span>Regerar com IA</span>
-                          </>
-                        )}
-                      </button>
+                      {!sumItem.is_ready_made ? (
+                        <button
+                          type="button"
+                          onClick={() => handleRegenerateSummary(sumItem)}
+                          disabled={isRegenerating}
+                          className="nb-btn px-4 py-2 bg-violet-200 hover:bg-violet-300 text-violet-950 font-heading font-black text-xs uppercase rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5"
+                        >
+                          {isRegenerating ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Regerando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Wand2 className="w-4 h-4" />
+                              <span>Regerar com IA</span>
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <span className="text-[11px] font-bold text-emerald-900 bg-emerald-100 px-3 py-1.5 rounded-lg border border-black/40">
+                          Material pronto inserido diretamente pelo professor
+                        </span>
+                      )}
 
                       <div className="flex flex-wrap items-center gap-2">
                         {!isPublished ? (
@@ -1901,13 +2165,19 @@ export default function AdminResumosPanel() {
         <ModalPortal>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 sm:p-5 backdrop-blur-sm">
             <div className="nb-card w-full max-w-4xl bg-white rounded-2xl border-3 border-black shadow-[8px_8px_0_0_#000] flex flex-col max-h-[92vh] overflow-hidden">
-              <div className="p-4 sm:p-5 bg-amber-300 border-b-2 border-black flex items-center justify-between gap-3">
+              <div className={`p-4 sm:p-5 border-b-2 border-black flex items-center justify-between gap-3 ${summaryForm.is_ready_made ? "bg-emerald-300" : "bg-amber-300"}`}>
                 <div>
                   <h3 className="text-base sm:text-xl font-heading font-black text-black uppercase">
-                    {editingSummaryItem ? "Editar & Revisar Resumo" : "Novo Resumo Manual"}
+                    {editingSummaryItem
+                      ? "Editar & Revisar Resumo"
+                      : summaryForm.is_ready_made
+                      ? "Colocar Resumo Pronto"
+                      : "Novo Resumo Manual"}
                   </h3>
                   <p className="text-xs font-bold text-neutral-800">
-                    Revise o texto, regere com IA se necessário e disponibilize quando estiver pronto para os alunos.
+                    {summaryForm.is_ready_made
+                      ? "Suba seu PDF, imagem ou arquivo pronto e/ou cole o texto já formatado — sem precisar gerar pela IA."
+                      : "Revise o texto, regere com IA se necessário e disponibilize quando estiver pronto para os alunos."}
                   </p>
                 </div>
                 <button
@@ -1968,19 +2238,54 @@ export default function AdminResumosPanel() {
 
               <div className="p-5 overflow-y-auto space-y-4 flex-1">
                 {editorViewTab === "preview" ? (
-                  summaryForm.summary_text.trim() ? (
-                    <MarkdownSummaryViewer
-                      markdown={summaryForm.summary_text}
-                      title={summaryForm.topic || "Preview do Resumo"}
-                      subtitle={`Matéria: ${summaryForm.subject}`}
-                      subjects={[summaryForm.subject]}
-                      showToolbar={false}
-                    />
-                  ) : (
-                    <div className="p-10 text-center bg-neutral-50 rounded-xl border-2 border-dashed border-black">
-                      <p className="font-heading font-black text-sm text-black">Nenhum texto de resumo ainda.</p>
-                    </div>
-                  )
+                  <div className="space-y-4">
+                    {summaryForm.summary_text.trim() ? (
+                      <MarkdownSummaryViewer
+                        markdown={summaryForm.summary_text}
+                        title={summaryForm.topic || "Preview do Resumo"}
+                        subtitle={`Matéria: ${summaryForm.subject}`}
+                        subjects={[summaryForm.subject]}
+                        showToolbar={false}
+                      />
+                    ) : null}
+
+                    {summaryForm.attachments?.length > 0 && (
+                      <div className="nb-card bg-emerald-50 p-4 rounded-xl border-2 border-black space-y-2.5">
+                        <h4 className="text-xs font-heading font-black uppercase text-black flex items-center gap-1.5">
+                          <Paperclip className="w-4 h-4" /> Arquivos do Resumo ({summaryForm.attachments.length})
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {summaryForm.attachments.map((att) =>
+                            isImageAttachment(att) ? (
+                              <img
+                                key={att.id}
+                                src={`/api/files/${att.id}`}
+                                alt={att.original_filename}
+                                className="w-24 h-24 object-cover rounded-xl border-2 border-black"
+                              />
+                            ) : (
+                              <a
+                                key={att.id}
+                                href={getFileDownloadUrl(att.id)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 px-3 py-2 bg-white border-2 border-black rounded-xl text-xs font-black"
+                              >
+                                <FileText className="w-4 h-4 text-emerald-700" />
+                                <span>{att.original_filename}</span>
+                              </a>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {!summaryForm.summary_text.trim() && (!summaryForm.attachments || summaryForm.attachments.length === 0) && (
+                      <div className="p-10 text-center bg-neutral-50 rounded-xl border-2 border-dashed border-black">
+                        <p className="font-heading font-black text-sm text-black">Nenhum texto ou arquivo anexado ainda.</p>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2005,8 +2310,90 @@ export default function AdminResumosPanel() {
                           onChange={(e) => setSummaryForm({ ...summaryForm, topic: e.target.value })}
                           placeholder="Ex: Revisão Completa — Cinemática"
                           className="nb-input"
+                          data-testid="summary-editor-title-input"
                         />
                       </div>
+                    </div>
+
+                    {/* Zona de upload para Resumo Pronto (PDF, imagem, DOCX, etc.) */}
+                    <div className="bg-emerald-50/70 p-4 rounded-xl border-2 border-black space-y-3">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div>
+                          <label className="text-xs font-heading font-black uppercase text-black flex items-center gap-1.5">
+                            <Paperclip className="w-4 h-4 text-emerald-700" />
+                            <span>Anexar Arquivos Prontos (Opcional — PDF, Fotos, Docs, Slides)</span>
+                          </label>
+                          <p className="text-[11px] font-bold text-neutral-600 mt-0.5">
+                            Se você já tem o resumo pronto em PDF, imagem ou documento, anexe aqui e disponibilize direto aos alunos (pode enviar só o arquivo ou combinar com texto).
+                          </p>
+                        </div>
+                        <label className="flex items-center gap-1.5 text-[11px] font-black cursor-pointer bg-white px-2.5 py-1 rounded-lg border border-black">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(summaryForm.is_ready_made)}
+                            onChange={(e) => setSummaryForm({ ...summaryForm, is_ready_made: e.target.checked })}
+                            className="accent-emerald-600"
+                          />
+                          <span>Resumo Pronto</span>
+                        </label>
+                      </div>
+
+                      <label
+                        className="block w-full border-2 border-dashed border-black rounded-xl bg-white hover:bg-emerald-100/60 p-4 cursor-pointer transition-colors text-center"
+                        data-testid="summary-ready-upload-zone"
+                      >
+                        {uploadingSummaryFiles ? (
+                          <div className="flex items-center justify-center gap-2 text-xs font-black">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Enviando arquivo(s)...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload className="w-5 h-5 mx-auto mb-1 text-emerald-700" />
+                            <span className="text-xs font-heading font-black uppercase text-black block">
+                              Clique para selecionar arquivos do resumo pronto
+                            </span>
+                            <span className="text-[11px] font-bold text-neutral-500">
+                              PDF, PNG, JPG, DOC/DOCX, PPT/PPTX, TXT, MD
+                            </span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          multiple
+                          accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md"
+                          onChange={handleUploadSummaryFiles}
+                          disabled={uploadingSummaryFiles}
+                          className="hidden"
+                          data-testid="summary-ready-file-input"
+                        />
+                      </label>
+
+                      {summaryForm.attachments?.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {summaryForm.attachments.map((att) => (
+                            <div
+                              key={att.id}
+                              className="flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-black rounded-xl text-xs font-bold shadow-[2px_2px_0_0_#000]"
+                            >
+                              {isImageAttachment(att) ? (
+                                <ImageIcon className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+                              ) : (
+                                <FileText className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                              )}
+                              <span className="max-w-[200px] truncate">{att.original_filename}</span>
+                              <button
+                                type="button"
+                                onClick={() => removeSummaryAttachment(att.id)}
+                                className="text-rose-700 hover:text-black font-black"
+                                title="Remover arquivo"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {editingSummaryItem && (
@@ -2026,13 +2413,13 @@ export default function AdminResumosPanel() {
 
                     <div>
                       <label className="block text-xs font-heading font-black uppercase text-black mb-1">
-                        Conteúdo do Resumo para os Alunos (Markdown + LaTeX $...$):
+                        Texto do Resumo (opcional se houver arquivo anexado — aceita Markdown + LaTeX $...$):
                       </label>
                       <textarea
-                        rows={11}
+                        rows={10}
                         value={summaryForm.summary_text}
                         onChange={(e) => setSummaryForm({ ...summaryForm, summary_text: e.target.value })}
-                        placeholder="Escreva o conteúdo do resumo..."
+                        placeholder="Cole seu resumo pronto aqui ou edite o conteúdo gerado..."
                         className="nb-input resize-y font-body text-sm leading-relaxed"
                         data-testid="summary-editor-textarea"
                       />
@@ -2074,9 +2461,9 @@ export default function AdminResumosPanel() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
-                    disabled={savingSummaryEditor}
+                    disabled={savingSummaryEditor || uploadingSummaryFiles || (!summaryForm.summary_text.trim() && !(summaryForm.attachments?.length > 0))}
                     onClick={() => handleSaveSummaryModal(null, { publishAfterSave: false })}
-                    className="nb-btn px-4 py-2.5 bg-amber-300 hover:bg-amber-400 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000]"
+                    className="nb-btn px-4 py-2.5 bg-amber-300 hover:bg-amber-400 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] disabled:opacity-45"
                     data-testid="save-summary-draft-btn"
                   >
                     {savingSummaryEditor ? "Salvando..." : "Salvar Rascunho"}
@@ -2084,7 +2471,7 @@ export default function AdminResumosPanel() {
 
                   <button
                     type="button"
-                    disabled={savingSummaryEditor || !summaryForm.summary_text.trim()}
+                    disabled={savingSummaryEditor || uploadingSummaryFiles || (!summaryForm.summary_text.trim() && !(summaryForm.attachments?.length > 0))}
                     onClick={() => handleSaveSummaryModal(null, { publishAfterSave: true })}
                     className="nb-btn px-4 py-2.5 bg-emerald-400 hover:bg-emerald-300 text-black font-heading font-black text-xs uppercase rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5 disabled:opacity-45"
                     data-testid="save-and-publish-summary-btn"
@@ -2120,13 +2507,53 @@ export default function AdminResumosPanel() {
                 </button>
               </div>
 
-              <MarkdownSummaryViewer
-                markdown={previewSummary.summary_text}
-                title={previewSummary.topic}
-                subtitle={`Matéria: ${previewSummary.subject}`}
-                subjects={[previewSummary.subject]}
-                showToolbar={true}
-              />
+              {previewSummary.summary_text?.trim() && (
+                <MarkdownSummaryViewer
+                  markdown={previewSummary.summary_text}
+                  title={previewSummary.topic}
+                  subtitle={`Matéria: ${previewSummary.subject}`}
+                  subjects={[previewSummary.subject]}
+                  showToolbar={true}
+                />
+              )}
+
+              {((previewSummary.attachments?.length > 0) || (previewSummary.attachment_ids?.length > 0)) && (
+                <div className="nb-card bg-emerald-50 p-4 rounded-2xl border-2 border-black space-y-3">
+                  <h4 className="font-heading font-black text-xs sm:text-sm uppercase text-black flex items-center gap-2">
+                    <Paperclip className="w-4 h-4 text-emerald-700" />
+                    <span>Arquivos do Resumo Pronto:</span>
+                  </h4>
+                  <div className="flex flex-wrap gap-3">
+                    {(previewSummary.attachments?.length ? previewSummary.attachments : previewSummary.attachment_ids)
+                      .map(normalizeAttachmentItem)
+                      .filter(Boolean)
+                      .map((att) =>
+                        isImageAttachment(att) ? (
+                          <button
+                            key={att.id}
+                            type="button"
+                            onClick={() => setPreviewImageId(att.id)}
+                            className="group relative w-28 h-28 rounded-xl border-2 border-black overflow-hidden bg-white shadow-[2px_2px_0_0_#000]"
+                          >
+                            <img src={`/api/files/${att.id}`} alt={att.original_filename} className="w-full h-full object-cover" />
+                          </button>
+                        ) : (
+                          <a
+                            key={att.id}
+                            href={getFileDownloadUrl(att.id)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-amber-100 border-2 border-black rounded-xl text-xs font-heading font-black text-black shadow-[2px_2px_0_0_#000]"
+                          >
+                            <FileText className="w-4 h-4 text-emerald-700" />
+                            <span>{att.original_filename}</span>
+                            <Download className="w-3.5 h-3.5" />
+                          </a>
+                        )
+                      )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </ModalPortal>

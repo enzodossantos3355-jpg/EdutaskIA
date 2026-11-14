@@ -1,7 +1,27 @@
 import React, { useEffect } from "react";
-import { Sparkles, Star, Megaphone, X, CheckCircle2, Bell, Calendar, Pin, Pencil } from "lucide-react";
+import { Sparkles, Star, Megaphone, X, CheckCircle2, Bell, Calendar, Pin, Pencil, Paperclip, FileText, Download } from "lucide-react";
+import { API } from "@/lib/api";
 import { formatDateBR } from "@/lib/priority";
 import ModalPortal from "@/components/ModalPortal";
+
+function normalizeModalAtt(item) {
+  if (!item) return null;
+  if (typeof item === "string") return { id: item, original_filename: item, content_type: "" };
+  if (typeof item === "object" && item.id) {
+    return {
+      id: String(item.id),
+      original_filename: String(item.original_filename || item.filename || item.id),
+      content_type: item.content_type || "",
+    };
+  }
+  return null;
+}
+
+function isModalImgAtt(att) {
+  const ct = String(att?.content_type || "").toLowerCase();
+  const name = String(att?.original_filename || "").toLowerCase();
+  return ct.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|svg|avif)$/i.test(name);
+}
 
 /**
  * SpecialAnnouncementModal
@@ -23,6 +43,15 @@ export default function SpecialAnnouncementModal({
   }, [isOpen, onClose]);
 
   if (!isOpen || !announcement) return null;
+
+  const rawAtts =
+    Array.isArray(announcement.attachment_files) && announcement.attachment_files.length > 0
+      ? announcement.attachment_files
+      : Array.isArray(announcement.attachments)
+      ? announcement.attachments
+      : [];
+  const attachments = rawAtts.map(normalizeModalAtt).filter(Boolean);
+  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : "";
 
   return (
     <ModalPortal>
@@ -103,6 +132,47 @@ export default function SpecialAnnouncementModal({
           <div className="bg-white rounded-xl border-2 border-black p-4 sm:p-5 text-neutral-900 text-sm sm:text-base whitespace-pre-wrap leading-relaxed shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
             {announcement.message}
           </div>
+
+          {attachments.length > 0 && (
+            <div className="bg-amber-50 rounded-xl border-2 border-black p-4 space-y-2.5" data-testid="special-modal-attachments">
+              <div className="text-xs font-heading font-black uppercase text-black flex items-center gap-1.5">
+                <Paperclip className="w-4 h-4 text-amber-700" />
+                <span>Anexos ({attachments.length})</span>
+              </div>
+              <div className="flex flex-wrap gap-2.5">
+                {attachments.map((att) =>
+                  isModalImgAtt(att) ? (
+                    <a
+                      key={att.id}
+                      href={`${API}/files/${att.id}/download?auth=${encodeURIComponent(token || "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group relative w-24 h-24 rounded-xl border-2 border-black overflow-hidden bg-white shadow-[2px_2px_0_0_#000]"
+                      title={att.original_filename}
+                    >
+                      <img
+                        src={`/api/files/${att.id}`}
+                        alt={att.original_filename}
+                        className="w-full h-full object-cover group-hover:opacity-80"
+                      />
+                    </a>
+                  ) : (
+                    <a
+                      key={att.id}
+                      href={`${API}/files/${att.id}/download?auth=${encodeURIComponent(token || "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-2 bg-white hover:bg-amber-100 border-2 border-black rounded-xl text-xs font-black text-black shadow-[2px_2px_0_0_#000]"
+                    >
+                      <FileText className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span className="max-w-[200px] truncate">{att.original_filename}</span>
+                      <Download className="w-3.5 h-3.5 shrink-0" />
+                    </a>
+                  )
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="text-xs text-neutral-800 bg-neutral-100 rounded-xl p-3 border border-neutral-300 flex items-start gap-2.5">
             <Pin className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />

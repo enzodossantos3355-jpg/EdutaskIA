@@ -124,6 +124,73 @@ function BotSandboxBanner({ onPointsUpdated }) {
   );
 }
 
+function normalizeStudentAnnAttachment(item) {
+  if (!item) return null;
+  if (typeof item === "string") return { id: item, original_filename: item, content_type: "" };
+  if (typeof item === "object" && item.id) {
+    return {
+      id: String(item.id),
+      original_filename: String(item.original_filename || item.filename || item.id),
+      content_type: item.content_type || "",
+      size: item.size,
+    };
+  }
+  return null;
+}
+
+function getStudentAnnAttachments(a) {
+  const raw =
+    Array.isArray(a?.attachment_files) && a.attachment_files.length > 0
+      ? a.attachment_files
+      : Array.isArray(a?.attachments)
+      ? a.attachments
+      : [];
+  return raw.map(normalizeStudentAnnAttachment).filter(Boolean);
+}
+
+function isStudentAnnImage(att) {
+  const ct = String(att?.content_type || "").toLowerCase();
+  const name = String(att?.original_filename || "").toLowerCase();
+  return ct.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|svg|avif)$/i.test(name);
+}
+
+function StudentAnnouncementAttachments({ announcement }) {
+  const atts = getStudentAnnAttachments(announcement);
+  if (atts.length === 0) return null;
+  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : "";
+  return (
+    <div className="mb-3 space-y-2" data-testid={`student-announcement-attachments-${announcement.id}`}>
+      <div className="text-[11px] font-heading font-black uppercase tracking-wide text-neutral-700 flex items-center gap-1">
+        <Paperclip className="w-3.5 h-3.5" />
+        <span>Anexos ({atts.length})</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {atts.map((att) =>
+          isStudentAnnImage(att) ? (
+            <a
+              key={att.id}
+              href={`${API}/files/${att.id}/download?auth=${encodeURIComponent(token || "")}`}
+              target="_blank"
+              rel="noreferrer"
+              className="group relative w-20 h-20 rounded-xl border-2 border-black overflow-hidden bg-white shadow-[2px_2px_0_0_#000]"
+              title={att.original_filename}
+              data-testid={`attachment-${att.id}`}
+            >
+              <img
+                src={`/api/files/${att.id}`}
+                alt={att.original_filename}
+                className="w-full h-full object-cover group-hover:opacity-80"
+              />
+            </a>
+          ) : (
+            <AttachmentLink key={att.id} file={att} />
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StudentAnnouncementsView({ announcements, specialAnnouncements, regularAnnouncements, onOpenSpecialModal }) {
   return (
     <div className="space-y-6" data-testid="student-announcements-panel">
@@ -195,6 +262,7 @@ function StudentAnnouncementsView({ announcements, specialAnnouncements, regular
                         <p className="text-xs sm:text-sm text-neutral-800 whitespace-pre-wrap leading-relaxed mb-3 bg-white/75 p-3 rounded-lg border border-amber-900/10">
                           {a.message}
                         </p>
+                        <StudentAnnouncementAttachments announcement={a} />
                         <AnnouncementComments announcementId={a.id} />
                       </div>
                     </div>
@@ -248,6 +316,7 @@ function StudentAnnouncementsView({ announcements, specialAnnouncements, regular
                           )}
                         </div>
                         <p className="text-xs sm:text-sm text-neutral-800 whitespace-pre-wrap mb-2">{a.message}</p>
+                        <StudentAnnouncementAttachments announcement={a} />
                         <div className="flex items-center gap-2 flex-wrap text-[11px] text-neutral-600 font-bold">
                           <span>{formatDateBR(a.created_at)}</span>
                           {(a.was_edited || a.edited_at) && a.edited_at && (

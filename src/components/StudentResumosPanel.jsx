@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { api, formatApiError } from "@/lib/api";
+import { api, API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import { toast } from "sonner";
 import MarkdownSummaryViewer from "./MarkdownSummaryViewer";
@@ -18,6 +18,9 @@ import {
   Loader2,
   Zap,
   CheckCircle2,
+  Paperclip,
+  FileText,
+  Download,
 } from "lucide-react";
 
 function isRecentlyPublished(item) {
@@ -25,6 +28,52 @@ function isRecentlyPublished(item) {
   if (!ref) return false;
   const diff = Date.now() - new Date(ref).getTime();
   return diff >= 0 && diff <= 48 * 60 * 60 * 1000;
+}
+
+function normalizeAttachmentItem(a) {
+  if (!a) return null;
+  if (typeof a === "string") {
+    return { id: a, original_filename: a, content_type: "" };
+  }
+  if (typeof a === "object" && a.id) {
+    return {
+      id: String(a.id),
+      original_filename: String(a.original_filename || a.filename || a.id),
+      content_type: a.content_type || "",
+      size: a.size,
+    };
+  }
+  return null;
+}
+
+function isImageAttachment(att) {
+  if (!att) return false;
+  const ct = String(att.content_type || "").toLowerCase();
+  const name = String(att.original_filename || "").toLowerCase();
+  return ct.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|svg|avif)$/i.test(name);
+}
+
+function getFileDownloadUrl(fileId) {
+  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : "";
+  return `${API}/files/${fileId}/download?auth=${encodeURIComponent(token || "")}`;
+}
+
+function hasSummaryContent(item) {
+  if (!item) return false;
+  const hasText = Boolean(item.summary_text && String(item.summary_text).trim().length > 0);
+  const hasFiles = (Array.isArray(item.attachments) && item.attachments.length > 0) ||
+    (Array.isArray(item.attachment_ids) && item.attachment_ids.length > 0);
+  return hasText || hasFiles;
+}
+
+function getSummaryAttachments(item) {
+  const raw =
+    Array.isArray(item?.attachments) && item.attachments.length > 0
+      ? item.attachments
+      : Array.isArray(item?.attachment_ids)
+      ? item.attachment_ids
+      : [];
+  return raw.map(normalizeAttachmentItem).filter(Boolean);
 }
 
 export default function StudentResumosPanel() {
@@ -50,7 +99,7 @@ export default function StudentResumosPanel() {
       ]);
       if (!Array.isArray(sumRes?.data)) throw new Error("Formato inválido de resumos");
       const publishedOnly = sumRes.data.filter(
-        (item) => item.is_published === true && item.summary_text && item.summary_text.trim().length > 0
+        (item) => item.is_published === true && hasSummaryContent(item)
       );
       setSummaries(publishedOnly);
       setSubjects(Array.isArray(subjRes?.data) ? subjRes.data : []);
@@ -61,7 +110,7 @@ export default function StudentResumosPanel() {
           firebaseService.getAllSubjects().catch(() => []),
         ]);
         const publishedOnly = (allSummaries || []).filter(
-          (item) => item.is_published === true && item.summary_text && item.summary_text.trim().length > 0
+          (item) => item.is_published === true && hasSummaryContent(item)
         );
         setSummaries(publishedOnly);
         setSubjects(Array.isArray(allSubjects) ? allSubjects : []);
@@ -80,14 +129,16 @@ export default function StudentResumosPanel() {
         item.subject.toLowerCase() === selectedSubject.toLowerCase();
 
       const query = searchQuery.trim().toLowerCase();
+      const atts = getSummaryAttachments(item);
       const matchQuery =
         !query ||
         item.subject.toLowerCase().includes(query) ||
         item.topic.toLowerCase().includes(query) ||
-        item.summary_text.toLowerCase().includes(query) ||
+        (item.summary_text || "").toLowerCase().includes(query) ||
         (item.key_concepts || []).some((c) => c.toLowerCase().includes(query)) ||
         (item.formulas || []).some((f) => f.toLowerCase().includes(query)) ||
-        (item.source_topic_titles || []).some((t) => t.toLowerCase().includes(query));
+        (item.source_topic_titles || []).some((t) => t.toLowerCase().includes(query)) ||
+        atts.some((a) => (a.original_filename || "").toLowerCase().includes(query));
 
       return matchSubject && matchQuery;
     });
@@ -255,6 +306,7 @@ export default function StudentResumosPanel() {
                     const includedTopics = Array.isArray(topicItem.source_topic_titles)
                       ? topicItem.source_topic_titles
                       : [];
+                    const atts = getSummaryAttachments(topicItem);
 
                     return (
                       <div
@@ -264,11 +316,22 @@ export default function StudentResumosPanel() {
                       >
                         <div className="space-y-3">
                           <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="nb-badge bg-emerald-200 text-emerald-950 border border-black text-[10px] font-black uppercase inline-flex items-center gap-1">
                                 <CheckCircle2 className="w-3 h-3" />
                                 <span>Disponível</span>
                               </span>
+                              {topicItem.is_ready_made && (
+                                <span className="nb-badge bg-sky-200 text-sky-950 border border-black text-[10px] font-black uppercase">
+                                  Resumo Pronto
+                                </span>
+                              )}
+                              {atts.length > 0 && (
+                                <span className="nb-badge bg-white text-black border border-black text-[10px] font-black uppercase inline-flex items-center gap-1 tabular-nums">
+                                  <Paperclip className="w-3 h-3" />
+                                  <span>{atts.length} arquivo(s)</span>
+                                </span>
+                              )}
                               {isNew && (
                                 <span className="nb-badge bg-amber-300 text-black border border-black text-[10px] font-black uppercase">
                                   Novo
@@ -323,9 +386,23 @@ export default function StudentResumosPanel() {
                             </div>
                           )}
 
-                          <p className="text-xs sm:text-sm font-body font-medium text-neutral-800 line-clamp-3 leading-relaxed bg-neutral-50 p-3.5 rounded-xl border-2 border-black/30">
-                            {topicItem.summary_text}
-                          </p>
+                          {topicItem.summary_text?.trim() ? (
+                            <p className="text-xs sm:text-sm font-body font-medium text-neutral-800 line-clamp-3 leading-relaxed bg-neutral-50 p-3.5 rounded-xl border-2 border-black/30">
+                              {topicItem.summary_text}
+                            </p>
+                          ) : atts.length > 0 ? (
+                            <div className="text-xs sm:text-sm font-body font-bold text-emerald-950 bg-emerald-50 p-3.5 rounded-xl border-2 border-black/40 space-y-1.5">
+                              <p>Material pronto anexado pelo professor ({atts.length} arquivo(s)) — clique abaixo para visualizar ou baixar:</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {atts.slice(0, 3).map((a) => (
+                                  <span key={a.id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-black rounded text-[11px] font-black">
+                                    <FileText className="w-3 h-3 text-emerald-700" />
+                                    <span className="max-w-[160px] truncate">{a.original_filename}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="pt-3 border-t-2 border-black/15 flex items-center justify-between gap-2">
@@ -336,7 +413,7 @@ export default function StudentResumosPanel() {
                             data-testid={`read-summary-${topicItem.id}`}
                           >
                             <Eye className="w-4 h-4" />
-                            <span>Estudar Resumo Completo</span>
+                            <span>{topicItem.summary_text?.trim() ? "Estudar Resumo Completo" : "Abrir Material do Resumo"}</span>
                           </button>
                         </div>
                       </div>
@@ -356,9 +433,16 @@ export default function StudentResumosPanel() {
             <div className="nb-card relative w-full max-w-4xl bg-white rounded-2xl border-3 border-black shadow-[8px_8px_0_0_#000] p-5 sm:p-6 space-y-6 max-h-[92vh] overflow-y-auto">
               <div className="flex items-start justify-between border-b-3 border-black pb-4 gap-3">
                 <div>
-                  <span className={`nb-badge ${getSubjectBadgeStyle(readingTopic.subject)} font-heading font-black text-xs uppercase border-2 border-black inline-block mb-2 shadow-[2px_2px_0_0_#000]`}>
-                    {readingTopic.subject}
-                  </span>
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <span className={`nb-badge ${getSubjectBadgeStyle(readingTopic.subject)} font-heading font-black text-xs uppercase border-2 border-black inline-block shadow-[2px_2px_0_0_#000]`}>
+                      {readingTopic.subject}
+                    </span>
+                    {readingTopic.is_ready_made && (
+                      <span className="nb-badge bg-emerald-200 text-emerald-950 font-heading font-black text-xs uppercase border-2 border-black">
+                        Material Pronto do Professor
+                      </span>
+                    )}
+                  </div>
                   <h2 className="text-xl sm:text-2xl font-heading font-black text-black leading-tight">
                     {readingTopic.topic}
                   </h2>
@@ -373,37 +457,107 @@ export default function StudentResumosPanel() {
                 </button>
               </div>
 
-              <MarkdownSummaryViewer
-                markdown={readingTopic.summary_text}
-                title={readingTopic.topic}
-                subtitle={`Matéria: ${readingTopic.subject} | Liberado em: ${new Date(readingTopic.published_at || readingTopic.updated_at || readingTopic.created_at).toLocaleDateString("pt-BR")}`}
-                subjects={[readingTopic.subject]}
-                showToolbar={true}
-              />
+              {readingTopic.summary_text?.trim() && (
+                <MarkdownSummaryViewer
+                  markdown={readingTopic.summary_text}
+                  title={readingTopic.topic}
+                  subtitle={`Matéria: ${readingTopic.subject} | Liberado em: ${new Date(readingTopic.published_at || readingTopic.updated_at || readingTopic.created_at).toLocaleDateString("pt-BR")}`}
+                  subjects={[readingTopic.subject]}
+                  showToolbar={true}
+                />
+              )}
+
+              {getSummaryAttachments(readingTopic).length > 0 && (
+                <div className="nb-card bg-emerald-50 p-4 sm:p-5 rounded-2xl border-2 border-black space-y-3">
+                  <h4 className="font-heading font-black text-xs sm:text-sm uppercase text-black flex items-center gap-2">
+                    <Paperclip className="w-4 h-4 text-emerald-700" />
+                    <span>Arquivos do Resumo / Material Pronto:</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {getSummaryAttachments(readingTopic).map((att) =>
+                      isImageAttachment(att) ? (
+                        <div
+                          key={att.id}
+                          onClick={() => setPreviewImageId(att.id)}
+                          className="group relative rounded-xl border-2 border-black overflow-hidden cursor-pointer shadow-[2px_2px_0_0_#000] bg-white"
+                        >
+                          <img
+                            src={`/api/files/${att.id}`}
+                            alt={att.original_filename}
+                            className="w-full h-44 object-cover group-hover:opacity-85 transition-opacity"
+                          />
+                          <div className="px-3 py-1.5 bg-white border-t-2 border-black flex items-center justify-between text-xs font-black">
+                            <span className="truncate">{att.original_filename}</span>
+                            <Eye className="w-4 h-4 shrink-0" />
+                          </div>
+                        </div>
+                      ) : (
+                        <a
+                          key={att.id}
+                          href={getFileDownloadUrl(att.id)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between gap-3 px-4 py-3 bg-white hover:bg-amber-100 border-2 border-black rounded-xl shadow-[2px_2px_0_0_#000] transition-colors"
+                          data-testid={`student-summary-attachment-${att.id}`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <FileText className="w-5 h-5 text-emerald-700 shrink-0" />
+                            <span className="text-xs sm:text-sm font-heading font-black text-black truncate">
+                              {att.original_filename}
+                            </span>
+                          </div>
+                          <span className="nb-badge bg-emerald-300 text-black text-[10px] font-black uppercase border border-black inline-flex items-center gap-1 shrink-0">
+                            <Download className="w-3 h-3" /> Abrir
+                          </span>
+                        </a>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
 
               {readingTopic.source_image_ids && readingTopic.source_image_ids.length > 0 && (
                 <div className="nb-card bg-neutral-50 p-4 rounded-2xl border-2 border-black space-y-3">
                   <h4 className="font-heading font-black text-xs sm:text-sm uppercase text-black flex items-center gap-2">
                     <ImageIcon className="w-4 h-4 text-neutral-700" />
-                    <span>Fotos de Apoio do Professor:</span>
+                    <span>Materiais de Apoio do Professor:</span>
                   </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {readingTopic.source_image_ids.map((imgId) => (
-                      <div
-                        key={imgId}
-                        onClick={() => setPreviewImageId(imgId)}
-                        className="group relative h-24 rounded-xl border-2 border-black overflow-hidden cursor-pointer shadow-[2px_2px_0_0_#000] bg-black"
-                      >
-                        <img
-                          src={`/api/files/${imgId}`}
-                          alt="Fonte"
-                          className="w-full h-full object-cover group-hover:opacity-75 transition-opacity"
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 text-white">
-                          <Eye className="w-5 h-5" />
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex flex-wrap gap-3">
+                    {readingTopic.source_image_ids.map((srcId) => {
+                      const meta = (readingTopic.source_files || []).find((f) => f.id === srcId) || { id: srcId, original_filename: srcId, content_type: "" };
+                      const isImg = meta.content_type ? isImageAttachment(meta) : !/\.(pdf|txt|md|csv)$/i.test(meta.original_filename || "");
+                      if (isImg) {
+                        return (
+                          <div
+                            key={srcId}
+                            onClick={() => setPreviewImageId(srcId)}
+                            className="group relative w-28 h-24 rounded-xl border-2 border-black overflow-hidden cursor-pointer shadow-[2px_2px_0_0_#000] bg-black"
+                          >
+                            <img
+                              src={`/api/files/${srcId}`}
+                              alt={meta.original_filename || "Fonte"}
+                              className="w-full h-full object-cover group-hover:opacity-75 transition-opacity"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 text-white">
+                              <Eye className="w-5 h-5" />
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <a
+                          key={srcId}
+                          href={getFileDownloadUrl(srcId)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-white hover:bg-amber-100 border-2 border-black rounded-xl text-xs font-black text-black shadow-[2px_2px_0_0_#000]"
+                        >
+                          <FileText className="w-4 h-4 text-rose-700" />
+                          <span className="max-w-[180px] truncate">{meta.original_filename}</span>
+                          <Download className="w-3.5 h-3.5" />
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
               )}

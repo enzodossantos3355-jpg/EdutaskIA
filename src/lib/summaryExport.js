@@ -359,57 +359,103 @@ function escapeHtml(str) {
 // Helper: Simple Markdown to HTML converter with rich formatting support
 function parseMarkdownToHtml(md) {
   if (!md) return "";
-  const lines = md.split("\n");
+  const lines = String(md).replace(/\r\n/g, "\n").split("\n");
   let html = "";
-  let inList = false;
+  let inUl = false;
+  let inOl = false;
+  let tableRows = [];
 
-  lines.forEach((line) => {
-    let trimmed = line.trim();
-    if (!trimmed) {
-      if (inList) {
-        html += "</ul>";
-        inList = false;
-      }
-      return;
+  const closeLists = () => {
+    if (inUl) { html += "</ul>"; inUl = false; }
+    if (inOl) { html += "</ol>"; inOl = false; }
+  };
+
+  const flushTable = () => {
+    if (tableRows.length === 0) return;
+    if (tableRows.length >= 2) {
+      const parseCells = (row) => row.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+      const headers = parseCells(tableRows[0]);
+      const isSep = (r) => /^\|(?:\s*:?-{2,}:?\s*\|)+$/.test(r.trim());
+      const bodyStart = isSep(tableRows[1]) ? 2 : 1;
+      html += `<table style="width:100%;border-collapse:collapse;margin:12px 0;border:2px solid #000;">`;
+      html += `<thead><tr style="background:#fef3c7;">${headers.map((h) => `<th style="border:1px solid #000;padding:8px;text-align:left;font-weight:800;">${formatInline(h)}</th>`).join("")}</tr></thead><tbody>`;
+      tableRows.slice(bodyStart).filter((r) => !isSep(r)).forEach((r, idx) => {
+        const cells = parseCells(r);
+        html += `<tr style="background:${idx % 2 === 0 ? "#fff" : "#f8fafc"};">${headers.map((_, ci) => `<td style="border:1px solid #cbd5e1;padding:7px;">${formatInline(cells[ci] || "")}</td>`).join("")}</tr>`;
+      });
+      html += `</tbody></table>`;
+    } else {
+      html += `<p>${formatInline(tableRows[0])}</p>`;
     }
+    tableRows = [];
+  };
 
-    // Clean stray code markers and lone backticks
-    if (trimmed.startsWith("```") || trimmed === "`") return;
-
-    // Convert LaTeX math to readable plain math
-    if (trimmed.includes("$$") || trimmed.includes("\\begin{") || trimmed.includes("\\frac")) {
-      trimmed = cleanLatexFormula(trimmed);
+  const formatInline = (text) => {
+    let t = text;
+    if (t.includes("$$") || t.includes("\\begin{") || t.includes("\\frac") || t.includes("$")) {
+      t = cleanLatexFormula(t);
     }
-
-    // Format bold and italic
-    trimmed = escapeHtml(trimmed)
+    return escapeHtml(t)
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/__(.*?)__/g, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em>$1</em>")
       .replace(/`(.*?)`/g, "<code style='background:#f1f5f9;padding:2px 6px;border-radius:4px;'>$1</code>");
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      closeLists();
+      flushTable();
+      return;
+    }
+
+    if (trimmed.startsWith("```") || trimmed === "`") return;
+
+    if (trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.length > 2) {
+      closeLists();
+      tableRows.push(trimmed);
+      return;
+    }
+    flushTable();
+
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      closeLists();
+      html += `<hr style="border:none;border-top:2px dashed #cbd5e1;margin:16px 0;" />`;
+      return;
+    }
 
     if (trimmed.startsWith("# ")) {
-      if (inList) { html += "</ul>"; inList = false; }
-      html += `<h1>${trimmed.replace(/^#\s+/, "")}</h1>`;
+      closeLists();
+      html += `<h1>${formatInline(trimmed.replace(/^#\s+/, ""))}</h1>`;
     } else if (trimmed.startsWith("## ")) {
-      if (inList) { html += "</ul>"; inList = false; }
-      html += `<h2>${trimmed.replace(/^##\s+/, "")}</h2>`;
+      closeLists();
+      html += `<h2>${formatInline(trimmed.replace(/^##\s+/, ""))}</h2>`;
     } else if (trimmed.startsWith("### ")) {
-      if (inList) { html += "</ul>"; inList = false; }
-      html += `<h3>${trimmed.replace(/^###\s+/, "")}</h3>`;
-    } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-      if (!inList) {
-        html += "<ul>";
-        inList = true;
-      }
-      html += `<li>${trimmed.replace(/^[-*]\s+/, "")}</li>`;
+      closeLists();
+      html += `<h3>${formatInline(trimmed.replace(/^###\s+/, ""))}</h3>`;
+    } else if (trimmed.startsWith("#### ")) {
+      closeLists();
+      html += `<h4 style="font-weight:800;margin:10px 0 4px;">${formatInline(trimmed.replace(/^####\s+/, ""))}</h4>`;
+    } else if (trimmed.startsWith(">")) {
+      closeLists();
+      html += `<div style="background:#fef3c7;border:2px solid #000;border-radius:8px;padding:10px 14px;margin:10px 0;font-weight:600;">${formatInline(trimmed.replace(/^>\s?/, ""))}</div>`;
+    } else if (/^[-*•]\s+/.test(trimmed)) {
+      if (inOl) { html += "</ol>"; inOl = false; }
+      if (!inUl) { html += "<ul>"; inUl = true; }
+      html += `<li>${formatInline(trimmed.replace(/^[-*•]\s+/, ""))}</li>`;
+    } else if (/^\d+[.)]\s+/.test(trimmed)) {
+      if (inUl) { html += "</ul>"; inUl = false; }
+      if (!inOl) { html += "<ol>"; inOl = true; }
+      html += `<li>${formatInline(trimmed.replace(/^\d+[.)]\s+/, ""))}</li>`;
     } else {
-      if (inList) { html += "</ul>"; inList = false; }
-      html += `<p>${trimmed}</p>`;
+      closeLists();
+      html += `<p>${formatInline(trimmed)}</p>`;
     }
   });
 
-  if (inList) html += "</ul>";
+  closeLists();
+  flushTable();
   return html;
 }
 
