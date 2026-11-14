@@ -156,6 +156,7 @@ async function runMaintenanceCycle(forceCacheClear = false) {
 
   if (forceCacheClear) {
     await clearStaleCachesAndKeepAuth();
+    await resetCorruptedFirestoreIndexedDB();
     return;
   }
 
@@ -192,18 +193,23 @@ export function initAutoCacheAndMemoryManager() {
   if (typeof window === "undefined" || initialized) return;
   initialized = true;
 
+  const hadSwController = Boolean("serviceWorker" in navigator && navigator.serviceWorker.controller);
   const currentVersion = getCurrentBuildVersion();
   let versionChanged = false;
+  let isFirstTrackedBuild = false;
   try {
     const previousVersion = localStorage.getItem(VERSION_STORAGE_KEY);
-    if (previousVersion && previousVersion !== currentVersion && currentVersion !== "dev") {
+    if (!previousVersion && currentVersion !== "dev") {
+      isFirstTrackedBuild = true;
+    } else if (previousVersion && previousVersion !== currentVersion && currentVersion !== "dev") {
       versionChanged = true;
     }
     localStorage.setItem(VERSION_STORAGE_KEY, currentVersion);
   } catch {}
 
-  // Immediate startup cleanup (clears old caches automatically whenever a new deploy arrives)
-  runMaintenanceCycle(versionChanged).catch(() => {});
+  // Clear stale caches & leftover Firestore IndexedDB automatically on new deploys or upgrades
+  const shouldForceCleanup = versionChanged || (isFirstTrackedBuild && hadSwController);
+  runMaintenanceCycle(shouldForceCleanup).catch(() => {});
 
   // Listen for new Service Worker taking control and refresh assets cleanly
   if ("serviceWorker" in navigator) {
@@ -211,8 +217,7 @@ export function initAutoCacheAndMemoryManager() {
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (refreshing) return;
       refreshing = true;
-      // Only auto-reload if a previous build version existed (avoid reloading on very first visit)
-      if (versionChanged) {
+      if (versionChanged || hadSwController) {
         triggerSafeReloadOnce();
       }
     });
@@ -227,7 +232,10 @@ export function initAutoCacheAndMemoryManager() {
       lower.includes("failed to fetch dynamically imported module") ||
       lower.includes("importing a module script failed")
     ) {
-      clearStaleCachesAndKeepAuth().finally(() => {
+      Promise.all([
+        clearStaleCachesAndKeepAuth(),
+        resetCorruptedFirestoreIndexedDB(),
+      ]).finally(() => {
         triggerSafeReloadOnce();
       });
     }
@@ -257,6 +265,11 @@ export function initAutoCacheAndMemoryManager() {
         runMaintenanceCycle(false).catch(() => {});
       }
     }
+  });
+
+  // Sanitize storage on page hide so heavy objects never persist
+  window.addEventListener("pagehide", () => {
+    pruneStaleLocalStorage();
   });
 }
 

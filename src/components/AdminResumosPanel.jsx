@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api, formatApiError } from "@/lib/api";
+import { firebaseService } from "@/lib/firebaseService";
 import { toast } from "sonner";
 import ModalPortal from "@/components/ModalPortal";
 import MarkdownSummaryViewer from "@/components/MarkdownSummaryViewer";
@@ -164,15 +165,30 @@ export default function AdminResumosPanel() {
         api.get("/admin/summary-topics"),
         api.get("/summaries"),
       ]);
-      const subjList = subjRes.data || [];
+      const subjList = Array.isArray(subjRes.data) ? subjRes.data : [];
       setSubjects(subjList);
       if (subjList.length > 0 && !selectedSubject) {
         setSelectedSubject(subjList[0].name);
       }
-      setTopics(topicsRes.data || []);
-      setSummaries(sumsRes.data || []);
+      setTopics(Array.isArray(topicsRes.data) ? topicsRes.data : []);
+      setSummaries(Array.isArray(sumsRes.data) ? sumsRes.data : []);
     } catch (err) {
-      toast.error(formatApiError(err));
+      try {
+        const [subjList, topicsList, sumsList] = await Promise.all([
+          firebaseService.getAllSubjects().catch(() => []),
+          firebaseService.getAllSummaryTopics().catch(() => []),
+          firebaseService.getAllSummaries().catch(() => []),
+        ]);
+        const validSubjs = Array.isArray(subjList) ? subjList : [];
+        setSubjects(validSubjs);
+        if (validSubjs.length > 0 && !selectedSubject) {
+          setSelectedSubject(validSubjs[0].name);
+        }
+        setTopics(Array.isArray(topicsList) ? topicsList : []);
+        setSummaries(Array.isArray(sumsList) ? sumsList : []);
+      } catch {
+        toast.error(formatApiError(err));
+      }
     } finally {
       setLoading(false);
     }
@@ -184,10 +200,19 @@ export default function AdminResumosPanel() {
         api.get("/admin/summary-topics"),
         api.get("/summaries"),
       ]);
-      setTopics(topicsRes.data || []);
-      setSummaries(sumsRes.data || []);
+      setTopics(Array.isArray(topicsRes.data) ? topicsRes.data : []);
+      setSummaries(Array.isArray(sumsRes.data) ? sumsRes.data : []);
     } catch (err) {
-      toast.error(formatApiError(err));
+      try {
+        const [topicsList, sumsList] = await Promise.all([
+          firebaseService.getAllSummaryTopics().catch(() => []),
+          firebaseService.getAllSummaries().catch(() => []),
+        ]);
+        setTopics(Array.isArray(topicsList) ? topicsList : []);
+        setSummaries(Array.isArray(sumsList) ? sumsList : []);
+      } catch {
+        toast.error(formatApiError(err));
+      }
     }
   };
 

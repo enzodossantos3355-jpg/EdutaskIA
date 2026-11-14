@@ -94,9 +94,11 @@ export function AuthProvider({ children }) {
       throw new Error("Resposta inválida de /auth/me");
     } catch (err) {
       const status = err?.response?.status;
-      const isClientFallbackToken = token.startsWith("token_");
-      // Only clear session if backend explicitly rejected a real JWT (not a client fallback token)
-      if ((status === 401 || status === 403) && !isClientFallbackToken) {
+      const isLiveBackendJsonRejection =
+        (status === 401 || status === 403) &&
+        typeof err?.response?.data?.detail === "string";
+      // Clear session if the live backend explicitly rejected the token (including old fallback tokens when backend is now awake)
+      if (isLiveBackendJsonRejection) {
         localStorage.removeItem("auth_token");
         localStorage.removeItem("cached_user");
         setUser(null);

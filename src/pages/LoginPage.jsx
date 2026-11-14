@@ -89,8 +89,18 @@ export default function LoginPage() {
 
     const load = async () => {
       try {
-        const { data } = await api.get("/auth/profiles", { timeout: 8000 });
+        const res = await api.get("/auth/profiles", { timeout: 8000 });
+        const data = res?.data;
+        const serverSynced = res?.headers?.["x-edutask-firebase-synced"] !== "false";
         if (!cancelled && Array.isArray(data) && data.length > 0) {
+          // If server hasn't synced Firestore yet and only has seed profiles, fetch directly from Firestore too
+          if (!serverSynced && data.length <= 2) {
+            const okDirect = await loadFirestoreProfiles();
+            if (okDirect) {
+              clearTimeout(fastFallbackTimer);
+              return;
+            }
+          }
           apiLoaded = true;
           clearTimeout(fastFallbackTimer);
           setProfiles(data);

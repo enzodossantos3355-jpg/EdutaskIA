@@ -380,6 +380,9 @@ export default function StudentDashboard() {
         firebaseService.setCollectionPrefix(statusRes.data.collection_prefix);
         setActiveCollectionPrefix(statusRes.data.collection_prefix);
       }
+      if (statusRes?.data?.firebase_synced === false) {
+        throw new Error("Servidor ainda sincronizando com Firestore — usando leitura direta");
+      }
       if (statusRes?.data?.annual_cycle) {
         setAnnualCycle(statusRes.data.annual_cycle);
       }

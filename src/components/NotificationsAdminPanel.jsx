@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api, formatApiError } from "@/lib/api";
+import { firebaseService } from "@/lib/firebaseService";
 import { toast } from "sonner";
 import {
   Bell,
@@ -108,6 +109,24 @@ export default function NotificationsAdminPanel() {
         setEnvMode(data.env_mode);
       }
     } catch (err) {
+      try {
+        const sysSettings = await firebaseService.getSettings("system");
+        if (sysSettings) {
+          if (sysSettings.push_settings) {
+            setSettings((prev) => ({ ...prev, ...sysSettings.push_settings }));
+          }
+          if (Array.isArray(sysSettings.push_subscriptions)) {
+            const subs = sysSettings.push_subscriptions;
+            setStats({
+              total_subscriptions: subs.length,
+              active_student_devices: subs.filter((s) => s.role === "aluno").length,
+              admin_devices: subs.filter((s) => s.role === "admin").length,
+              recent_subscribers: subs.slice(0, 15),
+            });
+          }
+          return;
+        }
+      } catch {}
       toast.error(formatApiError(err?.response?.data?.detail) || "Erro ao carregar configurações de notificação");
     } finally {
       setLoading(false);

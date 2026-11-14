@@ -981,15 +981,19 @@ class Database {
     } catch {}
   }
 
+  isFirebaseSynced(): boolean {
+    return this.firebaseSynced;
+  }
+
   async ensureSynced() {
     if (this.firebaseSynced) return;
     if (!this.syncPromise) {
       // Avoid hammering Firestore on every incoming request if a previous sync just failed
-      if (this.lastSyncAttemptAt > 0 && Date.now() - this.lastSyncAttemptAt < 15000) {
+      if (this.lastSyncAttemptAt > 0 && Date.now() - this.lastSyncAttemptAt < 5000) {
         return;
       }
       this.lastSyncAttemptAt = Date.now();
-      this.syncPromise = withTimeout(this.syncWithFirebase(), 12000)
+      this.syncPromise = withTimeout(this.syncWithFirebase(), 25000)
         .then((ok) => {
           this.firebaseSynced = ok;
           if (!ok) {
@@ -4933,6 +4937,7 @@ api.get('/app-status', (req, res) => {
     summary_ai_model: db.summary_ai_model || 'gemini-3.8-flash',
     env_mode: IS_PREVIEW_ENV ? 'preview' : 'production',
     collection_prefix: firebaseService.getCollectionPrefix(),
+    firebase_synced: db.isFirebaseSynced(),
     top3,
   });
 });
@@ -8268,6 +8273,7 @@ app.use('/api', async (req, res, next) => {
   } catch (err) {
     console.warn('[Firebase Sync Middleware Error]', err);
   }
+  res.setHeader('X-EduTask-Firebase-Synced', db.isFirebaseSynced() ? 'true' : 'false');
   next();
 }, api);
 

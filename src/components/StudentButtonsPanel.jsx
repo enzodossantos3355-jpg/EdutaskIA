@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import api, { formatApiError } from "@/lib/api";
+import { firebaseService } from "@/lib/firebaseService";
 import { toast } from "sonner";
 import ModalPortal from "@/components/ModalPortal";
 import {
@@ -59,8 +60,16 @@ export default function StudentButtonsPanel({ annualCycle }) {
     setLoading(true);
     try {
       const { data } = await api.get("/student-buttons");
+      if (!Array.isArray(data)) throw new Error("Resposta inválida");
       setButtons(data);
     } catch (e) {
+      try {
+        const sysSettings = await firebaseService.getSettings("system");
+        if (Array.isArray(sysSettings?.student_buttons)) {
+          setButtons(sysSettings.student_buttons);
+          return;
+        }
+      } catch {}
       toast.error(formatApiError(e?.response?.data?.detail) || "Falha ao carregar botões");
     } finally {
       setLoading(false);

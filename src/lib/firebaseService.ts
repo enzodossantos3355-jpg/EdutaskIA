@@ -202,7 +202,7 @@ export const firebaseService = {
     const path = `${col}/${taskId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...task, id: taskId });
-      await setDoc(doc(db, col, taskId), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, taskId), sanitized, { merge: true }), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -213,7 +213,7 @@ export const firebaseService = {
     const col = colPath('tasks');
     const path = `${col}/${taskId}`;
     try {
-      await deleteDoc(doc(db, col, taskId));
+      await withFirestoreTimeout(deleteDoc(doc(db, col, taskId)), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -262,7 +262,7 @@ export const firebaseService = {
         delete sanitized.avatar_data;
         delete sanitized.avatar_content_type;
       }
-      await setDoc(doc(db, col, userId), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, userId), sanitized, { merge: true }), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -274,7 +274,7 @@ export const firebaseService = {
     const path = `${col}/${userId}`;
     try {
       const sanitized = sanitizeFirestoreData(updates);
-      await updateDoc(doc(db, col, userId), sanitized);
+      await withFirestoreTimeout(updateDoc(doc(db, col, userId), sanitized), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.UPDATE, path);
@@ -285,7 +285,7 @@ export const firebaseService = {
     const col = colPath('users');
     const path = `${col}/${userId}`;
     try {
-      await deleteDoc(doc(db, col, userId));
+      await withFirestoreTimeout(deleteDoc(doc(db, col, userId)), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -313,7 +313,7 @@ export const firebaseService = {
     const path = `${col}/${subId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...subject, id: subId });
-      await setDoc(doc(db, col, subId), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, subId), sanitized, { merge: true }), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -324,7 +324,7 @@ export const firebaseService = {
     const col = colPath('subjects');
     const path = `${col}/${subId}`;
     try {
-      await deleteDoc(doc(db, col, subId));
+      await withFirestoreTimeout(deleteDoc(doc(db, col, subId)), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -352,7 +352,7 @@ export const firebaseService = {
     const path = `${col}/${annId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...ann, id: annId });
-      await setDoc(doc(db, col, annId), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, annId), sanitized, { merge: true }), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -363,7 +363,7 @@ export const firebaseService = {
     const col = colPath('announcements');
     const path = `${col}/${annId}`;
     try {
-      await deleteDoc(doc(db, col, annId));
+      await withFirestoreTimeout(deleteDoc(doc(db, col, annId)), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -391,7 +391,7 @@ export const firebaseService = {
     const path = `${col}/${compId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...comp, id: compId });
-      await setDoc(doc(db, col, compId), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, compId), sanitized, { merge: true }), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -403,7 +403,7 @@ export const firebaseService = {
     const compId = `${userId}_${taskId}`;
     const path = `${col}/${compId}`;
     try {
-      await deleteDoc(doc(db, col, compId));
+      await withFirestoreTimeout(deleteDoc(doc(db, col, compId)), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -414,7 +414,7 @@ export const firebaseService = {
   async getAllComments(): Promise<any[]> {
     const col = colPath('comments');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 12000, col);
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
@@ -431,7 +431,7 @@ export const firebaseService = {
     const path = `${col}/${commentId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...comment, id: commentId });
-      await setDoc(doc(db, col, commentId), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, commentId), sanitized, { merge: true }), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -442,7 +442,7 @@ export const firebaseService = {
     const col = colPath('comments');
     const path = `${col}/${commentId}`;
     try {
-      await deleteDoc(doc(db, col, commentId));
+      await withFirestoreTimeout(deleteDoc(doc(db, col, commentId)), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -469,7 +469,7 @@ export const firebaseService = {
     const path = `${col}/${key}`;
     try {
       const sanitized = sanitizeFirestoreData(data);
-      await setDoc(doc(db, col, key), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, key), sanitized, { merge: true }), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -480,7 +480,7 @@ export const firebaseService = {
   async getAllFiles(): Promise<any[]> {
     const col = colPath('files');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 20000, col);
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
@@ -497,7 +497,7 @@ export const firebaseService = {
     const path = `${col}/${fileId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...file, id: fileId });
-      await setDoc(doc(db, col, fileId), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, fileId), sanitized, { merge: true }), 15000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -528,7 +528,7 @@ export const firebaseService = {
     const col = colPath('files');
     const path = `${col}/${fileId}`;
     try {
-      await deleteDoc(doc(db, col, fileId));
+      await withFirestoreTimeout(deleteDoc(doc(db, col, fileId)), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -539,7 +539,7 @@ export const firebaseService = {
   async getAllLoginLogs(): Promise<any[]> {
     const col = colPath('login_logs');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 10000, col);
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
@@ -556,7 +556,7 @@ export const firebaseService = {
     const path = `${col}/${logId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...log, id: logId });
-      await setDoc(doc(db, col, logId), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, logId), sanitized, { merge: true }), 10000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -567,7 +567,7 @@ export const firebaseService = {
     const col = colPath('login_logs');
     const path = `${col}/${logId}`;
     try {
-      await deleteDoc(doc(db, col, logId));
+      await withFirestoreTimeout(deleteDoc(doc(db, col, logId)), 10000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -577,12 +577,12 @@ export const firebaseService = {
   async clearAllLoginLogs(): Promise<boolean> {
     const col = colPath('login_logs');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 12000, col);
       const promises: Promise<void>[] = [];
       snap.forEach((docSnap) => {
         promises.push(deleteDoc(doc(db, col, docSnap.id)));
       });
-      await Promise.all(promises);
+      await withFirestoreTimeout(Promise.all(promises), 15000, col);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, col);
@@ -593,7 +593,7 @@ export const firebaseService = {
   async getAllStudentAnswers(): Promise<any[]> {
     const col = colPath('student_answers');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 12000, col);
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
@@ -611,7 +611,7 @@ export const firebaseService = {
     const path = `${col}/${ansId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...ansObj, id: ansId });
-      await setDoc(doc(db, col, ansId), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, ansId), sanitized, { merge: true }), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -622,7 +622,7 @@ export const firebaseService = {
     const col = colPath('student_answers');
     const path = `${col}/${ansId}`;
     try {
-      await deleteDoc(doc(db, col, ansId));
+      await withFirestoreTimeout(deleteDoc(doc(db, col, ansId)), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -633,7 +633,7 @@ export const firebaseService = {
   async getAllSummaries(): Promise<any[]> {
     const col = colPath('summaries');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 12000, col);
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
@@ -650,7 +650,7 @@ export const firebaseService = {
     const path = `${col}/${sumId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...summary, id: sumId });
-      await setDoc(doc(db, col, sumId), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, sumId), sanitized, { merge: true }), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -661,7 +661,7 @@ export const firebaseService = {
     const col = colPath('summaries');
     const path = `${col}/${sumId}`;
     try {
-      await deleteDoc(doc(db, col, sumId));
+      await withFirestoreTimeout(deleteDoc(doc(db, col, sumId)), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -672,7 +672,7 @@ export const firebaseService = {
   async getAllSummaryTopics(): Promise<any[]> {
     const col = colPath('summary_topics');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 12000, col);
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
@@ -689,7 +689,7 @@ export const firebaseService = {
     const path = `${col}/${topicId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...topicItem, id: topicId });
-      await setDoc(doc(db, col, topicId), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, topicId), sanitized, { merge: true }), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -700,7 +700,7 @@ export const firebaseService = {
     const col = colPath('summary_topics');
     const path = `${col}/${topicId}`;
     try {
-      await deleteDoc(doc(db, col, topicId));
+      await withFirestoreTimeout(deleteDoc(doc(db, col, topicId)), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -711,7 +711,7 @@ export const firebaseService = {
   async getAllSummaryGenerations(): Promise<any[]> {
     const col = colPath('summary_generations');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 12000, col);
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
@@ -728,7 +728,7 @@ export const firebaseService = {
     const path = `${col}/${genId}`;
     try {
       const sanitized = sanitizeFirestoreData({ ...gen, id: genId });
-      await setDoc(doc(db, col, genId), sanitized, { merge: true });
+      await withFirestoreTimeout(setDoc(doc(db, col, genId), sanitized, { merge: true }), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, path);
@@ -739,7 +739,7 @@ export const firebaseService = {
     const col = colPath('summary_generations');
     const path = `${col}/${genId}`;
     try {
-      await deleteDoc(doc(db, col, genId));
+      await withFirestoreTimeout(deleteDoc(doc(db, col, genId)), 12000, path);
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.DELETE, path);
