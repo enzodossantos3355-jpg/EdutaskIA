@@ -524,6 +524,7 @@ interface FileRecord {
   data: Buffer;
   uploaded_by: string;
   created_at: string;
+  last_accessed_at?: number;
 }
 
 interface ChatSession {
@@ -848,6 +849,7 @@ class Database {
       this.seed();
       this.saveToDisk();
     }
+    this.cleanupMemoryAndCaches();
     whatsappService.setConfig(this.whatsapp_config);
     if (
       !IS_PREVIEW_ENV &&
@@ -860,6 +862,123 @@ class Database {
     this.ensureSynced().catch((err) => {
       console.warn('[Firebase Sync Error]', err);
     });
+  }
+
+  cleanupMemoryAndCaches() {
+    const now = Date.now();
+    const FILE_TTL_MS = 15 * 60 * 1000;
+    const MAX_CACHED_FILES = 20;
+    const MAX_CACHED_FILE_BYTES = 12 * 1024 * 1024; // 12 MB buffer cap in RAM
+
+    // 1. Prune expired Gemini quota entries
+    for (const [model, exp] of quotaExhaustedModels.entries()) {
+      if (now > exp) quotaExhaustedModels.delete(model);
+    }
+
+    // 2. Evict stale or excess in-memory file buffers (Firestore & disk hold copies)
+    let evictedFiles = 0;
+    const entries = Array.from(this.files.entries()).map(([id, rec]) => {
+      const ts = rec.last_accessed_at || Date.parse(rec.created_at || '') || 0;
+      const bytes = rec.data ? rec.data.length : 0;
+      return { id, rec, ts, bytes };
+    });
+
+    for (const item of entries) {
+      if (item.ts > 0 && now - item.ts > FILE_TTL_MS) {
+        this.files.delete(item.id);
+        evictedFiles++;
+      }
+    }
+
+    // Sort remaining newest-first and enforce max count & max heap bytes
+    const remaining = Array.from(this.files.entries())
+      .map(([id, rec]) => ({
+        id,
+        ts: rec.last_accessed_at || Date.parse(rec.created_at || '') || 0,
+        bytes: rec.data ? rec.data.length : 0,
+      }))
+      .sort((a, b) => b.ts - a.ts);
+
+    let totalBytes = 0;
+    remaining.forEach((item, index) => {
+      totalBytes += item.bytes;
+      if (index >= MAX_CACHED_FILES || totalBytes > MAX_CACHED_FILE_BYTES) {
+        this.files.delete(item.id);
+        evictedFiles++;
+      }
+    });
+
+    if (evictedFiles > 0) {
+      this.filesSynced = false;
+      this.filesSyncPromise = null;
+    }
+
+    // 3. Evict old AI chat sessions (> 6h inactive or > 40 sessions)
+    const CHAT_TTL_MS = 6 * 60 * 60 * 1000;
+    const MAX_CHATS = 40;
+    for (const [sid, session] of this.ai_chats.entries()) {
+      const updated = Date.parse(session.updated_at || '') || 0;
+      if (updated > 0 && now - updated > CHAT_TTL_MS) {
+        this.ai_chats.delete(sid);
+      }
+    }
+    if (this.ai_chats.size > MAX_CHATS) {
+      const sortedChats = Array.from(this.ai_chats.entries()).sort(
+        (a, b) => (Date.parse(b[1].updated_at || '') || 0) - (Date.parse(a[1].updated_at || '') || 0)
+      );
+      for (let i = MAX_CHATS; i < sortedChats.length; i++) {
+        this.ai_chats.delete(sortedChats[i][0]);
+      }
+    }
+
+    // 4. Cap in-memory logs
+    if (this.login_logs.length > 500) {
+      this.login_logs = this.login_logs.slice(0, 500);
+    }
+    if (this.webhook_logs.length > 50) {
+      this.webhook_logs = this.webhook_logs.slice(0, 50);
+    }
+
+    // 5. In ephemeral production containers (tmpdir), prune cached uploads > 2h if folder > 35MB
+    if (BASE_DIR === os.tmpdir() && fs.existsSync(UPLOAD_DIR)) {
+      try {
+        const filesInDir = fs.readdirSync(UPLOAD_DIR);
+        let dirTotalBytes = 0;
+        const stats: Array<{ path: string; size: number; mtimeMs: number }> = [];
+        for (const f of filesInDir) {
+          const full = path.join(UPLOAD_DIR, f);
+          try {
+            const st = fs.statSync(full);
+            if (st.isFile()) {
+              dirTotalBytes += st.size;
+              stats.push({ path: full, size: st.size, mtimeMs: st.mtimeMs });
+            }
+          } catch {}
+        }
+        const MAX_TMP_UPLOAD_BYTES = 35 * 1024 * 1024;
+        const TMP_FILE_TTL_MS = 2 * 60 * 60 * 1000;
+        if (dirTotalBytes > MAX_TMP_UPLOAD_BYTES) {
+          stats.sort((a, b) => a.mtimeMs - b.mtimeMs);
+          for (const entry of stats) {
+            if (dirTotalBytes <= MAX_TMP_UPLOAD_BYTES * 0.6) break;
+            if (now - entry.mtimeMs > TMP_FILE_TTL_MS) {
+              try {
+                fs.unlinkSync(entry.path);
+                dirTotalBytes -= entry.size;
+              } catch {}
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // 6. Optional GC hint under high RSS memory pressure (> 300 MB)
+    try {
+      const rss = process.memoryUsage().rss;
+      if (rss > 300 * 1024 * 1024 && typeof (global as any).gc === 'function') {
+        (global as any).gc();
+      }
+    } catch {}
   }
 
   async ensureSynced() {
@@ -1573,7 +1692,7 @@ api.post('/auth/login', (req, res) => {
       ip: req.ip || (req.headers['x-forwarded-for'] as string) || '127.0.0.1',
       created_at: new Date().toISOString(),
     });
-    if (db.login_logs.length > 2000) db.login_logs.pop();
+    if (db.login_logs.length > 500) db.login_logs.pop();
     updateStudentStreak(user.id);
   }
 
@@ -3275,9 +3394,11 @@ api.get('/files/:file_id/download', async (req, res) => {
           uploaded_by: 'system',
           created_at: new Date().toISOString(),
         };
-        db.files.set(file_id, file);
+        db.files.set(file_id, { ...file, last_accessed_at: Date.now() });
       }
     } catch {}
+  } else {
+    file.last_accessed_at = Date.now();
   }
 
   if (!file) {
@@ -3293,8 +3414,10 @@ api.get('/files/:file_id/download', async (req, res) => {
           data: Buffer.from(remoteFile.base64, 'base64'),
           uploaded_by: remoteFile.uploaded_by || 'system',
           created_at: remoteFile.created_at || new Date().toISOString(),
+          last_accessed_at: Date.now(),
         };
         db.files.set(file_id, file);
+        if (db.files.size > 24) db.cleanupMemoryAndCaches();
       }
     } catch (err: any) {
       const msg = String(err?.message || '');
@@ -3315,6 +3438,7 @@ export function getFileRecord(fileId: string | null | undefined): FileRecord | n
   if (!fileId) return null;
   let file = db.files.get(fileId);
   if (file && file.data && file.data.length > 0) {
+    file.last_accessed_at = Date.now();
     return file;
   }
   try {
@@ -3340,8 +3464,10 @@ export function getFileRecord(fileId: string | null | undefined): FileRecord | n
           data,
           uploaded_by: file?.uploaded_by || 'system',
           created_at: file?.created_at || new Date().toISOString(),
+          last_accessed_at: Date.now(),
         };
         db.files.set(fileId, record);
+        if (db.files.size > 24) db.cleanupMemoryAndCaches();
         return record;
       }
     }
@@ -3355,6 +3481,7 @@ export async function resolveFileRecordAsync(fileId: string | null | undefined):
   if (!fileId) return null;
   const syncRecord = getFileRecord(fileId);
   if (syncRecord && syncRecord.data && syncRecord.data.length > 0) {
+    syncRecord.last_accessed_at = Date.now();
     return syncRecord;
   }
   try {
@@ -3369,8 +3496,10 @@ export async function resolveFileRecordAsync(fileId: string | null | undefined):
         data: buffer,
         uploaded_by: remoteFile.uploaded_by || 'system',
         created_at: remoteFile.created_at || new Date().toISOString(),
+        last_accessed_at: Date.now(),
       };
       db.files.set(fileId, record);
+      if (db.files.size > 24) db.cleanupMemoryAndCaches();
       return record;
     }
   } catch (err: any) {
@@ -8106,10 +8235,24 @@ if (!process.env.VERCEL) {
   }, 30000);
 }
 
+// Automatic background memory & cache cleanup every 3 minutes
+if (!process.env.VERCEL && !process.env.VERCEL_ENV && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  setInterval(() => {
+    try {
+      db.cleanupMemoryAndCaches();
+    } catch {}
+  }, 3 * 60 * 1000);
+}
+
 // ---------------------------------------------------------------------------
 // Mount /api router with Firestore sync guarantee for Serverless environments
 // ---------------------------------------------------------------------------
 app.use('/api', async (req, res, next) => {
+  if (!req.path.startsWith('/files/')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
   if (!IS_PREVIEW_ENV && req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
     const reqOriginOrHost = String(
       req.headers['x-forwarded-host'] || req.headers.origin || req.headers.referer || ''
@@ -8136,8 +8279,30 @@ async function startServer() {
 
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath));
+    app.use(
+      express.static(distPath, {
+        setHeaders: (res, filePath) => {
+          const base = path.basename(filePath);
+          if (
+            base === 'index.html' ||
+            base === 'sw.js' ||
+            base === 'registerSW.js' ||
+            base === 'manifest.json' ||
+            base.startsWith('workbox-')
+          ) {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+          } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          }
+        },
+      })
+    );
     app.get('*', (req, res) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(path.resolve(distPath, 'index.html'));
     });
   } else {

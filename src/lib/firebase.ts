@@ -19,14 +19,21 @@ const defaultConfig = {
   firestoreDatabaseId: "ai-studio-edutaskgestodeta-3284915b-c459-465f-8391-17d32111c03c",
 };
 
+const cleanEnv = (val?: string) => {
+  if (!val || typeof val !== 'string') return '';
+  return val.trim().replace(/^["']|["']$/g, '').trim();
+};
+
+const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+
 const config = {
-  apiKey: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_API_KEY) || defaultConfig.apiKey,
-  authDomain: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN) || defaultConfig.authDomain,
-  projectId: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_PROJECT_ID) || defaultConfig.projectId,
-  storageBucket: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET) || defaultConfig.storageBucket,
+  apiKey: cleanEnv(env.VITE_FIREBASE_API_KEY) || defaultConfig.apiKey,
+  authDomain: cleanEnv(env.VITE_FIREBASE_AUTH_DOMAIN) || defaultConfig.authDomain,
+  projectId: cleanEnv(env.VITE_FIREBASE_PROJECT_ID) || defaultConfig.projectId,
+  storageBucket: cleanEnv(env.VITE_FIREBASE_STORAGE_BUCKET) || defaultConfig.storageBucket,
   messagingSenderId: defaultConfig.messagingSenderId,
-  appId: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_APP_ID) || defaultConfig.appId,
-  firestoreDatabaseId: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_DATABASE_ID) || defaultConfig.firestoreDatabaseId,
+  appId: cleanEnv(env.VITE_FIREBASE_APP_ID) || defaultConfig.appId,
+  firestoreDatabaseId: cleanEnv(env.VITE_FIREBASE_DATABASE_ID) || defaultConfig.firestoreDatabaseId,
 };
 
 const app = getApps().length === 0 ? initializeApp(config) : getApps()[0];

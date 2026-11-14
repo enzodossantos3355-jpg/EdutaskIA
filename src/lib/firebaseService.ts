@@ -117,9 +117,20 @@ export function logSyncAudit(context: string, payload: {
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
   const errMsg = error instanceof Error ? error.message : String(error);
-  if (errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('resource_exhausted')) {
+  const lower = errMsg.toLowerCase();
+  if (lower.includes('quota') || lower.includes('resource_exhausted')) {
     markFirestoreQuotaExceeded();
   } else {
+    if (
+      typeof window !== 'undefined' &&
+      (lower.includes('indexeddb') ||
+        lower.includes('internal assertion') ||
+        lower.includes('corrupt'))
+    ) {
+      import('./autoCacheManager')
+        .then((m) => m.resetCorruptedFirestoreIndexedDB())
+        .catch(() => {});
+    }
     const errInfo: FirestoreErrorInfo = {
       error: errMsg,
       authInfo: {

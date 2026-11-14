@@ -99,40 +99,51 @@ export function AIStatusProvider({ children }) {
     let unsubscribeSystem = null;
     let cancelled = false;
 
-    const attach = async () => {
+    const applySnapshot = (data) => {
+      if (!data) return;
+      if (typeof data.ai_enabled === "boolean") {
+        setEnabledState(data.ai_enabled);
+      }
+      if (typeof data.ai_hidden === "boolean") {
+        setHiddenState(data.ai_hidden);
+      }
+      if (typeof data.frames_disabled === "boolean") {
+        applyFramesDisabled(data.frames_disabled);
+      }
+      if (typeof data.frame_rotation_disabled === "boolean") {
+        applyFrameRotationDisabled(data.frame_rotation_disabled);
+      }
+      if (data.ai_model) {
+        setModelState(data.ai_model);
+      }
+    };
+
+    const attachSubscription = () => {
+      if (unsubscribeSystem) {
+        try { unsubscribeSystem(); } catch {}
+        unsubscribeSystem = null;
+      }
       try {
-        const statusRes = await api.get("/app-status").catch(() => null);
-        if (cancelled) return;
-        if (statusRes?.data?.collection_prefix !== undefined) {
-          firebaseService.setCollectionPrefix(statusRes.data.collection_prefix);
-        }
-        unsubscribeSystem = firebaseService.subscribeToSystemSettings(
-          (data) => {
-            if (!data) return;
-            if (typeof data.ai_enabled === "boolean") {
-              setEnabledState(data.ai_enabled);
-            }
-            if (typeof data.ai_hidden === "boolean") {
-              setHiddenState(data.ai_hidden);
-            }
-            if (typeof data.frames_disabled === "boolean") {
-              applyFramesDisabled(data.frames_disabled);
-            }
-            if (typeof data.frame_rotation_disabled === "boolean") {
-              applyFrameRotationDisabled(data.frame_rotation_disabled);
-            }
-            if (data.ai_model) {
-              setModelState(data.ai_model);
-            }
-          },
-          () => {}
-        );
+        unsubscribeSystem = firebaseService.subscribeToSystemSettings(applySnapshot, () => {});
       } catch (e) {
         console.warn("[AIStatusContext] Firestore snapshot skipped:", e);
       }
     };
 
-    attach();
+    // Attach immediately with detected initial prefix so Firestore works even if backend is cold-starting
+    const initialPrefix = firebaseService.getCollectionPrefix();
+    attachSubscription();
+
+    api.get("/app-status", { timeout: 6000 })
+      .then((statusRes) => {
+        if (cancelled) return;
+        const remotePrefix = statusRes?.data?.collection_prefix;
+        if (typeof remotePrefix === "string" && remotePrefix !== initialPrefix) {
+          firebaseService.setCollectionPrefix(remotePrefix);
+          attachSubscription();
+        }
+      })
+      .catch(() => {});
 
     return () => {
       cancelled = true;

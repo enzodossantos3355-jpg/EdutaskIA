@@ -12,6 +12,23 @@ const AuthContext = createContext({
   refresh: async () => {},
 });
 
+function sanitizeUserForStorage(u) {
+  if (!u || typeof u !== "object") return null;
+  const { avatar_data, ...rest } = u;
+  return {
+    ...rest,
+    has_avatar: Boolean(avatar_data || u.has_avatar),
+  };
+}
+
+function saveCachedUser(u) {
+  const sanitized = sanitizeUserForStorage(u);
+  if (!sanitized || !sanitized.id) return;
+  try {
+    localStorage.setItem("cached_user", JSON.stringify(sanitized));
+  } catch {}
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -24,48 +41,53 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    const restoreFromCacheOrFirestore = async () => {
-      const cached = localStorage.getItem("cached_user");
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (parsed && parsed.id) {
-            setUser(parsed);
-            // Refresh latest user attributes directly from Firestore in background
-            firebaseService.getUserById(parsed.id)
-              .then((remote) => {
-                if (remote && remote.id) {
-                  const updated = {
-                    ...parsed,
-                    name: remote.name ?? parsed.name,
-                    role: remote.role ?? parsed.role,
-                    status: remote.status ?? parsed.status,
-                    points: remote.role === "admin" ? 0 : (remote.points ?? parsed.points ?? 0),
-                    streak_count: remote.role === "admin" ? 0 : (remote.streak_count ?? parsed.streak_count ?? 0),
-                    longest_streak: remote.role === "admin" ? 0 : (remote.longest_streak ?? parsed.longest_streak ?? 0),
-                    equipped_effect: remote.equipped_effect ?? parsed.equipped_effect ?? "none",
-                    owned_effects: remote.owned_effects ?? parsed.owned_effects ?? ["none"],
-                    has_avatar: Boolean(remote.avatar_data || parsed.has_avatar),
-                  };
-                  setUser(updated);
-                  localStorage.setItem("cached_user", JSON.stringify(updated));
-                }
-              })
-              .catch(() => {});
-            return true;
-          }
-        } catch {
-          localStorage.removeItem("cached_user");
+    let cachedParsed = null;
+    const cachedRaw = localStorage.getItem("cached_user");
+    if (cachedRaw) {
+      try {
+        const parsed = JSON.parse(cachedRaw);
+        if (parsed && parsed.id) {
+          cachedParsed = sanitizeUserForStorage(parsed);
+          setUser(cachedParsed);
+          setLoading(false);
         }
+      } catch {
+        localStorage.removeItem("cached_user");
       }
-      return false;
+    }
+
+    const syncUserFromFirestore = async (targetUser) => {
+      if (!targetUser?.id) return false;
+      try {
+        const remote = await firebaseService.getUserById(targetUser.id);
+        if (remote && remote.id) {
+          const updated = sanitizeUserForStorage({
+            ...targetUser,
+            name: remote.name ?? targetUser.name,
+            role: remote.role ?? targetUser.role,
+            status: remote.status ?? targetUser.status,
+            points: remote.role === "admin" ? 0 : (remote.points ?? targetUser.points ?? 0),
+            streak_count: remote.role === "admin" ? 0 : (remote.streak_count ?? targetUser.streak_count ?? 0),
+            longest_streak: remote.role === "admin" ? 0 : (remote.longest_streak ?? targetUser.longest_streak ?? 0),
+            equipped_effect: remote.equipped_effect ?? targetUser.equipped_effect ?? "none",
+            owned_effects: remote.owned_effects ?? targetUser.owned_effects ?? ["none"],
+            has_avatar: Boolean(remote.avatar_data || targetUser.has_avatar),
+          });
+          setUser(updated);
+          saveCachedUser(updated);
+        }
+        return true;
+      } catch {
+        return Boolean(targetUser?.id);
+      }
     };
 
     try {
-      const { data } = await api.get("/auth/me");
+      const { data } = await api.get("/auth/me", { timeout: 8000 });
       if (data && typeof data === "object" && data.id) {
-        setUser(data);
-        localStorage.setItem("cached_user", JSON.stringify(data));
+        const sanitized = sanitizeUserForStorage(data);
+        setUser(sanitized);
+        saveCachedUser(sanitized);
         setLoading(false);
         return;
       }
@@ -74,15 +96,16 @@ export function AuthProvider({ children }) {
       const status = err?.response?.status;
       const isClientFallbackToken = token.startsWith("token_");
       // Only clear session if backend explicitly rejected a real JWT (not a client fallback token)
-      if (status === 401 && !isClientFallbackToken) {
+      if ((status === 401 || status === 403) && !isClientFallbackToken) {
         localStorage.removeItem("auth_token");
         localStorage.removeItem("cached_user");
         setUser(null);
         setLoading(false);
         return;
       }
-      const restored = await restoreFromCacheOrFirestore();
-      if (!restored) {
+      if (cachedParsed) {
+        await syncUserFromFirestore(cachedParsed);
+      } else {
         localStorage.removeItem("auth_token");
         setUser(null);
       }
@@ -97,15 +120,20 @@ export function AuthProvider({ children }) {
 
   const login = async ({ user_id, email, password }) => {
     try {
-      const { data } = await api.post("/auth/login", { user_id, email, password });
+      const { data } = await api.post("/auth/login", { user_id, email, password }, { timeout: 7000 });
       if (data.token) {
+        const sanitized = sanitizeUserForStorage(data.user);
         localStorage.setItem("auth_token", data.token);
-        localStorage.setItem("cached_user", JSON.stringify(data.user));
-        setUser(data.user);
+        saveCachedUser(sanitized);
+        setUser(sanitized);
       }
       return data.user || data;
     } catch (apiErr) {
-      // Direct Firestore Login Fallback
+      const status = apiErr?.response?.status;
+      if (status === 401 || status === 403) {
+        throw apiErr;
+      }
+      // Direct Firestore Login Fallback when backend is unavailable or waking up
       let users = [];
       try {
         users = await firebaseService.getAllUsers();
@@ -148,7 +176,7 @@ export function AuthProvider({ children }) {
         throw new Error("Senha incorreta");
       }
 
-      const clientUser = {
+      const clientUser = sanitizeUserForStorage({
         id: match.id,
         name: match.name,
         email: match.email || `${match.name.toLowerCase().replace(/\s+/g, '.')}@escola.com`,
@@ -159,13 +187,12 @@ export function AuthProvider({ children }) {
         longest_streak: match.role === "admin" ? 0 : (match.longest_streak || 0),
         equipped_effect: match.equipped_effect || "none",
         owned_effects: match.owned_effects || ["none"],
-        avatar_data: match.avatar_data || undefined,
         has_avatar: Boolean(match.avatar_data),
-      };
+      });
 
       const token = `token_${match.id}_${Date.now()}`;
       localStorage.setItem("auth_token", token);
-      localStorage.setItem("cached_user", JSON.stringify(clientUser));
+      saveCachedUser(clientUser);
       setUser(clientUser);
       return clientUser;
     }

@@ -5,7 +5,11 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
+  const buildVersion = `${process.env.RENDER_GIT_COMMIT || process.env.VERCEL_GIT_COMMIT_SHA || 'build'}-${Date.now()}`;
   return {
+    define: {
+      __APP_BUILD_VERSION__: JSON.stringify(buildVersion),
+    },
     plugins: [
       react(),
       tailwindcss(),
@@ -19,7 +23,7 @@ export default defineConfig(() => {
         },
       },
       VitePWA({
-        registerType: 'prompt',
+        registerType: 'autoUpdate',
         manifestFilename: 'manifest.json',
         includeAssets: [
           'favicon.png',
@@ -67,6 +71,8 @@ export default defineConfig(() => {
         },
         workbox: {
           importScripts: ['/sw-push.js'],
+          skipWaiting: true,
+          clientsClaim: true,
           cleanupOutdatedCaches: true,
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
@@ -77,6 +83,14 @@ export default defineConfig(() => {
           ],
           navigateFallbackDenylist: [/^\/api/, /^\/__/],
           runtimeCaching: [
+            {
+              urlPattern: /^\/api\/.*/i,
+              handler: 'NetworkOnly',
+            },
+            {
+              urlPattern: /^https:\/\/(firestore|firebasestorage|identitytoolkit|securetoken)\.googleapis\.com\/.*/i,
+              handler: 'NetworkOnly',
+            },
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
               handler: 'CacheFirst',

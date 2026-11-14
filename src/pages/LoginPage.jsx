@@ -43,10 +43,56 @@ export default function LoginPage() {
   }, [user, navigate]);
 
   useEffect(() => {
+    let cancelled = false;
+    let apiLoaded = false;
+    let fallbackLoaded = false;
+
+    const mapFirestoreUsers = (users) =>
+      users
+        .map((u) => ({
+          id: u.id,
+          name: u.name,
+          role: u.role,
+          status: u.status || "active",
+          has_avatar: Boolean(u.avatar_data),
+          points: u.points || 0,
+          equipped_effect: u.equipped_effect || "none",
+        }))
+        .sort((a, b) => {
+          if (a.role === "admin" && b.role !== "admin") return -1;
+          if (a.role !== "admin" && b.role === "admin") return 1;
+          return (a.name || "").localeCompare(b.name || "");
+        });
+
+    const loadFirestoreProfiles = async () => {
+      try {
+        const users = await firebaseService.getAllUsers();
+        if (cancelled || apiLoaded) return false;
+        if (Array.isArray(users) && users.length > 0) {
+          fallbackLoaded = true;
+          setProfiles(mapFirestoreUsers(users));
+          setLoading(false);
+          return true;
+        }
+      } catch (e2) {
+        console.warn("Firestore profiles load fallback:", e2);
+      }
+      return false;
+    };
+
+    // Fast 2.5s cold-start guard: show Firestore profiles quickly if Render/server is sleeping
+    const fastFallbackTimer = setTimeout(() => {
+      if (!cancelled && !apiLoaded) {
+        loadFirestoreProfiles();
+      }
+    }, 2500);
+
     const load = async () => {
       try {
-        const { data } = await api.get("/auth/profiles");
-        if (Array.isArray(data) && data.length > 0) {
+        const { data } = await api.get("/auth/profiles", { timeout: 8000 });
+        if (!cancelled && Array.isArray(data) && data.length > 0) {
+          apiLoaded = true;
+          clearTimeout(fastFallbackTimer);
           setProfiles(data);
           setLoading(false);
           return;
@@ -55,48 +101,31 @@ export default function LoginPage() {
         console.warn("API load profiles fallback to Firestore:", e?.message);
       }
 
-      // Fallback: Read directly from Firestore
-      try {
-        const users = await firebaseService.getAllUsers();
-        if (Array.isArray(users) && users.length > 0) {
-          const mapped = users
-            .map((u) => ({
-              id: u.id,
-              name: u.name,
-              role: u.role,
-              status: u.status || "active",
-              has_avatar: Boolean(u.avatar_data),
-              points: u.points || 0,
-              equipped_effect: u.equipped_effect || "none",
-            }))
-            .sort((a, b) => {
-              if (a.role === "admin" && b.role !== "admin") return -1;
-              if (a.role !== "admin" && b.role === "admin") return 1;
-              return (a.name || "").localeCompare(b.name || "");
-            });
-          setProfiles(mapped);
-          setLoading(false);
-          return;
-        }
-      } catch (e2) {
-        console.warn("Firestore profiles load fallback:", e2);
-      }
+      if (cancelled || fallbackLoaded) return;
 
-      // Default Admin Profile fallback
-      setProfiles([
-        {
-          id: "admin-user-001",
-          name: "Administrador",
-          role: "admin",
-          status: "active",
-          has_avatar: false,
-          points: 0,
-          equipped_effect: "none",
-        }
-      ]);
-      setLoading(false);
+      const ok = await loadFirestoreProfiles();
+      if (!cancelled && !ok && !fallbackLoaded) {
+        // Default Admin Profile fallback
+        setProfiles([
+          {
+            id: "admin-user-001",
+            name: "Administrador",
+            role: "admin",
+            status: "active",
+            has_avatar: false,
+            points: 0,
+            equipped_effect: "none",
+          }
+        ]);
+        setLoading(false);
+      }
     };
+
     load();
+    return () => {
+      cancelled = true;
+      clearTimeout(fastFallbackTimer);
+    };
   }, []);
 
   const onSubmit = async (e) => {
