@@ -29,7 +29,13 @@ function ProtectedRoute({ children, role }) {
 
 function HomeRedirect() {
   const { user, loading } = useAuth();
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA]" data-testid="loading-screen">
+        <div className="text-lg font-bold tracking-wide">Carregando...</div>
+      </div>
+    );
+  }
   if (!user) return <Navigate to="/login" replace />;
   return <Navigate to={user.role === "admin" ? "/admin" : "/aluno"} replace />;
 }

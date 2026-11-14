@@ -31,12 +31,19 @@ const config = {
 
 const app = getApps().length === 0 ? initializeApp(config) : getApps()[0];
 
-// Use initializeFirestore with experimentalForceLongPolling to eliminate WebChannel RPC 'Listen' transport stream errors in web/proxy environments
+// Use initializeFirestore with experimentalForceLongPolling in browser (for web/proxy environments)
+// and experimentalAutoDetectLongPolling in Node.js server runtime, with ignoreUndefinedProperties.
 let firestoreInstance;
 try {
-  firestoreInstance = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
-  }, config.firestoreDatabaseId || '(default)');
+  const firestoreSettings =
+    typeof window !== 'undefined'
+      ? { experimentalForceLongPolling: true, ignoreUndefinedProperties: true }
+      : { experimentalAutoDetectLongPolling: true, ignoreUndefinedProperties: true };
+  firestoreInstance = initializeFirestore(
+    app,
+    firestoreSettings,
+    config.firestoreDatabaseId || '(default)'
+  );
 } catch (e) {
   firestoreInstance = getFirestore(app, config.firestoreDatabaseId || '(default)');
 }

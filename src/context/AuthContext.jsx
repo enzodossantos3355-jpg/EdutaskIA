@@ -23,29 +23,69 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
+
+    const restoreFromCacheOrFirestore = async () => {
+      const cached = localStorage.getItem("cached_user");
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.id) {
+            setUser(parsed);
+            // Refresh latest user attributes directly from Firestore in background
+            firebaseService.getUserById(parsed.id)
+              .then((remote) => {
+                if (remote && remote.id) {
+                  const updated = {
+                    ...parsed,
+                    name: remote.name ?? parsed.name,
+                    role: remote.role ?? parsed.role,
+                    status: remote.status ?? parsed.status,
+                    points: remote.role === "admin" ? 0 : (remote.points ?? parsed.points ?? 0),
+                    streak_count: remote.role === "admin" ? 0 : (remote.streak_count ?? parsed.streak_count ?? 0),
+                    longest_streak: remote.role === "admin" ? 0 : (remote.longest_streak ?? parsed.longest_streak ?? 0),
+                    equipped_effect: remote.equipped_effect ?? parsed.equipped_effect ?? "none",
+                    owned_effects: remote.owned_effects ?? parsed.owned_effects ?? ["none"],
+                    has_avatar: Boolean(remote.avatar_data || parsed.has_avatar),
+                  };
+                  setUser(updated);
+                  localStorage.setItem("cached_user", JSON.stringify(updated));
+                }
+              })
+              .catch(() => {});
+            return true;
+          }
+        } catch {
+          localStorage.removeItem("cached_user");
+        }
+      }
+      return false;
+    };
+
     try {
       const { data } = await api.get("/auth/me");
-      if (data && data.id) {
+      if (data && typeof data === "object" && data.id) {
         setUser(data);
         localStorage.setItem("cached_user", JSON.stringify(data));
         setLoading(false);
         return;
       }
-    } catch {
-      // Fallback to cached user
-      const cached = localStorage.getItem("cached_user");
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          setUser(parsed);
-          setLoading(false);
-          return;
-        } catch {
-          localStorage.removeItem("cached_user");
-        }
+      throw new Error("Resposta inválida de /auth/me");
+    } catch (err) {
+      const status = err?.response?.status;
+      const isClientFallbackToken = token.startsWith("token_");
+      // Only clear session if backend explicitly rejected a real JWT (not a client fallback token)
+      if (status === 401 && !isClientFallbackToken) {
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("cached_user");
+        setUser(null);
+        setLoading(false);
+        return;
       }
-      localStorage.removeItem("auth_token");
-      setUser(null);
+      const restored = await restoreFromCacheOrFirestore();
+      if (!restored) {
+        localStorage.removeItem("auth_token");
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }

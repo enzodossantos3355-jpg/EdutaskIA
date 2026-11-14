@@ -44,19 +44,25 @@ export function AIStatusProvider({ children }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [{ data }, statusRes] = await Promise.all([
-        api.get("/ai/status"),
+      const hasToken = Boolean(localStorage.getItem("auth_token"));
+      const [statusRes, aiRes] = await Promise.all([
         api.get("/app-status").catch(() => ({ data: null })),
+        hasToken ? api.get("/ai/status").catch(() => ({ data: null })) : Promise.resolve({ data: null }),
       ]);
       if (statusRes?.data?.collection_prefix !== undefined) {
         firebaseService.setCollectionPrefix(statusRes.data.collection_prefix);
       }
-      if (data) {
+      const data = aiRes?.data || statusRes?.data;
+      if (data && typeof data === "object") {
         if (typeof data.enabled === "boolean") {
           setEnabledState(data.enabled);
+        } else if (typeof data.ai_enabled === "boolean") {
+          setEnabledState(data.ai_enabled);
         }
         if (typeof data.hidden === "boolean") {
           setHiddenState(data.hidden);
+        } else if (typeof data.ai_hidden === "boolean") {
+          setHiddenState(data.ai_hidden);
         }
         if (typeof data.frames_disabled === "boolean") {
           applyFramesDisabled(data.frames_disabled);
@@ -64,8 +70,18 @@ export function AIStatusProvider({ children }) {
         if (typeof data.frame_rotation_disabled === "boolean") {
           applyFrameRotationDisabled(data.frame_rotation_disabled);
         }
-        if (data.model) {
-          setModelState(data.model);
+        if (data.model || data.ai_model) {
+          setModelState(data.model || data.ai_model);
+        }
+      } else {
+        // Fallback direto para Firestore settings/system
+        const remote = await firebaseService.getSettings("system").catch(() => null);
+        if (remote) {
+          if (typeof remote.ai_enabled === "boolean") setEnabledState(remote.ai_enabled);
+          if (typeof remote.ai_hidden === "boolean") setHiddenState(remote.ai_hidden);
+          if (typeof remote.frames_disabled === "boolean") applyFramesDisabled(remote.frames_disabled);
+          if (typeof remote.frame_rotation_disabled === "boolean") applyFrameRotationDisabled(remote.frame_rotation_disabled);
+          if (remote.ai_model) setModelState(remote.ai_model);
         }
       }
     } catch {

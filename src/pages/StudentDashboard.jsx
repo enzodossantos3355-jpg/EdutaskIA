@@ -300,6 +300,8 @@ export default function StudentDashboard() {
   const [specialModalAnnouncement, setSpecialModalAnnouncement] = useState(null);
   const [customButtons, setCustomButtons] = useState([]);
   const [annualCycle, setAnnualCycle] = useState(null);
+  const [dailySchedule, setDailySchedule] = useState(null);
+  const [showFullSchedule, setShowFullSchedule] = useState(false);
 
   const [loadError, setLoadError] = useState(null);
   const [isOfflineData, setIsOfflineData] = useState(false);
@@ -354,17 +356,24 @@ export default function StudentDashboard() {
     if (!silent) setLoading(true);
     setLoadError(null);
     try {
-      const [{ data: t }, { data: a }, btnRes, statusRes, subjRes] = await Promise.all([
+      const [{ data: t }, { data: a }, btnRes, statusRes, subjRes, schedRes] = await Promise.all([
         api.get("/tasks"),
         api.get("/announcements"),
         api.get("/student-buttons").catch(() => ({ data: [] })),
         api.get("/app-status").catch(() => ({ data: null })),
         api.get("/subjects").catch(() => ({ data: [] })),
+        api.get("/schedule").catch(() => ({ data: null })),
       ]);
-      setTasks(t || []);
-      setAnnouncements(a || []);
-      setCustomButtons(btnRes?.data || []);
-      if (subjRes?.data && Array.isArray(subjRes.data)) {
+      if (!Array.isArray(t) || !Array.isArray(a)) {
+        throw new Error("Resposta inválida do servidor");
+      }
+      setTasks(t);
+      setAnnouncements(a);
+      setCustomButtons(Array.isArray(btnRes?.data) ? btnRes.data : []);
+      if (schedRes?.data && typeof schedRes.data === "object") {
+        setDailySchedule(schedRes.data);
+      }
+      if (Array.isArray(subjRes?.data)) {
         setCachedSubjects(subjRes.data);
       }
       if (statusRes?.data?.collection_prefix !== undefined) {
@@ -377,11 +386,12 @@ export default function StudentDashboard() {
       setIsOfflineData(false);
     } catch (e) {
       try {
-        const [allTasks, allAnnouncements, allCompletions, btnRes] = await Promise.all([
+        const [allTasks, allAnnouncements, allCompletions, allSubjects, sysSettings] = await Promise.all([
           firebaseService.getAllTasks(),
           firebaseService.getAllAnnouncements(),
           firebaseService.getAllCompletions(),
-          api.get("/student-buttons").catch(() => ({ data: [] })),
+          firebaseService.getAllSubjects().catch(() => []),
+          firebaseService.getSettings("system").catch(() => null),
         ]);
         const currentUserId = user?.id;
         const mapped = (allTasks || [])
@@ -401,7 +411,33 @@ export default function StudentDashboard() {
           });
         setTasks(mapped);
         setAnnouncements(allAnnouncements || []);
-        setCustomButtons(btnRes?.data || []);
+        if (Array.isArray(allSubjects) && allSubjects.length > 0) {
+          setCachedSubjects(allSubjects);
+        }
+        if (sysSettings) {
+          if (sysSettings.annual_cycle) setAnnualCycle(sysSettings.annual_cycle);
+          if (Array.isArray(sysSettings.student_buttons)) {
+            setCustomButtons(sysSettings.student_buttons.filter((b) => b && b.active !== false));
+          }
+          if (sysSettings.weekly_schedule) {
+            const ws = sysSettings.weekly_schedule;
+            const dayMap = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+            const labelMap = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+            const nowBr = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+            const dow = nowBr.getDay();
+            const key = dayMap[dow];
+            const isWeekend = dow === 0 || dow === 6;
+            const subjectsToday = !isWeekend && Array.isArray(ws[key]) ? ws[key] : [];
+            setDailySchedule({
+              enabled: ws.enabled !== false,
+              is_weekend: isWeekend,
+              today_key: isWeekend ? null : key,
+              today_label: labelMap[dow],
+              today_subjects: subjectsToday,
+              schedule: ws,
+            });
+          }
+        }
         setIsOfflineData(true);
       } catch (e2) {
         const msg = formatApiError(e?.response?.data?.detail || e2?.message) || "Erro ao conectar com o banco de dados";
@@ -1001,6 +1037,80 @@ export default function StudentDashboard() {
             </div>
           </div>
         )}
+
+        {/* Cronograma do Dia (bloco compacto acima das tarefas; somente Segunda a Sexta quando habilitado) */}
+        {dailySchedule?.schedule?.enabled !== false &&
+          !dailySchedule?.is_weekend &&
+          Array.isArray(dailySchedule?.today_subjects) &&
+          dailySchedule.today_subjects.length > 0 && (
+            <div
+              className="mb-4 bg-white border-2 border-black rounded-xl px-3.5 py-2.5"
+              data-testid="student-daily-schedule"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                  <span className="inline-flex items-center gap-1.5 font-heading font-bold text-xs sm:text-sm text-neutral-900">
+                    <CalendarDays className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                    <span>Matérias de hoje ({dailySchedule.today_label}):</span>
+                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {dailySchedule.today_subjects.map((subj) => {
+                      const cfg = getSubjectColorConfig(subj);
+                      return (
+                        <span
+                          key={subj}
+                          className={`px-2 py-0.5 rounded-md border border-black/25 text-xs font-semibold ${cfg.badgeBg} ${cfg.badgeText}`}
+                        >
+                          {subj}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowFullSchedule((prev) => !prev)}
+                  className="text-[11px] font-bold text-neutral-600 hover:text-black underline underline-offset-2 flex-shrink-0"
+                  data-testid="toggle-weekly-schedule-preview"
+                >
+                  {showFullSchedule ? "Ocultar semana" : "Ver semana"}
+                </button>
+              </div>
+
+              {showFullSchedule && (
+                <div className="mt-2.5 pt-2.5 border-t border-neutral-200 grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
+                  {[
+                    ["monday", "Segunda"],
+                    ["tuesday", "Terça"],
+                    ["wednesday", "Quarta"],
+                    ["thursday", "Quinta"],
+                    ["friday", "Sexta"],
+                  ].map(([key, label]) => {
+                    const list = dailySchedule.schedule?.[key] || [];
+                    const isToday = dailySchedule.today_key === key;
+                    return (
+                      <div
+                        key={key}
+                        className={`p-2 rounded-lg border ${
+                          isToday ? "bg-emerald-50 border-black" : "bg-neutral-50 border-neutral-200"
+                        }`}
+                      >
+                        <div className="font-bold text-[11px] text-neutral-900 mb-1 flex items-center justify-between">
+                          <span>{label}</span>
+                          {isToday && <span className="text-[10px] text-emerald-800 font-black">Hoje</span>}
+                        </div>
+                        {list.length === 0 ? (
+                          <p className="text-[11px] text-neutral-400">—</p>
+                        ) : (
+                          <p className="text-[11px] text-neutral-700 leading-snug">{list.join(", ")}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
         {/* 2. Filtros e Modos de Visualização */}
         <div className="flex flex-wrap gap-2 mb-6 items-center menu-enter">

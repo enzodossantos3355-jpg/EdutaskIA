@@ -18,7 +18,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'edutask-super-secret-jwt-key-2026';
-const PORT = 3000;
 const HOST = '0.0.0.0';
 
 const K_SERVICE_NAME = (process.env.K_SERVICE || '').toLowerCase();
@@ -30,6 +29,10 @@ const IS_DEPLOYED_HOST_ENV = Boolean(
   process.env.RENDER_EXTERNAL_URL ||
   process.env.VERCEL
 );
+const PORT =
+  !IS_AI_STUDIO_RUNTIME && process.env.PORT
+    ? Number(process.env.PORT) || 3000
+    : 3000;
 
 export const IS_PREVIEW_ENV =
   process.env.EDUTASK_ENV === 'preview' ||
@@ -540,10 +543,74 @@ export interface StudentButton {
   color?: string; // Estilo/cor do botão (ex: 'indigo', 'emerald', 'amber', 'rose', 'sky', 'violet')
   icon?: string;  // Emoji ou ícone
   active: boolean; // Se está visível para os alunos
+  open_in_new_tab?: boolean;
   order?: number;
   click_count?: number;
   created_at: string;
   created_by?: string;
+}
+
+export interface WeeklyScheduleConfig {
+  enabled: boolean;
+  monday: string[];
+  tuesday: string[];
+  wednesday: string[];
+  thursday: string[];
+  friday: string[];
+  updated_at?: string | null;
+}
+
+type WeekdayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday';
+
+const SCHEDULE_WEEKDAYS: ReadonlyArray<{ key: WeekdayKey; label: string; short: string }> = [
+  { key: 'monday', label: 'Segunda-feira', short: 'Seg' },
+  { key: 'tuesday', label: 'Terça-feira', short: 'Ter' },
+  { key: 'wednesday', label: 'Quarta-feira', short: 'Qua' },
+  { key: 'thursday', label: 'Quinta-feira', short: 'Qui' },
+  { key: 'friday', label: 'Sexta-feira', short: 'Sex' },
+];
+
+function createEmptyScheduleConfig(): WeeklyScheduleConfig {
+  return {
+    enabled: true,
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: [],
+    updated_at: null,
+  };
+}
+
+function normalizeScheduleList(list: any): string[] {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of list) {
+    const trimmed = typeof item === 'string' ? item.trim() : '';
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(trimmed);
+    }
+  }
+  return result;
+}
+
+function normalizeWeeklyScheduleConfig(raw: any): WeeklyScheduleConfig {
+  if (!raw || typeof raw !== 'object') {
+    return createEmptyScheduleConfig();
+  }
+  return {
+    enabled: raw.enabled !== false,
+    monday: normalizeScheduleList(raw.monday),
+    tuesday: normalizeScheduleList(raw.tuesday),
+    wednesday: normalizeScheduleList(raw.wednesday),
+    thursday: normalizeScheduleList(raw.thursday),
+    friday: normalizeScheduleList(raw.friday),
+    updated_at: typeof raw.updated_at === 'string' ? raw.updated_at : null,
+  };
 }
 
 const BASE_DIR =
@@ -656,6 +723,7 @@ class Database {
     last_deleted_titles: [],
   };
   student_buttons: Map<string, StudentButton> = new Map();
+  weekly_schedule: WeeklyScheduleConfig = createEmptyScheduleConfig();
   whatsapp_config: {
     group_1_jid: string;
     group_1_name: string;
@@ -771,6 +839,9 @@ class Database {
 
   private firebaseSynced: boolean = false;
   private syncPromise: Promise<boolean> | null = null;
+  private lastSyncAttemptAt: number = 0;
+  private filesSynced: boolean = false;
+  private filesSyncPromise: Promise<void> | null = null;
 
   constructor() {
     if (!this.loadFromDisk()) {
@@ -794,7 +865,12 @@ class Database {
   async ensureSynced() {
     if (this.firebaseSynced) return;
     if (!this.syncPromise) {
-      this.syncPromise = this.syncWithFirebase()
+      // Avoid hammering Firestore on every incoming request if a previous sync just failed
+      if (this.lastSyncAttemptAt > 0 && Date.now() - this.lastSyncAttemptAt < 15000) {
+        return;
+      }
+      this.lastSyncAttemptAt = Date.now();
+      this.syncPromise = withTimeout(this.syncWithFirebase(), 12000)
         .then((ok) => {
           this.firebaseSynced = ok;
           if (!ok) {
@@ -802,7 +878,8 @@ class Database {
           }
           return ok;
         })
-        .catch(() => {
+        .catch((err) => {
+          console.warn('[Firebase] Sync timeout/erro em ensureSynced:', err?.message || err);
           this.firebaseSynced = false;
           this.syncPromise = null;
           return false;
@@ -811,10 +888,42 @@ class Database {
     await this.syncPromise;
   }
 
+  async ensureFilesSynced(): Promise<void> {
+    if (this.filesSynced) return;
+    if (!this.filesSyncPromise) {
+      this.filesSyncPromise = withTimeout(firebaseService.getAllFiles(), 25000)
+        .then((remoteFiles) => {
+          if (Array.isArray(remoteFiles) && remoteFiles.length > 0) {
+            remoteFiles.forEach((f) => {
+              if (f.id && f.base64 && !this.files.has(f.id)) {
+                this.files.set(f.id, {
+                  id: f.id,
+                  original_filename: f.original_filename || f.id,
+                  content_type: f.content_type || 'image/jpeg',
+                  size: f.size || 0,
+                  data: Buffer.from(f.base64, 'base64'),
+                  uploaded_by: f.uploaded_by || 'system',
+                  created_at: f.created_at || new Date().toISOString(),
+                });
+              }
+            });
+          }
+          this.filesSynced = true;
+        })
+        .catch((err) => {
+          console.warn('[Firebase] Erro ao carregar coleção files sob demanda:', err?.message || err);
+          this.filesSyncPromise = null;
+        });
+    }
+    await this.filesSyncPromise;
+  }
+
   async syncWithFirebase(): Promise<boolean> {
     try {
       const prefix = firebaseService.getCollectionPrefix() || '(produção)';
-      console.log(`[Firebase] Sincronizando coleções do Firestore [${prefix}]...`);
+      console.log(`[Firebase] Sincronizando coleções essenciais do Firestore [${prefix}]...`);
+      // Nota: coleção 'files' (base64 pesados) é carregada sob demanda via resolveFileRecordAsync / ensureFilesSynced
+      // para evitar gargalos de memória e timeouts no cold start da versão publicada.
       const results = await Promise.allSettled([
         firebaseService.getAllTasks(),
         firebaseService.getAllUsers(),
@@ -824,7 +933,6 @@ class Database {
         firebaseService.getAllComments(),
         firebaseService.getSettings('system'),
         firebaseService.getAllStudentAnswers(),
-        firebaseService.getAllFiles(),
         firebaseService.getAllSummaryTopics(),
         firebaseService.getAllSummaries(),
         firebaseService.getAllSummaryGenerations(),
@@ -851,10 +959,9 @@ class Database {
       const comments = pick<any[]>(5, 'comments');
       const settings = pick<any>(6, 'settings');
       const studentAnswers = pick<any[]>(7, 'student_answers');
-      const remoteFiles = pick<any[]>(8, 'files');
-      const remoteSummaryTopics = pick<any[]>(9, 'summary_topics');
-      const remoteSummaries = pick<any[]>(10, 'summaries');
-      const remoteSummaryGens = pick<any[]>(11, 'summary_generations');
+      const remoteSummaryTopics = pick<any[]>(8, 'summary_topics');
+      const remoteSummaries = pick<any[]>(9, 'summaries');
+      const remoteSummaryGens = pick<any[]>(10, 'summary_generations');
 
       // Tarefas: Firestore é a fonte autoritativa (inclusive quando vazio após exclusões)
       if (Array.isArray(tasks)) {
@@ -965,6 +1072,21 @@ class Database {
         if (settings.frame_rotation_disabled !== undefined) this.frame_rotation_disabled = settings.frame_rotation_disabled;
         if (settings.annual_cycle) this.annual_cycle = settings.annual_cycle;
         if (settings.annual_history) this.annual_history = settings.annual_history;
+        if (Array.isArray(settings.student_buttons)) {
+          this.student_buttons.clear();
+          settings.student_buttons.forEach((b: any) => {
+            if (b && b.id && b.name && b.url) {
+              this.student_buttons.set(b.id, {
+                ...b,
+                active: b.active !== false,
+                open_in_new_tab: b.open_in_new_tab !== false,
+              });
+            }
+          });
+        }
+        if (settings.weekly_schedule) {
+          this.weekly_schedule = normalizeWeeklyScheduleConfig(settings.weekly_schedule);
+        }
         if (settings.push_settings) {
           this.push_settings = { ...this.push_settings, ...settings.push_settings };
         }
@@ -1001,22 +1123,6 @@ class Database {
         studentAnswers.forEach((sa) => {
           const key = sa.key || sa.id;
           if (key) this.task_student_answers.set(key, sa);
-        });
-      }
-
-      if (remoteFiles && remoteFiles.length > 0) {
-        remoteFiles.forEach((f) => {
-          if (f.id && f.base64) {
-            this.files.set(f.id, {
-              id: f.id,
-              original_filename: f.original_filename || f.id,
-              content_type: f.content_type || 'image/jpeg',
-              size: f.size || 0,
-              data: Buffer.from(f.base64, 'base64'),
-              uploaded_by: f.uploaded_by || 'system',
-              created_at: f.created_at || new Date().toISOString(),
-            });
-          }
         });
       }
 
@@ -1091,6 +1197,7 @@ class Database {
         monthly_history: this.monthly_history,
         task_cleanup_config: this.task_cleanup_config,
         student_buttons: Array.from(this.student_buttons.entries()),
+        weekly_schedule: this.weekly_schedule,
         whatsapp_config: this.whatsapp_config,
         app_info: this.app_info,
         ai_enabled: this.ai_enabled,
@@ -1137,6 +1244,7 @@ class Database {
         if (data.monthly_history) this.monthly_history = data.monthly_history;
         if (data.task_cleanup_config) this.task_cleanup_config = { ...this.task_cleanup_config, ...data.task_cleanup_config };
         if (data.student_buttons) this.student_buttons = new Map(data.student_buttons);
+        if (data.weekly_schedule) this.weekly_schedule = normalizeWeeklyScheduleConfig(data.weekly_schedule);
         if (data.whatsapp_config) this.whatsapp_config = { ...this.whatsapp_config, ...data.whatsapp_config };
         if (data.app_info) this.app_info = data.app_info;
         if (data.ai_enabled !== undefined) this.ai_enabled = data.ai_enabled;
@@ -1261,39 +1369,6 @@ class Database {
       const id = `subj-${i + 1}`;
       this.subjects.set(id, { id, name: item.name, color: item.color });
     });
-
-    // Seed default student buttons if empty
-    if (this.student_buttons.size === 0) {
-      const defaultButtons: StudentButton[] = [
-        {
-          id: 'btn-classroom',
-          name: 'Google Sala de Aula',
-          url: 'https://classroom.google.com',
-          description: 'Acesse suas salas de aula virtuais e materiais complementares.',
-          color: 'emerald',
-          icon: '📚',
-          active: true,
-          order: 1,
-          click_count: 0,
-          created_at: new Date().toISOString(),
-          created_by: 'admin',
-        },
-        {
-          id: 'btn-livros',
-          name: 'Biblioteca Digital',
-          url: 'http://www.dominiopublico.gov.br',
-          description: 'Acervo gratuito de livros, literatura e pesquisas acadêmicas.',
-          color: 'indigo',
-          icon: '📖',
-          active: true,
-          order: 2,
-          click_count: 0,
-          created_at: new Date().toISOString(),
-          created_by: 'admin',
-        },
-      ];
-      defaultButtons.forEach((b) => this.student_buttons.set(b.id, b));
-    }
   }
 
   getEffectsCatalog() {
@@ -3012,7 +3087,8 @@ api.put('/admin/summaries/model', requireAdmin, async (req, res) => {
   res.json({ ok: true, summary_ai_model: db.summary_ai_model });
 });
 
-api.get('/summaries/drive', requireAuth, (req, res) => {
+api.get('/summaries/drive', requireAuth, async (req, res) => {
+  await db.ensureFilesSynced();
   const filesList = Array.from(db.files.values()).filter((f) =>
     f.content_type?.startsWith('image/')
   );
@@ -3152,9 +3228,9 @@ api.post('/files/upload', requireAdmin, upload.single('file'), async (req, res) 
   });
 });
 
-api.get('/files/:file_id', (req, res) => {
+api.get('/files/:file_id', async (req, res) => {
   const { file_id } = req.params;
-  const file = getFileRecord(file_id);
+  const file = await resolveFileRecordAsync(file_id);
   if (file && file.data) {
     res.setHeader('Content-Type', file.content_type || 'image/jpeg');
     res.setHeader('Cache-Control', 'public, max-age=86400');
@@ -3501,7 +3577,7 @@ async function dispatchTaskWhatsAppNotifications(task: TaskItem) {
 
     const publicFileIds = [...(task.attachments || [])];
     for (const fId of publicFileIds) {
-      const f = getFileRecord(fId);
+      const f = await resolveFileRecordAsync(fId);
       if (f && f.content_type?.startsWith('image/') && f.data && f.data.length > 0) {
         photoBuffer = f.data;
         photoContentType = f.content_type;
@@ -3511,7 +3587,7 @@ async function dispatchTaskWhatsAppNotifications(task: TaskItem) {
 
     // Se não houver foto pública anexada nesta tarefa específica, usar a foto universal de tarefas configurada no WhatsApp
     if (!photoBuffer && db.whatsapp_config?.templates?.task_photo_id) {
-      const f = getFileRecord(db.whatsapp_config.templates.task_photo_id);
+      const f = await resolveFileRecordAsync(db.whatsapp_config.templates.task_photo_id);
       if (f && f.data) {
         photoBuffer = f.data;
         photoContentType = f.content_type;
@@ -3584,7 +3660,7 @@ api.post('/tasks/:task_id/send-whatsapp', requireAdmin, async (req, res) => {
       console.warn('Erro ao decodificar photo_data:', e);
     }
   } else if (photo_id) {
-    const f = getFileRecord(photo_id);
+    const f = await resolveFileRecordAsync(photo_id);
     if (f && f.data) {
       photoBuffer = f.data;
       photoContentType = f.content_type;
@@ -3593,7 +3669,7 @@ api.post('/tasks/:task_id/send-whatsapp', requireAdmin, async (req, res) => {
     // Anexos públicos da tarefa (NUNCA fotos fonte da IA admin_photos)
     const publicFileIds = [...(task.attachments || [])];
     for (const fId of publicFileIds) {
-      const f = getFileRecord(fId);
+      const f = await resolveFileRecordAsync(fId);
       if (f && f.content_type?.startsWith('image/') && f.data && f.data.length > 0) {
         photoBuffer = f.data;
         photoContentType = f.content_type;
@@ -3601,7 +3677,7 @@ api.post('/tasks/:task_id/send-whatsapp', requireAdmin, async (req, res) => {
       }
     }
     if (!photoBuffer && db.whatsapp_config?.templates?.task_photo_id) {
-      const f = getFileRecord(db.whatsapp_config.templates.task_photo_id);
+      const f = await resolveFileRecordAsync(db.whatsapp_config.templates.task_photo_id);
       if (f && f.data) {
         photoBuffer = f.data;
         photoContentType = f.content_type;
@@ -4273,7 +4349,7 @@ api.post('/announcements', requireAdmin, async (req, res) => {
     let photoBuffer: Buffer | null = null;
     let photoContentType: string | null = null;
     if (db.whatsapp_config?.templates?.announcement_photo_id) {
-      const f = getFileRecord(db.whatsapp_config.templates.announcement_photo_id);
+      const f = await resolveFileRecordAsync(db.whatsapp_config.templates.announcement_photo_id);
       if (f && f.data) {
         photoBuffer = f.data;
         photoContentType = f.content_type;
@@ -4356,14 +4432,14 @@ api.post('/announcements/:ann_id/send-whatsapp', requireAdmin, async (req, res) 
       console.warn('Erro ao decodificar photo_data para aviso:', e);
     }
   } else if (photo_id) {
-    const f = getFileRecord(photo_id);
+    const f = await resolveFileRecordAsync(photo_id);
     if (f && f.data) {
       photoBuffer = f.data;
       photoContentType = f.content_type;
     }
   } else if (photo_id !== null) {
     if (db.whatsapp_config?.templates?.announcement_photo_id) {
-      const f = getFileRecord(db.whatsapp_config.templates.announcement_photo_id);
+      const f = await resolveFileRecordAsync(db.whatsapp_config.templates.announcement_photo_id);
       if (f && f.data) {
         photoBuffer = f.data;
         photoContentType = f.content_type;
@@ -4531,7 +4607,7 @@ api.post('/student-buttons', requireAdmin, (req, res) => {
   if (db.annual_cycle?.is_closed) {
     return res.status(403).json({ detail: "O Ano Letivo / Ranking Anual está encerrado. Não é possível criar botões de alunos até que o novo ano seja iniciado na aba Ranking Anual." });
   }
-  const { name, url, description, color, icon, active, order } = req.body || {};
+  const { name, url, description, color, icon, active, open_in_new_tab, order } = req.body || {};
   if (!name || !name.trim()) {
     return res.status(400).json({ detail: 'O nome do botão é obrigatório.' });
   }
@@ -4554,6 +4630,7 @@ api.post('/student-buttons', requireAdmin, (req, res) => {
     color: color || 'indigo',
     icon: icon || '🔗',
     active: active !== false,
+    open_in_new_tab: open_in_new_tab !== false,
     order: typeof order === 'number' ? order : db.student_buttons.size + 1,
     click_count: 0,
     created_at: new Date().toISOString(),
@@ -4562,6 +4639,7 @@ api.post('/student-buttons', requireAdmin, (req, res) => {
 
   db.student_buttons.set(id, button);
   db.saveToDisk();
+  saveSystemSettingsToFirestore();
   res.status(201).json(button);
 });
 
@@ -4570,7 +4648,7 @@ api.put('/student-buttons/:btn_id', requireAdmin, (req, res) => {
   const btn = db.student_buttons.get(btn_id);
   if (!btn) return res.status(404).json({ detail: 'Botão não encontrado.' });
 
-  const { name, url, description, color, icon, active, order } = req.body || {};
+  const { name, url, description, color, icon, active, open_in_new_tab, order } = req.body || {};
   if (name && name.trim()) btn.name = name.trim();
   if (url && url.trim()) {
     let formattedUrl = url.trim();
@@ -4583,9 +4661,11 @@ api.put('/student-buttons/:btn_id', requireAdmin, (req, res) => {
   if (color !== undefined) btn.color = color;
   if (icon !== undefined) btn.icon = icon;
   if (typeof active === 'boolean') btn.active = active;
+  if (typeof open_in_new_tab === 'boolean') btn.open_in_new_tab = open_in_new_tab;
   if (typeof order === 'number') btn.order = order;
 
   db.saveToDisk();
+  saveSystemSettingsToFirestore();
   res.json(btn);
 });
 
@@ -4596,6 +4676,7 @@ api.delete('/student-buttons/:btn_id', requireAdmin, (req, res) => {
   }
   db.student_buttons.delete(btn_id);
   db.saveToDisk();
+  saveSystemSettingsToFirestore();
   res.json({ ok: true, message: 'Botão removido com sucesso.' });
 });
 
@@ -4605,8 +4686,71 @@ api.post('/student-buttons/:btn_id/click', requireAuth, (req, res) => {
   if (btn) {
     btn.click_count = (btn.click_count || 0) + 1;
     db.saveToDisk();
+    saveSystemSettingsToFirestore();
   }
   res.json({ ok: true, clicks: btn?.click_count || 0 });
+});
+
+// ---------------------------------------------------------------------------
+// Cronograma Escolar Semanal (Segunda a Sexta; finais de semana não contam)
+// ---------------------------------------------------------------------------
+function getTodayScheduleContext() {
+  const shortWeekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    weekday: 'short',
+  }).format(new Date());
+
+  const dayMap: Record<string, { key: WeekdayKey | null; label: string; is_weekend: boolean }> = {
+    Mon: { key: 'monday', label: 'Segunda-feira', is_weekend: false },
+    Tue: { key: 'tuesday', label: 'Terça-feira', is_weekend: false },
+    Wed: { key: 'wednesday', label: 'Quarta-feira', is_weekend: false },
+    Thu: { key: 'thursday', label: 'Quinta-feira', is_weekend: false },
+    Fri: { key: 'friday', label: 'Sexta-feira', is_weekend: false },
+    Sat: { key: null, label: 'Sábado', is_weekend: true },
+    Sun: { key: null, label: 'Domingo', is_weekend: true },
+  };
+
+  const info = dayMap[shortWeekday] || { key: null, label: '', is_weekend: true };
+  const todaySubjects = !info.is_weekend && info.key ? (db.weekly_schedule[info.key] || []) : [];
+
+  return {
+    today_key: info.key,
+    today_label: info.label,
+    is_weekend: info.is_weekend,
+    today_subjects: todaySubjects,
+  };
+}
+
+api.get('/schedule', requireAuth, (req, res) => {
+  const schedule = normalizeWeeklyScheduleConfig(db.weekly_schedule);
+  db.weekly_schedule = schedule;
+  res.json({
+    schedule,
+    ...getTodayScheduleContext(),
+  });
+});
+
+api.put('/admin/schedule', requireAdmin, (req, res) => {
+  const body = req.body || {};
+  const nextSchedule = normalizeWeeklyScheduleConfig({
+    enabled: body.enabled !== undefined ? Boolean(body.enabled) : db.weekly_schedule.enabled,
+    monday: body.monday !== undefined ? body.monday : db.weekly_schedule.monday,
+    tuesday: body.tuesday !== undefined ? body.tuesday : db.weekly_schedule.tuesday,
+    wednesday: body.wednesday !== undefined ? body.wednesday : db.weekly_schedule.wednesday,
+    thursday: body.thursday !== undefined ? body.thursday : db.weekly_schedule.thursday,
+    friday: body.friday !== undefined ? body.friday : db.weekly_schedule.friday,
+    updated_at: new Date().toISOString(),
+  });
+
+  db.weekly_schedule = nextSchedule;
+  db.saveToDisk();
+  saveSystemSettingsToFirestore();
+
+  res.json({
+    ok: true,
+    schedule: db.weekly_schedule,
+    ...getTodayScheduleContext(),
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -4655,6 +4799,8 @@ api.get('/app-status', (req, res) => {
     frames_disabled: db.frames_disabled || false,
     frame_rotation_disabled: db.frame_rotation_disabled !== undefined ? db.frame_rotation_disabled : true,
     ai_enabled: db.ai_enabled || false,
+    ai_hidden: db.ai_hidden || false,
+    ai_model: db.ai_model || 'gemini-3.8-flash',
     summary_ai_model: db.summary_ai_model || 'gemini-3.8-flash',
     env_mode: IS_PREVIEW_ENV ? 'preview' : 'production',
     collection_prefix: firebaseService.getCollectionPrefix(),
@@ -5308,6 +5454,8 @@ function saveSystemSettingsToFirestore() {
     active_month_key: db.active_month_key,
     monthly_history: db.monthly_history,
     task_cleanup_config: db.task_cleanup_config,
+    student_buttons: Array.from(db.student_buttons.values()),
+    weekly_schedule: db.weekly_schedule,
     whatsapp_config: db.whatsapp_config,
     app_info: db.app_info,
     effect_overrides: db.effect_overrides,
@@ -6176,7 +6324,7 @@ async function executeTomorrowTasksDispatch(isTest = false, overrideExtra?: stri
   let photoContentType: string | null = null;
 
   if (templates.tomorrow_photo_id) {
-    const f = db.files.get(templates.tomorrow_photo_id);
+    const f = await resolveFileRecordAsync(templates.tomorrow_photo_id);
     if (f && f.data) {
       photoBuffer = f.data;
       photoContentType = f.content_type;
@@ -6425,10 +6573,13 @@ function escapeCsvField(field: any): string {
   return `"${str}"`;
 }
 
-api.get('/admin/zip/export', requireAdmin, (req, res) => {
+api.get('/admin/zip/export', requireAdmin, async (req, res) => {
   try {
     const { include_uploads = 'true', type = 'full' } = req.query;
     const shouldIncludeUploads = include_uploads !== 'false';
+    if (shouldIncludeUploads) {
+      await db.ensureFilesSynced();
+    }
     const zip = new AdmZip();
 
     const students = Array.from(db.users.values()).filter((u) => u.role === 'aluno');
@@ -6462,12 +6613,13 @@ api.get('/admin/zip/export', requireAdmin, (req, res) => {
         annual_history: db.annual_history,
         task_cleanup_config: db.task_cleanup_config,
         student_buttons: Array.from(db.student_buttons.values()),
+        weekly_schedule: db.weekly_schedule,
         whatsapp_config: db.whatsapp_config,
         app_info: db.app_info,
         ai_enabled: db.ai_enabled,
         ai_hidden: db.ai_hidden,
         frames_disabled: db.frames_disabled,
-    frame_rotation_disabled: db.frame_rotation_disabled,
+        frame_rotation_disabled: db.frame_rotation_disabled,
         ai_model: db.ai_model,
         task_student_answers: Array.from(db.task_student_answers.entries()),
       },
@@ -6475,6 +6627,7 @@ api.get('/admin/zip/export', requireAdmin, (req, res) => {
     zip.addFile('edutask_backup.json', Buffer.from(JSON.stringify(backupData, null, 2), 'utf8'));
 
     // 2. manifest.json
+    const scheduleDaysConfigured = SCHEDULE_WEEKDAYS.filter((d) => (db.weekly_schedule[d.key] || []).length > 0).length;
     const manifest = {
       app: 'EduTask',
       version: db.app_info?.version || '1.2.0',
@@ -6488,6 +6641,7 @@ api.get('/admin/zip/export', requireAdmin, (req, res) => {
         announcements: db.announcements.size,
         comments: db.comments.size,
         student_buttons: db.student_buttons.size,
+        schedule_days_configured: scheduleDaysConfigured,
         uploads: 0,
       },
     };
@@ -6540,7 +6694,7 @@ api.get('/admin/zip/export', requireAdmin, (req, res) => {
     zip.addFile('csv/entregas_concluidas.csv', Buffer.from(csvEntregas, 'utf8'));
 
     // 3d. Botões de Alunos CSV
-    let csvBotoes = `${UTF8_BOM}ID;Nome;Link;Descricao;Cor;Icone;Ativo;Ordem;Cliques;CriadoEm\n`;
+    let csvBotoes = `${UTF8_BOM}ID;Nome;Link;Descricao;Cor;Icone;Ativo;NovaAba;Ordem;Cliques;CriadoEm\n`;
     Array.from(db.student_buttons.values()).forEach((b) => {
       csvBotoes += [
         escapeCsvField(b.id),
@@ -6550,12 +6704,25 @@ api.get('/admin/zip/export', requireAdmin, (req, res) => {
         escapeCsvField(b.color || 'indigo'),
         escapeCsvField(b.icon || '🔗'),
         escapeCsvField(b.active ? 'Sim' : 'Não'),
+        escapeCsvField(b.open_in_new_tab !== false ? 'Sim' : 'Não'),
         escapeCsvField(b.order || 0),
         escapeCsvField(b.click_count || 0),
         escapeCsvField(b.created_at || ''),
       ].join(';') + '\n';
     });
     zip.addFile('csv/botoes_alunos.csv', Buffer.from(csvBotoes, 'utf8'));
+
+    // 3e. Cronograma Semanal (Segunda a Sexta) CSV
+    let csvCronograma = `${UTF8_BOM}DiaSemana;AtivoParaAlunos;MateriasNecessarias\n`;
+    SCHEDULE_WEEKDAYS.forEach((day) => {
+      const items = db.weekly_schedule[day.key] || [];
+      csvCronograma += [
+        escapeCsvField(day.label),
+        escapeCsvField(db.weekly_schedule.enabled ? 'Sim' : 'Não'),
+        escapeCsvField(items.join(', ')),
+      ].join(';') + '\n';
+    });
+    zip.addFile('csv/cronograma_semanal.csv', Buffer.from(csvCronograma, 'utf8'));
 
     // 4. Attachments / Uploads directory
     let uploadFilesCount = 0;
@@ -6675,6 +6842,12 @@ api.post('/admin/zip/preview', requireAdmin, upload.single('file'), (req, res) =
     const buttonsList: any[] = Array.isArray(actualData?.student_buttons)
       ? actualData.student_buttons.map((b: any) => (Array.isArray(b) ? b[1] : b))
       : [];
+    const scheduleConfig = actualData?.weekly_schedule
+      ? normalizeWeeklyScheduleConfig(actualData.weekly_schedule)
+      : null;
+    const scheduleDaysConfigured = scheduleConfig
+      ? SCHEDULE_WEEKDAYS.filter((d) => (scheduleConfig[d.key] || []).length > 0).length
+      : 0;
 
     const preview = {
       valid: Boolean(backupData || uploadFiles.length > 0),
@@ -6689,6 +6862,7 @@ api.post('/admin/zip/preview', requireAdmin, upload.single('file'), (req, res) =
         completions: completionsList.length,
         uploads: uploadFiles.length,
         student_buttons: buttonsList.length,
+        schedule_days_configured: scheduleDaysConfigured,
       },
       previewUsers: usersList.slice(0, 5).map((u: any) => ({ id: u.id, name: u.name, role: u.role, points: u.points })),
       previewTasks: tasksList.slice(0, 5).map((t: any) => ({ id: t.id, title: t.title, subject: t.subject, points: t.points })),
@@ -6719,6 +6893,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
       import_uploads = 'true',
       import_effects = 'true',
       import_buttons = 'true',
+      import_schedule = 'true',
       import_whatsapp = 'true',
       import_monthly = 'true',
     } = req.body || {};
@@ -6790,6 +6965,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
     let importedSubjectsCount = 0;
     let importedCompletionsCount = 0;
     let importedButtonsCount = 0;
+    let importedScheduleDaysCount = 0;
 
     if (actualData) {
       // Import Subjects
@@ -6972,17 +7148,18 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         db.effect_overrides = { ...db.effect_overrides, ...actualData.effect_overrides };
       }
 
-      // Import Student Buttons (Botões de Alunos - Se já tem no merge, IGNORE)
-      if (import_buttons !== 'false' && actualData.student_buttons) {
-        const buttonsList: any[] = Array.isArray(actualData.student_buttons)
+      // Import Student Buttons (Botões de Alunos)
+      // Regra crítica: se não houver botões no backup (ou lista vazia), NUNCA manter ou adicionar botões pré-prontos na substituição
+      if (import_buttons !== 'false') {
+        const hasButtonsArray = Array.isArray(actualData.student_buttons);
+        const buttonsList: any[] = hasButtonsArray
           ? actualData.student_buttons.map((b: any) => (Array.isArray(b) ? b[1] : b))
           : [];
-        if (mode === 'overwrite' && buttonsList.length > 0) {
+        if (mode === 'overwrite') {
           db.student_buttons.clear();
         }
         buttonsList.forEach((b) => {
           if (b && b.id && b.name && b.url) {
-            // Se já tem, ignore!
             if (mode === 'merge' && db.student_buttons.has(b.id)) {
               return;
             }
@@ -6994,6 +7171,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
               color: b.color || 'indigo',
               icon: b.icon || '🔗',
               active: b.active !== false,
+              open_in_new_tab: b.open_in_new_tab !== false,
               order: typeof b.order === 'number' ? b.order : db.student_buttons.size + 1,
               click_count: typeof b.click_count === 'number' ? b.click_count : 0,
               created_at: b.created_at || new Date().toISOString(),
@@ -7002,6 +7180,29 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
             importedButtonsCount++;
           }
         });
+      }
+
+      // Import Weekly Schedule (Cronograma Segunda a Sexta)
+      if (import_schedule !== 'false') {
+        if (actualData.weekly_schedule) {
+          const parsedSchedule = normalizeWeeklyScheduleConfig(actualData.weekly_schedule);
+          if (mode === 'overwrite') {
+            db.weekly_schedule = parsedSchedule;
+          } else {
+            db.weekly_schedule = {
+              enabled: parsedSchedule.enabled,
+              monday: normalizeScheduleList([...db.weekly_schedule.monday, ...parsedSchedule.monday]),
+              tuesday: normalizeScheduleList([...db.weekly_schedule.tuesday, ...parsedSchedule.tuesday]),
+              wednesday: normalizeScheduleList([...db.weekly_schedule.wednesday, ...parsedSchedule.wednesday]),
+              thursday: normalizeScheduleList([...db.weekly_schedule.thursday, ...parsedSchedule.thursday]),
+              friday: normalizeScheduleList([...db.weekly_schedule.friday, ...parsedSchedule.friday]),
+              updated_at: parsedSchedule.updated_at || new Date().toISOString(),
+            };
+          }
+          importedScheduleDaysCount = SCHEDULE_WEEKDAYS.filter((d) => (parsedSchedule[d.key] || []).length > 0).length;
+        } else if (mode === 'overwrite') {
+          db.weekly_schedule = createEmptyScheduleConfig();
+        }
       }
 
       // Import WhatsApp Config (Modelos de Mensagens, Agendamentos, Lembretes)
@@ -7107,6 +7308,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         subjects: importedSubjectsCount,
         completions: importedCompletionsCount,
         buttons: importedButtonsCount,
+        schedule_days: importedScheduleDaysCount,
         files: extractedFilesCount,
       },
     });

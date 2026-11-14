@@ -46,7 +46,7 @@ export default function LoginPage() {
     const load = async () => {
       try {
         const { data } = await api.get("/auth/profiles");
-        if (data && data.length > 0) {
+        if (Array.isArray(data) && data.length > 0) {
           setProfiles(data);
           setLoading(false);
           return;
@@ -58,16 +58,22 @@ export default function LoginPage() {
       // Fallback: Read directly from Firestore
       try {
         const users = await firebaseService.getAllUsers();
-        if (users && users.length > 0) {
-          const mapped = users.map((u) => ({
-            id: u.id,
-            name: u.name,
-            role: u.role,
-            status: u.status || "active",
-            has_avatar: Boolean(u.avatar_data),
-            points: u.points || 0,
-            equipped_effect: u.equipped_effect || "none",
-          }));
+        if (Array.isArray(users) && users.length > 0) {
+          const mapped = users
+            .map((u) => ({
+              id: u.id,
+              name: u.name,
+              role: u.role,
+              status: u.status || "active",
+              has_avatar: Boolean(u.avatar_data),
+              points: u.points || 0,
+              equipped_effect: u.equipped_effect || "none",
+            }))
+            .sort((a, b) => {
+              if (a.role === "admin" && b.role !== "admin") return -1;
+              if (a.role !== "admin" && b.role === "admin") return 1;
+              return (a.name || "").localeCompare(b.name || "");
+            });
           setProfiles(mapped);
           setLoading(false);
           return;

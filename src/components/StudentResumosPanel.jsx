@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api, formatApiError } from "@/lib/api";
+import { firebaseService } from "@/lib/firebaseService";
 import { toast } from "sonner";
 import MarkdownSummaryViewer from "./MarkdownSummaryViewer";
 import ModalPortal from "@/components/ModalPortal";
@@ -47,13 +48,26 @@ export default function StudentResumosPanel() {
         api.get("/summaries"),
         api.get("/subjects"),
       ]);
-      const publishedOnly = (sumRes.data || []).filter(
+      if (!Array.isArray(sumRes?.data)) throw new Error("Formato inválido de resumos");
+      const publishedOnly = sumRes.data.filter(
         (item) => item.is_published === true && item.summary_text && item.summary_text.trim().length > 0
       );
       setSummaries(publishedOnly);
-      setSubjects(subjRes.data || []);
+      setSubjects(Array.isArray(subjRes?.data) ? subjRes.data : []);
     } catch (err) {
-      toast.error(formatApiError(err));
+      try {
+        const [allSummaries, allSubjects] = await Promise.all([
+          firebaseService.getAllSummaries(),
+          firebaseService.getAllSubjects().catch(() => []),
+        ]);
+        const publishedOnly = (allSummaries || []).filter(
+          (item) => item.is_published === true && item.summary_text && item.summary_text.trim().length > 0
+        );
+        setSummaries(publishedOnly);
+        setSubjects(Array.isArray(allSubjects) ? allSubjects : []);
+      } catch (err2) {
+        toast.error(formatApiError(err) || formatApiError(err2));
+      }
     } finally {
       setLoading(false);
     }

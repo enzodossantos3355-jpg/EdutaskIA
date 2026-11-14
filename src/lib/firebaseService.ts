@@ -154,6 +154,18 @@ function sanitizeFirestoreData(obj: any): any {
   return obj;
 }
 
+async function withFirestoreTimeout<T>(promise: Promise<T>, ms = 12000, label = 'Firestore'): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label}: tempo limite excedido (${ms}ms)`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export const firebaseService = {
   setCollectionPrefix,
   getCollectionPrefix,
@@ -162,7 +174,7 @@ export const firebaseService = {
   async getAllTasks(): Promise<any[]> {
     const col = colPath('tasks');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 12000, col);
       const tasks: any[] = [];
       snap.forEach((docSnap) => {
         tasks.push({ id: docSnap.id, ...docSnap.data() });
@@ -201,7 +213,7 @@ export const firebaseService = {
   async getAllUsers(): Promise<any[]> {
     const col = colPath('users');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 12000, col);
       const users: any[] = [];
       snap.forEach((docSnap) => {
         users.push({ id: docSnap.id, ...docSnap.data() });
@@ -216,7 +228,7 @@ export const firebaseService = {
     const col = colPath('users');
     const path = `${col}/${userId}`;
     try {
-      const snap = await getDoc(doc(db, col, userId));
+      const snap = await withFirestoreTimeout(getDoc(doc(db, col, userId)), 10000, path);
       if (snap.exists()) {
         return { id: snap.id, ...snap.data() };
       }
@@ -273,7 +285,7 @@ export const firebaseService = {
   async getAllSubjects(): Promise<any[]> {
     const col = colPath('subjects');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 10000, col);
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
@@ -312,7 +324,7 @@ export const firebaseService = {
   async getAllAnnouncements(): Promise<any[]> {
     const col = colPath('announcements');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 12000, col);
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
@@ -351,7 +363,7 @@ export const firebaseService = {
   async getAllCompletions(): Promise<any[]> {
     const col = colPath('completions');
     try {
-      const snap = await getDocs(collection(db, col));
+      const snap = await withFirestoreTimeout(getDocs(collection(db, col)), 12000, col);
       const list: any[] = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
@@ -431,7 +443,7 @@ export const firebaseService = {
     const col = colPath('settings');
     const path = `${col}/${key}`;
     try {
-      const snap = await getDoc(doc(db, col, key));
+      const snap = await withFirestoreTimeout(getDoc(doc(db, col, key)), 10000, path);
       if (snap.exists()) {
         return snap.data();
       }
@@ -486,7 +498,7 @@ export const firebaseService = {
     const col = colPath('files');
     const path = `${col}/${fileId}`;
     try {
-      const snap = await getDoc(doc(db, col, fileId));
+      const snap = await withFirestoreTimeout(getDoc(doc(db, col, fileId)), 12000, path);
       if (snap.exists()) {
         return { id: snap.id, ...snap.data() };
       }

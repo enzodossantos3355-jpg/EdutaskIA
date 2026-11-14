@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Calendar as CalendarIcon, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot, Rocket, Zap, BookOpen, FileText, Settings, Image as ImageIcon, Crown, Palette, Loader2, Check, Scissors, Target, Bell } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, CalendarDays, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot, Rocket, Zap, BookOpen, FileText, Settings, Image as ImageIcon, Crown, Palette, Loader2, Check, Scissors, Target, Bell } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import AppHeader from "@/components/AppHeader";
@@ -24,6 +24,7 @@ import StudentButtonsPanel from "@/components/StudentButtonsPanel";
 import AnnualRankingPanel from "@/components/AnnualRankingPanel";
 import AdminResumosPanel from "@/components/AdminResumosPanel";
 import NotificationsAdminPanel from "@/components/NotificationsAdminPanel";
+import ScheduleAdminPanel from "@/components/ScheduleAdminPanel";
 import { useAIStatus } from "@/context/AIStatusContext";
 import { effectClass, pullScreenToStore } from "@/lib/effects";
 import { getPriority, formatDateBR } from "@/lib/priority";
@@ -127,7 +128,7 @@ export default function AdminDashboard() {
             type="button"
             onClick={() => {
               setMainSection("estudos");
-              if (!["tasks", "announcements", "subjects", "resumos", "ranking_annual", "store", "buttons"].includes(tab)) {
+              if (!["tasks", "announcements", "subjects", "schedule", "resumos", "ranking_annual", "store", "buttons"].includes(tab)) {
                 setTab("tasks");
               }
             }}
@@ -223,6 +224,14 @@ export default function AdminDashboard() {
                 data-testid="tab-subjects"
               >
                 <BookMarked className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Matérias
+              </button>
+              <button
+                onClick={() => setTab("schedule")}
+                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "schedule" ? "bg-emerald-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
+                data-testid="tab-schedule"
+                title="Configurar matérias necessárias de Segunda a Sexta"
+              >
+                <CalendarDays className="w-4 h-4 inline mr-1.5 sm:mr-2 text-emerald-950" /> Cronograma
               </button>
               <button
                 onClick={() => setTab("resumos")}
@@ -342,6 +351,7 @@ export default function AdminDashboard() {
         {tab === "announcements" && <AnnouncementsPanel annualCycle={annualCycle} />}
         {tab === "students" && <StudentsPanel />}
         {tab === "subjects" && <SubjectsPanel annualCycle={annualCycle} />}
+        {tab === "schedule" && <ScheduleAdminPanel />}
         {tab === "resumos" && <AdminResumosPanel />}
         {tab === "logs" && <LoginLogsPanel />}
         {tab === "stats" && <StatsPanel />}
@@ -385,12 +395,13 @@ function TasksPanel({ annualCycle }) {
         api.get("/tasks"),
         api.get("/admin/task-cleanup").catch(() => ({ data: null })),
       ]);
+      if (!Array.isArray(t)) throw new Error("Formato inválido de tarefas");
       setTasks(t);
       if (c) setCleanupData(c);
     } catch (e) {
       try {
         const firestoreTasks = await firebaseService.getAllTasks();
-        if (firestoreTasks) {
+        if (Array.isArray(firestoreTasks)) {
           setTasks(firestoreTasks);
         }
       } catch (e2) {
@@ -715,10 +726,27 @@ function TaskDialog({ task, onClose, onSaved }) {
   useEffect(() => {
     setLoadingSubjects(true);
     api.get("/subjects").then(({ data }) => {
-      setSubjects(data);
-      if (!isEdit && data.length > 0 && !subject) setSubject(data[0].name);
-    }).catch(() => {}).finally(() => setLoadingSubjects(false));
-    api.get("/users").then(({ data }) => setStudents(data)).catch(() => {});
+      if (Array.isArray(data)) {
+        setSubjects(data);
+        if (!isEdit && data.length > 0 && !subject) setSubject(data[0].name);
+      }
+    }).catch(async () => {
+      try {
+        const list = await firebaseService.getAllSubjects();
+        if (Array.isArray(list)) {
+          setSubjects(list);
+          if (!isEdit && list.length > 0 && !subject) setSubject(list[0].name);
+        }
+      } catch {}
+    }).finally(() => setLoadingSubjects(false));
+    api.get("/users").then(({ data }) => {
+      if (Array.isArray(data)) setStudents(data);
+    }).catch(async () => {
+      try {
+        const list = await firebaseService.getAllUsers();
+        if (Array.isArray(list)) setStudents(list.filter((u) => u.role === "aluno"));
+      } catch {}
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1281,11 +1309,12 @@ function StudentsPanel() {
     setLoading(true);
     try {
       const { data } = await api.get("/users");
+      if (!Array.isArray(data)) throw new Error("Formato inválido de usuários");
       setStudents(data);
     } catch (e) {
       try {
         const firestoreUsers = await firebaseService.getAllUsers();
-        if (firestoreUsers && firestoreUsers.length > 0) {
+        if (Array.isArray(firestoreUsers) && firestoreUsers.length > 0) {
           setStudents(firestoreUsers.filter((u) => u.role === "aluno"));
         } else {
           setStudents([]);
@@ -1700,12 +1729,13 @@ function SubjectsPanel({ annualCycle }) {
     setLoading(true);
     try {
       const { data } = await api.get("/subjects");
+      if (!Array.isArray(data)) throw new Error("Formato inválido de matérias");
       setSubjects(data);
       setCachedSubjects(data);
     } catch (e) {
       try {
         const firestoreSubjects = await firebaseService.getAllSubjects();
-        if (firestoreSubjects && firestoreSubjects.length > 0) {
+        if (Array.isArray(firestoreSubjects) && firestoreSubjects.length > 0) {
           setSubjects(firestoreSubjects);
           setCachedSubjects(firestoreSubjects);
         }
@@ -2014,10 +2044,22 @@ function AnnouncementsPanel({ annualCycle }) {
         api.get("/announcements"),
         api.get("/users"),
       ]);
+      if (!Array.isArray(anns) || !Array.isArray(studs)) {
+        throw new Error("Formato inválido de avisos");
+      }
       setItems(anns);
       setStudents(studs);
     } catch (e) {
-      toast.error(formatApiError(e?.response?.data?.detail));
+      try {
+        const [anns, users] = await Promise.all([
+          firebaseService.getAllAnnouncements(),
+          firebaseService.getAllUsers(),
+        ]);
+        setItems(Array.isArray(anns) ? anns : []);
+        setStudents(Array.isArray(users) ? users.filter((u) => u.role === "aluno") : []);
+      } catch (e2) {
+        toast.error(formatApiError(e?.response?.data?.detail || e2?.message) || "Erro ao carregar avisos");
+      }
     } finally {
       setLoading(false);
     }

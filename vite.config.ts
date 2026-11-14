@@ -70,7 +70,12 @@ export default defineConfig(() => {
           cleanupOutdatedCaches: true,
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-          navigateFallbackDenylist: [/^\/api/],
+          globIgnores: [
+            '**/image_*.png',
+            '**/minecraft*.png',
+            '**/stranger_things*.png',
+          ],
+          navigateFallbackDenylist: [/^\/api/, /^\/__/],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

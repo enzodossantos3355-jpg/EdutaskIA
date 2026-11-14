@@ -55,6 +55,7 @@ export default function ZipDataTransferPanel() {
   const [optCompletions, setOptCompletions] = useState(true);
   const [optUploads, setOptUploads] = useState(true);
   const [optButtons, setOptButtons] = useState(true);
+  const [optSchedule, setOptSchedule] = useState(true);
   const [optWhatsapp, setOptWhatsapp] = useState(true);
   const [optMonthly, setOptMonthly] = useState(true);
 
@@ -203,6 +204,7 @@ export default function ZipDataTransferPanel() {
       formData.append("import_completions", String(optCompletions));
       formData.append("import_uploads", String(optUploads));
       formData.append("import_buttons", String(optButtons));
+      formData.append("import_schedule", String(optSchedule));
       formData.append("import_whatsapp", String(optWhatsapp));
       formData.append("import_monthly", String(optMonthly));
 
@@ -373,11 +375,11 @@ export default function ZipDataTransferPanel() {
               <ul className="text-xs space-y-2 text-neutral-700">
                 <li className="flex items-center gap-2">
                   <Database className="w-4 h-4 text-sky-600" />
-                  <span><strong>edutask_backup.json</strong> (Alunos, Tarefas, Matérias, Botões de Alunos, WhatsApp, Ciclo Mensal e Pontos)</span>
+                  <span><strong>edutask_backup.json</strong> (Alunos, Tarefas, Matérias, Cronograma, Botões de Alunos, WhatsApp, Ciclo Mensal e Pontos)</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span><strong>Planilhas CSV</strong> (Alunos e Pontos, Tarefas, Entregas Concluídas e Botões de Alunos)</span>
+                  <span><strong>Planilhas CSV</strong> (Alunos e Pontos, Tarefas, Entregas Concluídas, Botões de Alunos e Cronograma)</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <ImageIcon className="w-4 h-4 text-amber-600" />
@@ -580,6 +582,15 @@ export default function ZipDataTransferPanel() {
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input
                           type="checkbox"
+                          checked={optSchedule}
+                          onChange={(e) => setOptSchedule(e.target.checked)}
+                          className="rounded text-emerald-600"
+                        />
+                        <span>Cronograma ({previewData.counts.schedule_days_configured ?? 0}/5 dias)</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
                           checked={optCompletions}
                           onChange={(e) => setOptCompletions(e.target.checked)}
                           className="rounded text-sky-600"
@@ -651,6 +662,9 @@ export default function ZipDataTransferPanel() {
                     <p>• {importResult.imported.subjects} matérias organizadas.</p>
                     {importResult.imported.buttons !== undefined && (
                       <p>• {importResult.imported.buttons} botões de alunos sincronizados.</p>
+                    )}
+                    {importResult.imported.schedule_days !== undefined && (
+                      <p>• {importResult.imported.schedule_days} dia(s) de cronograma sincronizados.</p>
                     )}
                     <p>• {importResult.imported.files} arquivos de mídia e fotos extraídos.</p>
                   </div>
