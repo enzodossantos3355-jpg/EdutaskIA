@@ -235,44 +235,37 @@ export default function NotificationsAdminPanel() {
 
   return (
     <div className="space-y-6" data-testid="notifications-admin-panel">
-      {/* Header Banner */}
-      <div className="nb-card bg-amber-300 p-5 sm:p-6 rounded-2xl border-2 border-black shadow-[4px_4px_0_0_#000] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-3">
-            <span className="w-11 h-11 rounded-xl bg-amber-400 border-2 border-black flex items-center justify-center shrink-0 shadow-[2px_2px_0_0_#000]">
-              <BellRing className="w-6 h-6 text-black" />
+      {/* Cabeçalho */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">
+              Central de Notificações
+            </h1>
+            <span
+              data-testid="push-env-mode-badge"
+              className={`nb-badge text-[11px] font-bold uppercase px-2.5 py-0.5 ${
+                envMode === "preview"
+                  ? "bg-sky-100 text-sky-950"
+                  : "bg-emerald-100 text-emerald-950"
+              }`}
+            >
+              {envMode === "preview" ? "Ambiente Preview (Isolado)" : "Ambiente Produção (Turma)"}
             </span>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl sm:text-3xl font-heading font-black text-black uppercase tracking-tight">
-                  Central de Notificações
-                </h1>
-                <span
-                  data-testid="push-env-mode-badge"
-                  className={`nb-badge text-[11px] font-heading font-black uppercase px-2.5 py-0.5 border-2 border-black ${
-                    envMode === "preview"
-                      ? "bg-sky-200 text-sky-950"
-                      : "bg-emerald-300 text-emerald-950"
-                  }`}
-                >
-                  {envMode === "preview" ? "Ambiente Preview (Isolado)" : "Ambiente Produção (Turma)"}
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm font-bold text-neutral-800">
-                {envMode === "preview"
-                  ? "Dispositivos e chaves Push deste Preview são 100% isolados e nunca disparam notificações para os alunos da versão publicada."
-                  : "Ligue ou desligue quais eventos enviam alertas Web Push para os dispositivos dos alunos."}
-              </p>
-            </div>
           </div>
+          <p className="text-sm text-neutral-600">
+            {envMode === "preview"
+              ? "Dispositivos e chaves Push deste Preview são 100% isolados e nunca disparam notificações para os alunos da versão publicada."
+              : "Ligue ou desligue quais eventos enviam alertas Web Push para os dispositivos dos alunos."}
+          </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <button
             type="button"
             onClick={loadSettings}
             disabled={loading}
-            className="nb-btn bg-white hover:bg-neutral-100 px-3.5 py-2 text-xs font-black flex items-center gap-1.5"
+            className="nb-btn bg-white hover:bg-slate-50 px-3 py-2 text-xs font-bold flex items-center gap-1.5"
             title="Atualizar dados"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
@@ -282,7 +275,7 @@ export default function NotificationsAdminPanel() {
             type="button"
             onClick={() => handleBulkToggle(true)}
             disabled={bulkSaving || enabledCount === TRIGGER_ITEMS.length}
-            className="nb-btn bg-emerald-300 hover:bg-emerald-400 px-3.5 py-2 text-xs font-black flex items-center gap-1.5 disabled:opacity-50"
+            className="nb-btn admin-btn-primary px-3.5 py-2 text-xs flex items-center gap-1.5 disabled:opacity-50"
             data-testid="push-enable-all-btn"
           >
             <Bell className="w-3.5 h-3.5" />
@@ -292,7 +285,7 @@ export default function NotificationsAdminPanel() {
             type="button"
             onClick={() => handleBulkToggle(false)}
             disabled={bulkSaving || enabledCount === 0}
-            className="nb-btn bg-white hover:bg-rose-100 px-3.5 py-2 text-xs font-black flex items-center gap-1.5 disabled:opacity-50"
+            className="nb-btn bg-white hover:bg-rose-50 px-3.5 py-2 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
             data-testid="push-disable-all-btn"
           >
             <BellOff className="w-3.5 h-3.5 text-rose-700" />

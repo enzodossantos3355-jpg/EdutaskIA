@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAIStatus } from "@/context/AIStatusContext";
 import Avatar from "./Avatar";
 import MolduraArtCenter from "./MolduraArtCenter";
+import ImageMolduraCard, { hasImageMoldura } from "./ImageMolduraCard";
 import ModalPortal from "@/components/ModalPortal";
 import {
   Sparkles,
@@ -514,29 +515,55 @@ export default function StoreEffects({ user: propUser, refresh: propRefresh }) {
                   </div>
 
                   {/* Visual Box com a Moldura */}
-                  <div
-                    className={`p-4 rounded-xl border-2 border-black min-h-[120px] relative ${eff.cardClass}`}
-                  >
-                    <MolduraArtCenter effectId={eff.id} />
-                    <div className="relative z-10 flex items-center gap-3">
-                      <Avatar
-                        userId={user?.id}
-                        name={user?.name || "Aluno"}
-                        size={48}
-                        hasAvatar={user?.has_avatar}
-                        version={user?.avatar_version}
-                        effect={eff.avatarEffect || eff.id}
-                      />
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <div className="font-heading font-black text-sm truncate flex items-center gap-1">
-                          <span className="truncate">{eff.name}</span>
+                  {hasImageMoldura(eff.id) ? (
+                    <div
+                      className={`p-3 rounded-xl border-2 relative flex flex-col items-center gap-2.5 ${eff.cardClass}`}
+                    >
+                      <div className="w-[175px] sm:w-[190px] mx-auto rounded-xl overflow-hidden border-2 border-black/80 shadow-[2px_2px_0_0_#000]">
+                        <ImageMolduraCard
+                          effectId={eff.id}
+                          userId={user?.id}
+                          name={user?.name || "Aluno"}
+                          role={user?.role || "aluno"}
+                          hasAvatar={user?.has_avatar}
+                          version={user?.avatar_version}
+                          bleed={true}
+                        />
+                      </div>
+                      <div className="w-full text-center space-y-0.5 pt-2 border-t border-current/15">
+                        <div className="font-heading font-black text-sm truncate">
+                          {eff.name}
                         </div>
                         <p className="text-[11px] opacity-90 font-bold line-clamp-2 leading-tight">
                           {eff.description}
                         </p>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div
+                      className={`p-4 rounded-xl border-2 border-black min-h-[120px] relative ${eff.cardClass}`}
+                    >
+                      <MolduraArtCenter effectId={eff.id} />
+                      <div className="relative z-10 flex items-center gap-3">
+                        <Avatar
+                          userId={user?.id}
+                          name={user?.name || "Aluno"}
+                          size={48}
+                          hasAvatar={user?.has_avatar}
+                          version={user?.avatar_version}
+                          effect={eff.avatarEffect || eff.id}
+                        />
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="font-heading font-black text-sm truncate flex items-center gap-1">
+                            <span className="truncate">{eff.name}</span>
+                          </div>
+                          <p className="text-[11px] opacity-90 font-bold line-clamp-2 leading-tight">
+                            {eff.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Footer Action */}

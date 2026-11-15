@@ -1,6 +1,7 @@
 import { LogOut, Download, Bell, BellRing, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useAIStatus } from "@/context/AIStatusContext";
 import { usePWA } from "@/context/PWAContext";
 import Logo from "@/components/Logo";
 import Avatar from "@/components/Avatar";
@@ -8,6 +9,7 @@ import AdminSystemClock from "@/components/AdminSystemClock";
 
 export default function AppHeader({ title }) {
   const { user, logout } = useAuth();
+  const { framesDisabled } = useAIStatus();
   const {
     canInstallOrGuide,
     installApp,
@@ -18,8 +20,13 @@ export default function AppHeader({ title }) {
     enablePush,
     disablePush,
   } = usePWA();
+  const isMentalist = !framesDisabled && user?.role !== "admin" && user?.equipped_effect === "mentalist";
   const roleLabel = user?.role === "admin" ? "Admin" : "Aluno";
-  const badgeClass = user?.role === "admin" ? "bg-red-300" : "bg-sky-300";
+  const badgeClass = user?.role === "admin"
+    ? "bg-red-300"
+    : isMentalist
+    ? "bg-[#e2b03a] text-[#1a0505]"
+    : "bg-sky-300";
 
   const handleTogglePush = async () => {
     if (pushLoading) return;
@@ -43,7 +50,11 @@ export default function AppHeader({ title }) {
 
   return (
     <header
-      className="border-b-2 border-black bg-white sticky top-0 z-30"
+      className={`border-b-2 border-black sticky top-0 z-30 ${
+        isMentalist
+          ? "bg-[#5b0e14] text-[#fdf6e7] shadow-[0_3px_0_0_#1a0404]"
+          : "bg-white"
+      }`}
       data-testid="app-header"
     >
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-4 relative z-10">
@@ -51,9 +62,14 @@ export default function AppHeader({ title }) {
           <Logo size={34} />
           <div className="min-w-0">
             <div className="font-heading font-black text-base sm:text-lg leading-tight">
-              <span>Edu</span><span className="text-sky-500">task</span>
+              <span className={isMentalist ? "text-[#fdf6e7]" : ""}>Edu</span>
+              <span className={isMentalist ? "text-[#f5c451]" : "text-sky-500"}>task</span>
             </div>
-            <div className="text-[10px] sm:text-xs font-medium leading-tight truncate max-w-[130px] sm:max-w-none text-neutral-600">
+            <div
+              className={`text-[10px] sm:text-xs font-medium leading-tight truncate max-w-[130px] sm:max-w-none ${
+                isMentalist ? "text-amber-100/85" : "text-neutral-600"
+              }`}
+            >
               {title}
             </div>
           </div>
@@ -75,7 +91,7 @@ export default function AppHeader({ title }) {
             />
           )}
           <div className="hidden md:flex flex-col items-end leading-tight">
-            <span className="font-bold text-sm" data-testid="user-name">
+            <span className={`font-bold text-sm ${isMentalist ? "text-[#fdf6e7]" : ""}`} data-testid="user-name">
               {user?.name}
             </span>
             {user?.role === "admin" && user?.email && (
@@ -93,6 +109,8 @@ export default function AppHeader({ title }) {
               className={`nb-btn px-2 sm:px-2.5 py-1.5 sm:py-2 text-xs font-black flex items-center gap-1.5 shadow-[2px_2px_0_0_#000] ${
                 pushSubscribed
                   ? "bg-emerald-300 hover:bg-emerald-400 text-emerald-950"
+                  : isMentalist
+                  ? "bg-[#fbf5e8] hover:bg-amber-100 text-[#1a0505]"
                   : "bg-white hover:bg-sky-100 text-neutral-900"
               }`}
               title={
@@ -118,7 +136,11 @@ export default function AppHeader({ title }) {
           {canInstallOrGuide && (
             <button
               onClick={installApp}
-              className="nb-btn bg-amber-300 hover:bg-amber-400 text-black px-2 sm:px-2.5 py-1.5 sm:py-2 text-xs font-black flex items-center gap-1.5 shadow-[2px_2px_0_0_#000]"
+              className={`nb-btn px-2 sm:px-2.5 py-1.5 sm:py-2 text-xs font-black flex items-center gap-1.5 shadow-[2px_2px_0_0_#000] ${
+                isMentalist
+                  ? "bg-[#e2b03a] hover:bg-[#d4a028] text-[#1a0505]"
+                  : "bg-amber-300 hover:bg-amber-400 text-black"
+              }`}
               title="Instalar aplicativo EduTask IA na tela inicial"
               aria-label="Instalar aplicativo"
               data-testid="header-pwa-install-btn"
@@ -129,7 +151,11 @@ export default function AppHeader({ title }) {
           )}
           <button
             onClick={logout}
-            className="nb-btn bg-white hover:bg-red-100 px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-2 text-sm"
+            className={`nb-btn px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-2 text-sm ${
+              isMentalist
+                ? "bg-[#fbf5e8] hover:bg-red-100 text-[#1a0505]"
+                : "bg-white hover:bg-red-100"
+            }`}
             data-testid="logout-button"
             aria-label="Sair"
           >

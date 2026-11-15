@@ -181,34 +181,23 @@ export default function StudentButtonsPanel({ annualCycle }) {
 
   return (
     <div className="space-y-6 nb-fade-in" data-testid="student-buttons-panel">
-      {/* Banner de Apresentação */}
-      <div className="nb-card bg-gradient-to-r from-sky-100 via-indigo-50 to-emerald-100 p-5 sm:p-7 border-2 border-black flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-        <div className="space-y-1.5 max-w-2xl">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500 text-white border-2 border-black flex items-center justify-center font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-              <Link2 className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-heading font-black text-xl sm:text-2xl text-neutral-900 leading-tight">
-                Botões & Links para Alunos
-              </h2>
-              <span className="nb-badge bg-amber-300 text-black border-2 border-black text-xs font-black tracking-wide uppercase px-2.5 py-0.5 shadow-[1.5px_1.5px_0_0_#000]">
-                Acessos Rápidos Personalizados
-              </span>
-            </div>
-          </div>
-          <p className="text-xs sm:text-sm text-neutral-700 leading-relaxed pt-1">
-            Crie botões personalizados que levam os alunos diretamente para qualquer link da sua escolha
-            (Google Classroom, videoaulas, resumos, formulários, simulados, bibliotecas digitais, etc.).
+      {/* Cabeçalho */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">
+            Botões & Links para Alunos
+          </h1>
+          <p className="text-sm text-neutral-600 mt-0.5">
+            Crie atalhos personalizados (Google Classroom, videoaulas, formulários, simulados e bibliotecas digitais).
           </p>
         </div>
 
         <button
           onClick={openCreateModal}
-          className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 px-4 py-2.5 text-sm font-heading font-black flex items-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] self-start sm:self-auto flex-shrink-0"
+          className="nb-btn admin-btn-primary px-4 py-2 text-xs sm:text-sm flex items-center gap-2 self-start sm:self-auto flex-shrink-0"
           data-testid="create-student-button-btn"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4" strokeWidth={2.5} />
           <span>Criar Novo Botão</span>
         </button>
       </div>

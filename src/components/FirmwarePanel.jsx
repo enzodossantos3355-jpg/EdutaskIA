@@ -357,64 +357,63 @@ export default function FirmwarePanel() {
       <canvas ref={canvasRef} className="hidden" />
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <h1 className="font-heading font-black text-3xl sm:text-5xl tracking-tight flex items-center gap-3">
-            <Cpu className="w-8 h-8 sm:w-10 sm:h-10 text-sky-700" strokeWidth={2.4} />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">
             Firmware do Sistema
           </h1>
-          <p className="text-neutral-600 mt-1 text-sm sm:text-base">
-            Visão consolidada da versão instalada, auditoria de segurança e funções ativas do Edutask.
+          <p className="text-neutral-600 mt-0.5 text-sm">
+            Visão consolidada da versão instalada, auditoria de segurança e módulos ativos do EduTask.
           </p>
         </div>
 
         {/* Action Buttons: Download Image + Send to WhatsApp */}
-        <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto flex-shrink-0">
           <button
             onClick={() => setWhatsappModalOpen(true)}
-            className="nb-btn bg-emerald-400 hover:bg-emerald-300 px-4 py-3 text-sm sm:text-base font-bold flex items-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] text-emerald-950"
+            className="nb-btn bg-emerald-200 hover:bg-emerald-300 px-3.5 py-2 text-xs sm:text-sm font-bold flex items-center gap-2 text-emerald-950"
             data-testid="send-firmware-whatsapp-btn"
             title="Enviar a imagem oficial do firmware para os grupos do WhatsApp"
           >
-            <MessageSquare className="w-5 h-5 text-emerald-950" />
+            <MessageSquare className="w-4 h-4 text-emerald-950" />
             <span>Mandar no Zap a Foto</span>
           </button>
 
           <button
             onClick={handleDownloadFirmwareImage}
             disabled={generatingImage}
-            className="nb-btn bg-sky-300 hover:bg-sky-400 px-4 py-3 text-sm sm:text-base font-bold flex items-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+            className="nb-btn admin-btn-primary px-4 py-2 text-xs sm:text-sm flex items-center gap-2"
             data-testid="download-firmware-image-btn"
             title="Baixar imagem em PNG de alta resolução"
           >
-            <Download className="w-5 h-5 text-neutral-900" />
+            <Download className="w-4 h-4" />
             <span>{generatingImage ? "Gerando..." : "Baixar Imagem"}</span>
           </button>
         </div>
       </div>
 
       {/* Version & System Card */}
-      <div className="nb-card p-6 sm:p-8 bg-gradient-to-br from-sky-200 via-sky-100 to-amber-100 relative overflow-hidden border-3 border-black">
+      <div className="nb-card p-5 sm:p-7 bg-gradient-to-br from-sky-100 via-sky-50 to-amber-50 relative overflow-hidden">
         <div className="absolute -top-6 -right-6 opacity-10 select-none pointer-events-none">
           <Settings className="w-40 h-40 text-sky-900" />
         </div>
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="nb-badge bg-sky-900 text-white text-xs font-black">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="nb-badge bg-sky-900 text-white text-xs font-bold">
                 Versão Instalada
               </span>
-              <span className="nb-badge bg-emerald-300 text-emerald-950 text-xs font-black flex items-center gap-1">
+              <span className="nb-badge bg-emerald-200 text-emerald-950 text-xs font-bold flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" /> 100% Estável
               </span>
             </div>
 
             <div className="flex items-baseline gap-3 flex-wrap">
-              <span className="font-heading font-black text-4xl sm:text-6xl text-neutral-900" data-testid="firmware-version-label">
+              <span className="font-heading font-black text-3xl sm:text-5xl text-neutral-900" data-testid="firmware-version-label">
                 v{appInfo.version || "1.2.0"}
               </span>
-              <span className="nb-badge bg-white text-neutral-900 text-sm font-black px-3 py-1">
+              <span className="nb-badge bg-white text-neutral-900 text-xs sm:text-sm font-bold px-3 py-1">
                 {appInfo.codename || "Edutask AI Core"}
               </span>
             </div>
@@ -424,7 +423,7 @@ export default function FirmwarePanel() {
             </p>
           </div>
 
-          <div className="bg-white/90 backdrop-blur-xs p-4 rounded-xl border-2 border-black space-y-2 min-w-[240px]">
+          <div className="bg-white/95 p-4 rounded-xl border border-slate-300 space-y-2 w-full md:w-auto md:min-w-[240px]">
             <div className="text-[11px] font-black uppercase tracking-wider text-neutral-500">
               Integridade do Núcleo
             </div>

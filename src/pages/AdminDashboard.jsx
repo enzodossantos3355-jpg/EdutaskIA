@@ -1,16 +1,15 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Calendar as CalendarIcon, CalendarDays, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot, Rocket, Zap, BookOpen, FileText, Settings, Image as ImageIcon, Crown, Palette, Loader2, Check, Scissors, Target, Bell } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, CalendarDays, Trash2, Users, ListTodo, Paperclip, X, CheckCircle2, Circle, Upload, Eye, EyeOff, BookMarked, Wrench, Lock, CheckCircle, Megaphone, Pencil, Copy, History, BarChart3, Trophy, Minus, Cpu, Sparkles, Coins, ShoppingBag, Clock, AlertTriangle, Star, MessageSquare, FileArchive, Link2, Bot, Rocket, Zap, BookOpen, FileText, Settings, Image as ImageIcon, Crown, Palette, Loader2, Check, Scissors, Target, Bell, Menu, LogOut, Download, ChevronDown } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
-import AppHeader from "@/components/AppHeader";
 import ModalPortal from "@/components/ModalPortal";
 import RecipientSelector from "@/components/RecipientSelector";
-import MyProfileBanner from "@/components/MyProfileBanner";
 import AvatarUploader from "@/components/AvatarUploader";
 import EditProfileDialog from "@/components/EditProfileDialog";
 import AnnouncementComments from "@/components/AnnouncementComments";
 import Avatar from "@/components/Avatar";
+import Logo from "@/components/Logo";
 import FirmwarePanel from "@/components/FirmwarePanel";
 import AIEnhanceButton from "@/components/AIEnhanceButton";
 import AIAdminPanel from "@/components/AIAdminPanel";
@@ -26,7 +25,8 @@ import AdminResumosPanel from "@/components/AdminResumosPanel";
 import NotificationsAdminPanel from "@/components/NotificationsAdminPanel";
 import ScheduleAdminPanel from "@/components/ScheduleAdminPanel";
 import { useAIStatus } from "@/context/AIStatusContext";
-import { effectClass, pullScreenToStore } from "@/lib/effects";
+import { usePWA } from "@/context/PWAContext";
+import { effectClass, effectCardClass, getTheme, isDarkTheme, pullScreenToStore } from "@/lib/effects";
 import { getPriority, formatDateBR } from "@/lib/priority";
 import { SUBJECT_COLOR_OPTIONS, colorFor, getSubjectColorConfig, getSubjectCardClass, getSubjectBadgeClass, setCachedSubjects } from "@/lib/subjectColors";
 
@@ -39,15 +39,62 @@ const STATUS_OPTS = [
 
 import { useAuth } from "@/context/AuthContext";
 
+const TAB_LABELS = {
+  tasks: "Tarefas",
+  announcements: "Avisos",
+  subjects: "Matérias",
+  schedule: "Cronograma",
+  resumos: "Resumos",
+  ranking_annual: "Ranking Anual",
+  store: "Loja de Molduras",
+  buttons: "Botões dos Alunos",
+  students: "Alunos",
+  logs: "Acessos",
+  stats: "Estatísticas",
+  firmware: "Firmware",
+  ai: "IA",
+  whatsapp: "WhatsApp",
+  notifications: "Notificações",
+  zip_transfer: "Dados ZIP",
+};
+
 export default function AdminDashboard() {
-  const { user, refresh } = useAuth();
+  const { user, refresh, logout } = useAuth();
   const { framesDisabled } = useAIStatus();
+  const { canInstallOrGuide, installApp } = usePWA();
   const [tab, setTab] = useState("tasks");
   const [annualCycle, setAnnualCycle] = useState(null);
   const [globalCleanupOpen, setGlobalCleanupOpen] = useState(false);
   const [globalCleanupData, setGlobalCleanupData] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState({ estudos: true, configuracoes: true });
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true
+  );
 
   const [mainSection, setMainSection] = useState("estudos"); // "estudos" | "configuracoes"
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => {
+      setIsDesktop(mq.matches);
+      if (mq.matches) setMobileMenuOpen(false);
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setMobileMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileMenuOpen]);
 
   const loadGlobalCleanup = useCallback(async () => {
     try {
@@ -71,307 +118,422 @@ export default function AdminDashboard() {
     loadGlobalCleanup();
   }, [loadGlobalCleanup]);
 
-  // Listener para evento customizado do botão superior da Loja no AppHeader
+  // Listener para evento customizado do botão superior da Loja
   useEffect(() => {
     const handleOpenStore = () => {
       if (framesDisabled) return;
       setMainSection("estudos");
       setTab("store");
+      setMobileMenuOpen(false);
       pullScreenToStore();
     };
     window.addEventListener("open-store-tab", handleOpenStore);
     return () => window.removeEventListener("open-store-tab", handleOpenStore);
   }, [framesDisabled]);
 
-  return (
-    <div className="min-h-screen bg-[#FAFAFA]">
-      <AppHeader title="Painel do Administrador" />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-8 pb-24 sm:pb-8 page-enter">
-        <MyProfileBanner onOpenStore={!framesDisabled ? () => {
-          setMainSection("estudos");
-          setTab("store");
-          pullScreenToStore();
-        } : null} />
+  const selectTab = (nextTab, sectionKey) => {
+    setMainSection(sectionKey);
+    setTab(nextTab);
+    setMobileMenuOpen(false);
+    if (nextTab === "store") {
+      pullScreenToStore();
+    }
+  };
 
-        {/* Banner de Ano Letivo Encerrado */}
-        {annualCycle?.is_closed && (
-          <div className="mb-6 nb-card bg-amber-100 border-2 border-amber-600 p-4 rounded-xl shadow-[4px_4px_0_0_#d97706] flex flex-col sm:flex-row sm:items-center justify-between gap-3 nb-fade-in" data-testid="annual-cycle-closed-banner">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-400 border-2 border-black flex items-center justify-center flex-shrink-0 shadow-[2px_2px_0_0_#000]">
-                <Lock className="w-5 h-5 text-black" />
+  const toggleGroup = (groupKey) => {
+    setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
+  };
+
+  const estudosItems = [
+    { key: "tasks", label: "Tarefas", icon: ListTodo, testId: "tab-tasks" },
+    { key: "announcements", label: "Avisos", icon: Megaphone, testId: "tab-announcements" },
+    { key: "subjects", label: "Matérias", icon: BookMarked, testId: "tab-subjects" },
+    { key: "schedule", label: "Cronograma", icon: CalendarDays, testId: "tab-schedule", title: "Configurar matérias necessárias de Segunda a Sexta" },
+    { key: "resumos", label: "Resumos", icon: BookOpen, testId: "tab-resumos", title: "Resumos de Estudo por Matéria" },
+    { key: "ranking_annual", label: "Ranking Anual", icon: Trophy, testId: "tab-ranking-annual", title: "Ranking Anual dos Alunos e Controle do Ano Letivo" },
+    ...(!framesDisabled ? [{ key: "store", label: "Loja de Molduras", icon: ShoppingBag, testId: "tab-store", title: "Acessar Loja de Molduras" }] : []),
+    { key: "buttons", label: "Botões dos Alunos", icon: Link2, testId: "tab-buttons", title: "Criar e gerenciar botões para os alunos" },
+  ];
+
+  const configuracoesItems = [
+    { key: "students", label: "Alunos", icon: Users, testId: "tab-students" },
+    { key: "logs", label: "Acessos", icon: History, testId: "tab-logs" },
+    { key: "stats", label: "Estatísticas", icon: BarChart3, testId: "tab-stats" },
+    { key: "firmware", label: "Firmware", icon: Cpu, testId: "tab-firmware" },
+    { key: "ai", label: "IA", icon: Sparkles, testId: "tab-ai" },
+    { key: "whatsapp", label: "WhatsApp", icon: MessageSquare, testId: "tab-whatsapp" },
+    { key: "notifications", label: "Notificações", icon: Bell, testId: "tab-notifications" },
+    { key: "zip_transfer", label: "Dados ZIP", icon: FileArchive, testId: "tab-zip-transfer" },
+  ];
+
+  const activeTabLabel = TAB_LABELS[tab] || "Painel Administrativo";
+  const hasCustomFrame = !framesDisabled && user?.equipped_effect && user.equipped_effect !== "none";
+  const currentTheme = getTheme(user?.equipped_effect);
+  const darkProfileFrame = hasCustomFrame && isDarkTheme(user?.equipped_effect);
+  const compactProfileCls = hasCustomFrame
+    ? effectCardClass(user?.equipped_effect)
+    : "bg-slate-50 border border-slate-200";
+
+  return (
+    <div className="min-h-screen admin-workspace overflow-x-hidden">
+      {/* Backdrop da gaveta mobile/tablet */}
+      <div
+        onClick={() => setMobileMenuOpen(false)}
+        aria-hidden={isDesktop || !mobileMenuOpen}
+        className={`fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px] lg:hidden admin-drawer-backdrop ${
+          !isDesktop && mobileMenuOpen
+            ? "opacity-100 visible pointer-events-auto"
+            : "opacity-0 invisible pointer-events-none"
+        }`}
+        data-testid="admin-drawer-backdrop"
+      />
+
+      {/* Menu lateral fixo (desktop) / Gaveta lateral (celular e tablet) */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-[280px] max-w-[85vw] bg-white border-r border-slate-200 flex flex-col admin-drawer-panel lg:w-64 xl:w-72 lg:z-30 lg:translate-x-0 lg:visible lg:pointer-events-auto shadow-xl lg:shadow-none ${
+          mobileMenuOpen ? "translate-x-0 visible pointer-events-auto" : "-translate-x-full invisible pointer-events-none"
+        }`}
+        aria-label="Menu do painel administrativo"
+        aria-hidden={!isDesktop && !mobileMenuOpen}
+        data-testid="admin-sidebar"
+      >
+        {/* Marca + Botão Fechar (mobile) */}
+        <div className="h-14 px-4 border-b border-slate-200 flex items-center justify-between gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Logo size={30} />
+            <div className="min-w-0 leading-tight">
+              <div className="font-heading font-black text-base tracking-tight truncate">
+                <span>Edu</span><span className="text-sky-500">Task</span>
               </div>
-              <div>
-                <h3 className="font-heading font-black text-sm sm:text-base text-amber-950">
-                  Ano Letivo {annualCycle?.active_year || 2026} Encerrado — Criação Suspensa
-                </h3>
-                <p className="text-xs text-amber-900 mt-0.5 leading-relaxed">
-                  O ranking anual foi finalizado e os alunos estão na tela de bloqueio com o Pódio Top 3. A criação de novas tarefas, avisos e botões está desativada até você iniciar o próximo ano.
-                </p>
+              <div className="text-[11px] font-semibold text-neutral-500 truncate">
+                Painel Administrativo
               </div>
             </div>
-            <button
-              onClick={() => {
-                setMainSection("estudos");
-                setTab("ranking_annual");
-              }}
-              className="nb-btn bg-amber-400 hover:bg-amber-500 text-amber-950 font-heading font-black px-4 py-2 text-xs flex-shrink-0 border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5"
+          </div>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(false)}
+            className="lg:hidden nb-btn bg-white hover:bg-slate-100 p-1.5 text-neutral-800"
+            aria-label="Fechar menu"
+            data-testid="close-mobile-menu-button"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Perfil Compacto do Administrador */}
+        {user && (
+          <div className="p-3 border-b border-slate-200 flex-shrink-0">
+            <div
+              className={`rounded-xl p-2.5 transition-colors ${compactProfileCls}`}
+              data-testid="admin-compact-profile"
             >
-              <Rocket className="w-3.5 h-3.5" />
-              <span>Iniciar Próximo Ano</span>
-            </button>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Avatar
+                  userId={user.id}
+                  name={user.name}
+                  size={38}
+                  hasAvatar={user.has_avatar}
+                  bg="bg-red-300"
+                  effect={effectClass(user.equipped_effect)}
+                />
+                <div className="min-w-0 flex-1">
+                  <div
+                    className={`font-heading font-bold text-sm leading-tight truncate ${
+                      darkProfileFrame ? "text-white" : "text-neutral-900"
+                    }`}
+                  >
+                    {user.name}
+                  </div>
+                  <div
+                    className={`text-[11px] font-semibold truncate ${
+                      darkProfileFrame ? "text-white/80" : "text-neutral-600"
+                    }`}
+                  >
+                    Administrador{currentTheme?.id && currentTheme.id !== "none" ? ` • ${currentTheme.name.replace("Moldura ", "")}` : ""}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setEditProfileOpen(true);
+                }}
+                className="mt-2.5 w-full rounded-lg bg-white hover:bg-sky-50 text-neutral-950 border border-neutral-900 px-2.5 py-1.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-[1px_1px_0_0_#000]"
+                data-testid="open-edit-profile-button"
+              >
+                <Pencil className="w-3.5 h-3.5 text-sky-700" />
+                <span>Editar perfil</span>
+              </button>
+            </div>
           </div>
         )}
 
-        {/* 2 Botões Mestres Principais: Tarefas & Estudos vs Configurações */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-5" data-testid="admin-master-tabs">
-          <button
-            type="button"
-            onClick={() => {
-              setMainSection("estudos");
-              if (!["tasks", "announcements", "subjects", "schedule", "resumos", "ranking_annual", "store", "buttons"].includes(tab)) {
-                setTab("tasks");
-              }
-            }}
-            className={`p-3.5 sm:p-4 rounded-2xl border-3 border-black text-left transition-all flex items-center justify-between gap-3 ${
-              mainSection === "estudos"
-                ? "bg-amber-300 text-black shadow-[4px_4px_0px_0px_#000] -translate-x-0.5 -translate-y-0.5"
-                : "bg-white hover:bg-amber-50 text-neutral-800 shadow-[2px_2px_0px_0px_#000]"
-            }`}
-            data-testid="master-tab-estudos"
-          >
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-              <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl border-2 border-black flex items-center justify-center shrink-0 shadow-[2px_2px_0px_0px_#000] ${
-                mainSection === "estudos" ? "bg-amber-400 text-black" : "bg-amber-100 text-black"
-              }`}>
-                <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
-              </div>
-              <div className="min-w-0">
-                <div className="font-heading font-black text-sm sm:text-base leading-tight uppercase tracking-tight truncate">
-                  Tarefas & Estudos
-                </div>
-                <div className="text-[11px] sm:text-xs text-neutral-700 font-bold truncate">
-                  Tarefas, avisos, matérias e resumos
+        {/* Navegação com Grupos Expansíveis */}
+        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-3" aria-label="Seções administrativas">
+          {/* Grupo 1: Tarefas & Estudos */}
+          <div data-testid="nav-group-estudos">
+            <button
+              type="button"
+              onClick={() => toggleGroup("estudos")}
+              aria-expanded={expandedGroups.estudos}
+              className="w-full px-2 py-1.5 rounded-lg flex items-center justify-between gap-2 text-xs font-heading font-black uppercase tracking-wider text-neutral-600 hover:text-neutral-900 hover:bg-slate-100 transition-colors"
+              data-testid="group-toggle-estudos"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <BookOpen className="w-4 h-4 text-sky-600 flex-shrink-0" />
+                <span className="truncate">Tarefas & Estudos</span>
+              </span>
+              <ChevronDown
+                className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${
+                  expandedGroups.estudos ? "rotate-0" : "-rotate-90"
+                }`}
+              />
+            </button>
+            <div className={`expandable-grid ${expandedGroups.estudos ? "open" : ""}`}>
+              <div className="expandable-inner">
+                <div className="pt-1 space-y-1">
+                  {estudosItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = tab === item.key;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => selectTab(item.key, "estudos")}
+                        title={item.title}
+                        data-testid={item.testId}
+                        aria-current={active ? "page" : undefined}
+                        className={`w-full px-3 py-2 rounded-xl text-sm flex items-center gap-2.5 text-left transition-all duration-150 ${
+                          active
+                            ? "bg-sky-400 text-neutral-950 font-bold border-2 border-neutral-900 shadow-[2px_2px_0_0_#000]"
+                            : "text-neutral-700 hover:bg-slate-100 hover:text-neutral-950 font-medium border border-transparent"
+                        }`}
+                      >
+                        <Icon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-            {mainSection === "estudos" && (
-              <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 bg-amber-400 text-black text-[10px] font-black uppercase rounded-lg border-2 border-black shrink-0">
-                <Check className="w-3 h-3 stroke-[3]" /> Ativo
-              </span>
-            )}
-          </button>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setMainSection("configuracoes");
-              if (!["students", "logs", "stats", "firmware", "ai", "whatsapp", "notifications", "zip_transfer"].includes(tab)) {
-                setTab("students");
-              }
-            }}
-            className={`p-3.5 sm:p-4 rounded-2xl border-3 border-black text-left transition-all flex items-center justify-between gap-3 ${
-              mainSection === "configuracoes"
-                ? "bg-sky-300 text-black shadow-[4px_4px_0px_0px_#000] -translate-x-0.5 -translate-y-0.5"
-                : "bg-white hover:bg-sky-50 text-neutral-800 shadow-[2px_2px_0px_0px_#000]"
-            }`}
-            data-testid="master-tab-configuracoes"
-          >
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-              <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl border-2 border-black flex items-center justify-center shrink-0 shadow-[2px_2px_0px_0px_#000] ${
-                mainSection === "configuracoes" ? "bg-sky-400 text-black" : "bg-sky-100 text-black"
-              }`}>
-                <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
-              </div>
-              <div className="min-w-0">
-                <div className="font-heading font-black text-sm sm:text-base leading-tight uppercase tracking-tight truncate">
-                  Configurações
-                </div>
-                <div className="text-[11px] sm:text-xs text-neutral-700 font-bold truncate">
-                  Alunos, IA, notificações, WhatsApp e sistema
+          {/* Grupo 2: Configurações */}
+          <div data-testid="nav-group-configuracoes">
+            <button
+              type="button"
+              onClick={() => toggleGroup("configuracoes")}
+              aria-expanded={expandedGroups.configuracoes}
+              className="w-full px-2 py-1.5 rounded-lg flex items-center justify-between gap-2 text-xs font-heading font-black uppercase tracking-wider text-neutral-600 hover:text-neutral-900 hover:bg-slate-100 transition-colors"
+              data-testid="group-toggle-configuracoes"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <Settings className="w-4 h-4 text-sky-600 flex-shrink-0" />
+                <span className="truncate">Configurações</span>
+              </span>
+              <ChevronDown
+                className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${
+                  expandedGroups.configuracoes ? "rotate-0" : "-rotate-90"
+                }`}
+              />
+            </button>
+            <div className={`expandable-grid ${expandedGroups.configuracoes ? "open" : ""}`}>
+              <div className="expandable-inner">
+                <div className="pt-1 space-y-1">
+                  {configuracoesItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = tab === item.key;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => selectTab(item.key, "configuracoes")}
+                        title={item.title}
+                        data-testid={item.testId}
+                        aria-current={active ? "page" : undefined}
+                        className={`w-full px-3 py-2 rounded-xl text-sm flex items-center gap-2.5 text-left transition-all duration-150 ${
+                          active
+                            ? "bg-sky-400 text-neutral-950 font-bold border-2 border-neutral-900 shadow-[2px_2px_0_0_#000]"
+                            : "text-neutral-700 hover:bg-slate-100 hover:text-neutral-950 font-medium border border-transparent"
+                        }`}
+                      >
+                        <Icon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    );
+                  })}
+
+                  {/* Ação de Limpeza de Tarefas dentro de Configurações */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setGlobalCleanupOpen(true);
+                    }}
+                    className="w-full px-3 py-2 rounded-xl text-sm flex items-center justify-between gap-2 text-left bg-rose-50 hover:bg-rose-100 text-rose-900 font-semibold border border-rose-200 transition-colors duration-150"
+                    data-testid="btn-open-task-cleanup"
+                    title="Configurar exclusão automática de tarefas com hora do servidor"
+                  >
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <Clock className="w-4 h-4 flex-shrink-0 text-rose-700" />
+                      <span className="truncate">Limpeza de Tarefas</span>
+                    </span>
+                    {globalCleanupData?.config?.enabled && (
+                      <span className="px-1.5 py-0.5 bg-neutral-900 text-white text-[10px] rounded font-mono flex-shrink-0">
+                        {globalCleanupData.config.cleanup_time}
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
-            {mainSection === "configuracoes" && (
-              <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 bg-sky-400 text-black text-[10px] font-black uppercase rounded-lg border-2 border-black shrink-0">
-                <Check className="w-3 h-3 stroke-[3]" /> Ativo
-              </span>
-            )}
+          </div>
+        </nav>
+      </aside>
 
-          </button>
-        </div>
-
-        {/* Sub-Tabs do Grupo Selecionado */}
-        <div className="flex items-center gap-2 sm:gap-3 mb-6 sm:mb-8 overflow-x-auto pb-2 scrollbar-none sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
-          {mainSection === "estudos" ? (
-            <>
-              <button
-                onClick={() => setTab("tasks")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "tasks" ? "bg-sky-400 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-tasks"
-              >
-                <ListTodo className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Tarefas
-              </button>
-              <button
-                onClick={() => setTab("announcements")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "announcements" ? "bg-violet-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-announcements"
-              >
-                <Megaphone className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Avisos
-              </button>
-              <button
-                onClick={() => setTab("subjects")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "subjects" ? "bg-red-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-subjects"
-              >
-                <BookMarked className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Matérias
-              </button>
-              <button
-                onClick={() => setTab("schedule")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "schedule" ? "bg-emerald-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-schedule"
-                title="Configurar matérias necessárias de Segunda a Sexta"
-              >
-                <CalendarDays className="w-4 h-4 inline mr-1.5 sm:mr-2 text-emerald-950" /> Cronograma
-              </button>
-              <button
-                onClick={() => setTab("resumos")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "resumos" ? "bg-yellow-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-resumos"
-                title="Resumos de Estudo por Matéria"
-              >
-                <BookOpen className="w-4 h-4 inline mr-1.5 sm:mr-2 text-yellow-950" /> Resumos
-              </button>
-              <button
-                onClick={() => setTab("ranking_annual")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "ranking_annual" ? "bg-amber-400 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-ranking-annual"
-                title="Ranking Anual dos Alunos e Controle do Ano Letivo"
-              >
-                <Trophy className="w-4 h-4 inline mr-1.5 sm:mr-2 text-amber-950" /> Ranking Anual
-              </button>
-              {!framesDisabled && (
-                <button
-                  onClick={() => {
-                    setTab("store");
-                    pullScreenToStore();
-                  }}
-                  className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "store" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                  data-testid="tab-store"
-                  title="Acessar Loja de Molduras"
-                >
-                  <ShoppingBag className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Loja de Molduras
-                </button>
-              )}
-              <button
-                onClick={() => setTab("buttons")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "buttons" ? "bg-indigo-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-buttons"
-                title="Criar e gerenciar botões para os alunos"
-              >
-                <Link2 className="w-4 h-4 inline mr-1.5 sm:mr-2 text-indigo-950" /> Botões dos Alunos
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setTab("students")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "students" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-students"
-              >
-                <Users className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Alunos
-              </button>
-              <button
-                onClick={() => setTab("logs")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "logs" ? "bg-emerald-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-logs"
-              >
-                <History className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Acessos
-              </button>
-              <button
-                onClick={() => setTab("stats")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "stats" ? "bg-violet-400 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-stats"
-              >
-                <BarChart3 className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Estatísticas
-              </button>
-              <button
-                onClick={() => setTab("firmware")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "firmware" ? "bg-sky-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-firmware"
-              >
-                <Cpu className="w-4 h-4 inline mr-1.5 sm:mr-2" /> Firmware
-              </button>
-              <button
-                onClick={() => setTab("ai")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "ai" ? "bg-gradient-to-r from-violet-300 to-pink-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-ai"
-              >
-                <Sparkles className="w-4 h-4 inline mr-1.5 sm:mr-2" /> IA
-              </button>
-              <button
-                onClick={() => setTab("whatsapp")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "whatsapp" ? "bg-emerald-400 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-whatsapp"
-              >
-                <MessageSquare className="w-4 h-4 inline mr-1.5 sm:mr-2 text-emerald-950" /> WhatsApp
-              </button>
-              <button
-                onClick={() => setTab("notifications")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "notifications" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-notifications"
-              >
-                <Bell className="w-4 h-4 inline mr-1.5 sm:mr-2 text-amber-950" /> Notificações
-              </button>
-              <button
-                onClick={() => setTab("zip_transfer")}
-                className={`nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 ${tab === "zip_transfer" ? "bg-sky-300 font-bold shadow-[2px_2px_0px_0px_#000]" : "bg-white"}`}
-                data-testid="tab-zip-transfer"
-              >
-                <FileArchive className="w-4 h-4 inline mr-1.5 sm:mr-2 text-sky-950" /> Dados ZIP
-              </button>
+      {/* Shell principal à direita da barra lateral */}
+      <div className="lg:pl-64 xl:pl-72 min-h-screen flex flex-col min-w-0">
+        {/* Cabeçalho Compacto */}
+        <header
+          className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-slate-200"
+          data-testid="app-header"
+        >
+          <div className="h-14 px-3 sm:px-6 flex items-center justify-between gap-2 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <button
                 type="button"
-                onClick={() => setGlobalCleanupOpen(true)}
-                className="nb-btn px-3 sm:px-5 py-2 sm:py-2.5 text-sm flex-shrink-0 bg-rose-200 hover:bg-rose-300 text-rose-950 font-bold shadow-[2px_2px_0px_0px_#000]"
-                data-testid="btn-open-task-cleanup"
-                title="Configurar exclusão automática de tarefas com hora do servidor"
+                onClick={() => setMobileMenuOpen(true)}
+                className="lg:hidden nb-btn admin-btn-primary px-2.5 py-1.5 text-xs flex items-center gap-1.5 flex-shrink-0"
+                aria-label="Abrir menu"
+                aria-expanded={mobileMenuOpen}
+                data-testid="mobile-menu-button"
               >
-                <Clock className="w-4 h-4 inline mr-1.5 sm:mr-2 text-rose-900" />
-                Limpeza de Tarefas
-                {globalCleanupData?.config?.enabled && (
-                  <span className="ml-1.5 px-1.5 py-0.5 bg-black text-white text-[10px] rounded font-mono">
-                    {globalCleanupData.config.cleanup_time}
-                  </span>
-                )}
+                <Menu className="w-4 h-4" />
+                <span>Menu</span>
               </button>
-            </>
-          )}
-        </div>
-        {tab === "tasks" && <TasksPanel annualCycle={annualCycle} />}
-        {tab === "announcements" && <AnnouncementsPanel annualCycle={annualCycle} />}
-        {tab === "students" && <StudentsPanel />}
-        {tab === "subjects" && <SubjectsPanel annualCycle={annualCycle} />}
-        {tab === "schedule" && <ScheduleAdminPanel />}
-        {tab === "resumos" && <AdminResumosPanel />}
-        {tab === "logs" && <LoginLogsPanel />}
-        {tab === "stats" && <StatsPanel />}
-        {tab === "firmware" && <FirmwarePanel />}
-        {tab === "ai" && <AIAdminPanel />}
-        {tab === "ranking_annual" && <AnnualRankingPanel />}
-        {tab === "store" && !framesDisabled && <StoreEffects user={user} refresh={refresh} />}
-        {tab === "whatsapp" && <WhatsAppConfigPanel />}
-        {tab === "notifications" && <NotificationsAdminPanel />}
-        {tab === "buttons" && <StudentButtonsPanel annualCycle={annualCycle} />}
-        {tab === "zip_transfer" && <ZipDataTransferPanel />}
 
-        {globalCleanupOpen && (
-          <TaskCleanupDialog
-            open={globalCleanupOpen}
-            onClose={() => setGlobalCleanupOpen(false)}
-            onSaved={loadGlobalCleanup}
-          />
-        )}
+              <div className="flex items-center gap-2 lg:hidden min-w-0">
+                <Logo size={26} />
+                <span className="font-heading font-black text-sm tracking-tight hidden min-[390px]:inline truncate">
+                  <span>Edu</span><span className="text-sky-500">Task</span>
+                </span>
+              </div>
+
+              <div className="hidden lg:flex items-center gap-2 text-sm min-w-0">
+                <span className="text-neutral-500 font-medium">
+                  {mainSection === "estudos" ? "Tarefas & Estudos" : "Configurações"}
+                </span>
+                <span className="text-neutral-300">/</span>
+                <span className="font-heading font-bold text-neutral-900 truncate" data-testid="admin-header-breadcrumb">
+                  {activeTabLabel}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
+              <AdminSystemClock compact />
+
+              {canInstallOrGuide && (
+                <button
+                  type="button"
+                  onClick={installApp}
+                  className="nb-btn bg-amber-200 hover:bg-amber-300 text-neutral-950 px-2 sm:px-2.5 py-1.5 text-xs font-bold flex items-center gap-1.5"
+                  title="Instalar aplicativo EduTask IA"
+                  aria-label="Instalar aplicativo"
+                  data-testid="header-pwa-install-btn"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span className="hidden xl:inline">Instalar</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={logout}
+                className="nb-btn bg-white hover:bg-red-50 text-neutral-800 hover:text-red-700 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-bold flex items-center gap-1.5"
+                data-testid="logout-button"
+                aria-label="Sair"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sair</span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Área de Conteúdo */}
+        <main className="flex-1 w-full max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 sm:py-7 pb-12 page-enter min-w-0">
+          {/* Banner de Ano Letivo Encerrado */}
+          {annualCycle?.is_closed && (
+            <div className="mb-6 nb-card bg-amber-50 border border-amber-400 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 nb-fade-in" data-testid="annual-cycle-closed-banner">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-amber-300 border border-neutral-900 flex items-center justify-center flex-shrink-0">
+                  <Lock className="w-4 h-4 text-black" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-black text-sm sm:text-base text-amber-950">
+                    Ano Letivo {annualCycle?.active_year || 2026} Encerrado — Criação Suspensa
+                  </h3>
+                  <p className="text-xs text-amber-900 mt-0.5 leading-relaxed">
+                    O ranking anual foi finalizado e os alunos estão na tela de bloqueio com o Pódio Top 3. A criação de novas tarefas, avisos e botões está desativada até você iniciar o próximo ano.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => selectTab("ranking_annual", "estudos")}
+                className="nb-btn admin-btn-primary px-4 py-2 text-xs flex-shrink-0 flex items-center gap-1.5"
+              >
+                <Rocket className="w-3.5 h-3.5" />
+                <span>Iniciar Próximo Ano</span>
+              </button>
+            </div>
+          )}
+
+          {tab === "tasks" && <TasksPanel annualCycle={annualCycle} />}
+          {tab === "announcements" && <AnnouncementsPanel annualCycle={annualCycle} />}
+          {tab === "students" && <StudentsPanel />}
+          {tab === "subjects" && <SubjectsPanel annualCycle={annualCycle} />}
+          {tab === "schedule" && <ScheduleAdminPanel />}
+          {tab === "resumos" && <AdminResumosPanel />}
+          {tab === "logs" && <LoginLogsPanel />}
+          {tab === "stats" && <StatsPanel />}
+          {tab === "firmware" && <FirmwarePanel />}
+          {tab === "ai" && <AIAdminPanel />}
+          {tab === "ranking_annual" && <AnnualRankingPanel />}
+          {tab === "store" && !framesDisabled && <StoreEffects user={user} refresh={refresh} />}
+          {tab === "whatsapp" && <WhatsAppConfigPanel />}
+          {tab === "notifications" && <NotificationsAdminPanel />}
+          {tab === "buttons" && <StudentButtonsPanel annualCycle={annualCycle} />}
+          {tab === "zip_transfer" && <ZipDataTransferPanel />}
+        </main>
       </div>
+
+      {editProfileOpen && user && (
+        <EditProfileDialog
+          userId={user.id}
+          hasAvatar={Boolean(user.has_avatar)}
+          avatarPath="/me/avatar"
+          initialName={user.name}
+          path="/me"
+          onClose={() => setEditProfileOpen(false)}
+          onSaved={() => {
+            setEditProfileOpen(false);
+            refresh();
+          }}
+        />
+      )}
+
+      {globalCleanupOpen && (
+        <TaskCleanupDialog
+          open={globalCleanupOpen}
+          onClose={() => setGlobalCleanupOpen(false)}
+          onSaved={loadGlobalCleanup}
+        />
+      )}
     </div>
   );
 }
@@ -473,27 +635,27 @@ function TasksPanel({ annualCycle }) {
 
   return (
     <div>
-      <div className="flex items-end justify-between mb-6 flex-wrap gap-4">
-        <div>
-          <h1 className="font-heading font-black text-3xl sm:text-5xl tracking-tight">Tarefas</h1>
-          <p className="text-neutral-600 mt-1">Crie tarefas e acompanhe o progresso dos alunos.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6">
+        <div className="min-w-0">
+          <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">Tarefas</h1>
+          <p className="text-sm text-neutral-600 mt-0.5">Crie tarefas e acompanhe o progresso dos alunos.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setCleanupOpen(true)}
-            className={`nb-btn px-4 py-3 flex items-center gap-2 ${
+            className={`nb-btn px-3.5 py-2 text-xs sm:text-sm flex items-center gap-1.5 ${
               willDeleteToday
-                ? "bg-amber-300 hover:bg-amber-400 border-2 border-black font-bold"
-                : "bg-white hover:bg-neutral-100"
+                ? "bg-amber-200 hover:bg-amber-300 font-bold"
+                : "bg-white hover:bg-slate-50"
             }`}
             title="Configurar exclusão automática de tarefas"
             data-testid="open-task-cleanup-btn"
           >
-            <Clock className={`w-4 h-4 ${willDeleteToday ? "text-amber-950" : "text-neutral-700"}`} />
+            <Clock className={`w-4 h-4 ${willDeleteToday ? "text-amber-900" : "text-neutral-700"}`} />
             <span>
               {willDeleteToday
-                ? `⏰ ${deleteCount} p/ apagar hoje às ${cleanupTime}`
-                : "⏰ Auto-exclusão"}
+                ? `${deleteCount} p/ apagar hoje às ${cleanupTime}`
+                : "Auto-exclusão"}
             </span>
           </button>
 
@@ -505,11 +667,11 @@ function TasksPanel({ annualCycle }) {
               }
               setCreating(true);
             }}
-            className={`nb-btn px-5 py-3 flex items-center gap-2 ${annualCycle?.is_closed ? "bg-neutral-200 text-neutral-500 opacity-70" : "bg-sky-400"}`}
+            className={`nb-btn px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 ${annualCycle?.is_closed ? "bg-neutral-200 text-neutral-500 opacity-70" : "admin-btn-primary"}`}
             title={annualCycle?.is_closed ? "Ano Letivo encerrado" : "Criar nova tarefa"}
             data-testid="open-create-task-button"
           >
-            <Plus className="w-4 h-4" strokeWidth={3} /> Nova tarefa
+            <Plus className="w-4 h-4" strokeWidth={2.5} /> Nova tarefa
           </button>
         </div>
       </div>
@@ -1358,26 +1520,26 @@ function StudentsPanel() {
 
   return (
     <div>
-      <div className="flex items-end justify-between mb-6 flex-wrap gap-4">
-        <div>
-          <h1 className="font-heading font-black text-3xl sm:text-5xl tracking-tight">Alunos</h1>
-          <p className="text-neutral-600 mt-1">Gerencie as contas dos seus alunos e veja as senhas.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6">
+        <div className="min-w-0">
+          <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">Alunos</h1>
+          <p className="text-sm text-neutral-600 mt-0.5">Gerencie as contas dos seus alunos e veja as senhas.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setCreating({ isBot: true })}
-            className="nb-btn bg-cyan-200 hover:bg-cyan-300 px-4 py-3 flex items-center gap-2 text-sm font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+            className="nb-btn bg-white hover:bg-cyan-50 px-3.5 py-2 flex items-center gap-1.5 text-xs sm:text-sm font-bold"
             data-testid="open-create-bot-button"
             title="Criar perfil simulado para testes rápidos"
           >
-            <Bot className="w-4 h-4" strokeWidth={2.5} /> + Novo Bot de Teste
+            <Bot className="w-4 h-4 text-cyan-700" strokeWidth={2.5} /> Novo Bot de Teste
           </button>
           <button
             onClick={() => setCreating({ isBot: false })}
-            className="nb-btn bg-amber-300 px-5 py-3 flex items-center gap-2"
+            className="nb-btn admin-btn-primary px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5"
             data-testid="open-create-student-button"
           >
-            <Plus className="w-4 h-4" strokeWidth={3} /> Novo aluno
+            <Plus className="w-4 h-4" strokeWidth={2.5} /> Novo aluno
           </button>
         </div>
       </div>
@@ -1826,15 +1988,15 @@ function SubjectsPanel({ annualCycle }) {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="font-heading font-black text-3xl sm:text-5xl tracking-tight">Matérias</h1>
-        <p className="text-neutral-600 mt-1">
+        <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">Matérias</h1>
+        <p className="text-sm text-neutral-600 mt-0.5">
           Personalize as matérias e suas cores. As cores selecionadas serão exibidas nos cards, prazos e resumos de todos os alunos.
         </p>
       </div>
 
-      <form onSubmit={add} className="nb-card bg-white p-5 mb-8 max-w-2xl border-3 border-black shadow-[4px_4px_0_0_#000]" data-testid="subject-form">
+      <form onSubmit={add} className="nb-card bg-white p-5 mb-6 max-w-2xl" data-testid="subject-form">
         <div className="font-heading font-black text-sm uppercase tracking-wider text-neutral-800 mb-3 flex items-center gap-2">
-          <BookMarked className="w-4 h-4 text-amber-600" />
+          <BookMarked className="w-4 h-4 text-sky-600" />
           Cadastrar Nova Matéria
         </div>
 
@@ -1850,10 +2012,10 @@ function SubjectsPanel({ annualCycle }) {
           <button
             type="submit"
             disabled={adding || !newName.trim()}
-            className="nb-btn bg-amber-300 hover:bg-amber-400 font-heading font-black text-sm px-6 py-3 flex items-center justify-center gap-2 shadow-[2px_2px_0_0_#000]"
+            className="nb-btn admin-btn-primary text-sm px-5 py-2.5 flex items-center justify-center gap-1.5"
             data-testid="add-subject-button"
           >
-            <Plus className="w-4 h-4" strokeWidth={3} /> Adicionar
+            <Plus className="w-4 h-4" strokeWidth={2.5} /> Adicionar
           </button>
         </div>
 
@@ -2144,17 +2306,17 @@ function AnnouncementsPanel({ annualCycle }) {
 
   return (
     <div>
-      <div className="flex items-end justify-between mb-6 flex-wrap gap-4">
-        <div>
-          <h1 className="font-heading font-black text-3xl sm:text-5xl tracking-tight">Avisos</h1>
-          <p className="text-neutral-600 mt-1">Comunique-se com seus alunos. Avisos aparecem no dashboard deles.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6">
+        <div className="min-w-0">
+          <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">Avisos</h1>
+          <p className="text-sm text-neutral-600 mt-0.5">Comunique-se com seus alunos. Avisos aparecem no dashboard deles.</p>
         </div>
         <button
           onClick={() => setCreating(true)}
-          className="nb-btn bg-violet-300 px-5 py-3 flex items-center gap-2"
+          className="nb-btn admin-btn-primary px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 self-start sm:self-auto"
           data-testid="open-create-announcement-button"
         >
-          <Plus className="w-4 h-4" strokeWidth={3} /> Novo aviso
+          <Plus className="w-4 h-4" strokeWidth={2.5} /> Novo aviso
         </button>
       </div>
 
@@ -2746,16 +2908,15 @@ function LoginLogsPanel() {
 
   return (
     <div>
-      <div className="flex items-end justify-between mb-6 flex-wrap gap-4">
-        <div>
-          <h1 className="font-heading font-black text-3xl sm:text-5xl tracking-tight">Acessos</h1>
-          <p className="text-neutral-600 mt-1">Registros e histórico de logins dos alunos.</p>
-
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6">
+        <div className="min-w-0">
+          <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">Acessos</h1>
+          <p className="text-sm text-neutral-600 mt-0.5">Registros e histórico de logins dos alunos.</p>
         </div>
         {logs.length > 0 && (
           <button
             onClick={() => setConfirmClear(true)}
-            className="nb-btn bg-red-300 hover:bg-red-400 px-5 py-3 flex items-center gap-2"
+            className="nb-btn bg-rose-100 hover:bg-rose-200 text-rose-900 px-4 py-2 text-xs sm:text-sm font-bold flex items-center gap-1.5 self-start sm:self-auto"
             data-testid="clear-logs-button"
           >
             <Trash2 className="w-4 h-4" /> Limpar tudo
@@ -2770,7 +2931,7 @@ function LoginLogsPanel() {
       ) : (
         <div className="nb-card bg-white overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[360px]" data-testid="logs-table">
+            <table className="w-full" data-testid="logs-table">
             <thead className="bg-emerald-100 border-b-2 border-black">
               <tr>
                 <th className="text-left p-3 text-sm font-heading font-bold">Aluno</th>
@@ -2925,10 +3086,10 @@ function StatsPanel() {
   const hasJointTieWinner = Boolean(activeWinner && activeWinner.is_tie);
 
   return (
-    <div className="space-y-8">
-      <div className="mb-2">
-        <h1 className="font-heading font-black text-3xl sm:text-5xl tracking-tight">Estatísticas</h1>
-        <p className="text-neutral-600 mt-1">Visão geral do engajamento da turma.</p>
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">Estatísticas</h1>
+        <p className="text-sm text-neutral-600 mt-0.5">Visão geral do engajamento da turma.</p>
       </div>
 
       <PrizeEditor />

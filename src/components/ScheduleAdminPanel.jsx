@@ -179,21 +179,18 @@ export default function ScheduleAdminPanel() {
   return (
     <div className="space-y-5 nb-fade-in" data-testid="schedule-admin-panel">
       {/* Cabeçalho e Controles */}
-      <div className="nb-card p-5 bg-white border-2 border-black flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="space-y-1">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <div className="w-9 h-9 rounded-lg bg-emerald-200 border-2 border-black flex items-center justify-center">
-              <CalendarDays className="w-5 h-5 text-emerald-950" />
-            </div>
-            <h2 className="font-heading font-black text-xl text-neutral-900">
-              Cronograma do Dia (Segunda a Sexta)
-            </h2>
-            <span className="text-xs font-bold px-2 py-0.5 rounded bg-neutral-100 border border-neutral-300 text-neutral-700 tabular-nums">
-              {totalConfiguredDays}/5 dias preenchidos
+            <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">
+              Cronograma do Dia
+            </h1>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-slate-100 border border-slate-300 text-neutral-700 tabular-nums">
+              {totalConfiguredDays}/5 dias (Seg a Sex)
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-neutral-600">
-            Configure as matérias necessárias de cada dia da semana. O painel do aluno exibe automaticamente apenas as matérias do dia útil atual (finais de semana não contam).
+          <p className="text-sm text-neutral-600">
+            Configure as matérias de cada dia da semana. O painel do aluno exibe automaticamente apenas o dia útil atual.
           </p>
           {todayInfo.is_weekend && (
             <p className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-2.5 py-1 inline-block mt-1">
@@ -202,7 +199,7 @@ export default function ScheduleAdminPanel() {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
           <button
             type="button"
             onClick={() => {
@@ -224,8 +221,8 @@ export default function ScheduleAdminPanel() {
             disabled={saving}
             className={`nb-btn px-4 py-2 text-xs sm:text-sm font-heading font-black flex items-center gap-1.5 ${
               dirty
-                ? "bg-emerald-400 hover:bg-emerald-500 text-emerald-950 shadow-[3px_3px_0_0_#000]"
-                : "bg-sky-300 hover:bg-sky-400 text-black"
+                ? "bg-emerald-400 hover:bg-emerald-500 text-emerald-950 border-2 border-black shadow-[2px_2px_0_0_#000]"
+                : "admin-btn-primary"
             }`}
             data-testid="save-schedule-button"
           >

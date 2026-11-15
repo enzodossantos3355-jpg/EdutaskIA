@@ -162,7 +162,7 @@ export default function AvatarUploader({
             bg={bg}
             tierBorderColor={tierBorderColor}
             effect={effect}
-            square={square || effect === "fx-minecraft" || effect === "minecraft"}
+            square={square}
           />
         </div>
 

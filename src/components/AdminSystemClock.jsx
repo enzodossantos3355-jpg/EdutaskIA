@@ -69,20 +69,23 @@ export default function AdminSystemClock({ compact = false, nextCleanupTime = nu
   if (compact) {
     return (
       <div
-        className="nb-card px-2.5 sm:px-3 py-1.5 bg-amber-100 text-black flex items-center gap-2 text-xs font-mono select-none border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-        title={`Relógio do Servidor: ${timeString} (${timezone || "UTC"}). Clique para sincronizar.`}
+        className="px-2 sm:px-2.5 py-1.5 rounded-xl bg-amber-50 text-neutral-900 flex items-center gap-1.5 text-xs font-mono select-none border border-neutral-300 shadow-xs"
+        title={`Relógio do Servidor: ${timeString} (${timezone || "UTC"}). Clique no ícone para sincronizar.`}
         data-testid="admin-system-clock-compact"
       >
-        <Clock className="w-3.5 h-3.5 text-neutral-950 animate-pulse flex-shrink-0" />
-        <span className="font-bold tracking-wider text-black">{timeString}</span>
+        <Clock className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
+        <span className="font-bold tracking-wider text-neutral-950 tabular-nums">{timeString}</span>
         <button
+          type="button"
           onClick={syncWithServer}
           disabled={syncing}
-          className="hover:text-amber-800 text-neutral-700 p-0.5 transition-colors"
-          title="Sincronizar agora"
+          className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-sans font-bold text-sky-800 hover:bg-sky-100 hover:text-sky-950 transition-colors"
+          title="Sincronizar relógio agora"
           aria-label="Sincronizar relógio"
+          data-testid="sync-system-clock-compact-btn"
         >
-          <RefreshCw className={`w-3 h-3 ${syncing ? "animate-spin text-neutral-950" : ""}`} />
+          <RefreshCw className={`w-3 h-3 ${syncing ? "animate-spin text-sky-700" : ""}`} />
+          <span className="hidden md:inline">Sincronizar</span>
         </button>
       </div>
     );

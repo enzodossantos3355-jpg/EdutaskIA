@@ -19,6 +19,7 @@ export default function Avatar({
   tierBorderColor = null,
   effect = null,
   square = false,
+  fillContainer = false,
 }) {
   const [src, setSrc] = useState(null);
   const [errored, setErrored] = useState(false);
@@ -46,11 +47,13 @@ export default function Avatar({
 
   const inner = (
     <div
-      className={`flex items-center justify-center overflow-hidden border-2 border-black ${isSquare ? "rounded-none" : "rounded-full"} ${avatarBg} ${className}`}
+      className={`flex items-center justify-center overflow-hidden ${
+        fillContainer ? "border-0" : "border-2 border-black"
+      } ${isSquare ? "rounded-none" : "rounded-full"} ${avatarBg} ${className}`}
       style={{
-        width: size,
-        height: size,
-        boxShadow: isSquare ? "none" : "3px 3px 0 0 #0a0a0a",
+        width: fillContainer ? "100%" : size,
+        height: fillContainer ? "100%" : size,
+        boxShadow: isSquare || fillContainer ? "none" : "3px 3px 0 0 #0a0a0a",
         backgroundColor: avatarBgHex || undefined,
         borderRadius: isSquare ? 0 : undefined,
       }}
@@ -67,8 +70,9 @@ export default function Avatar({
         />
       ) : (
         <span
-          className={`font-heading font-black select-none ${fontSize} ${textClassName}`}
+          className={`fx-avatar-initial font-heading font-black select-none ${fontSize} ${textClassName}`}
           style={{
+            "--avatar-initial-color": initialColor,
             color: initialColor,
             fontWeight: 900,
           }}
@@ -84,7 +88,11 @@ export default function Avatar({
   return (
     <div
       className={`fx-avatar-wrapper ${effect} ${isSquare ? "rounded-none" : ""}`}
-      style={{ width: size + 10, height: size + 10, borderRadius: isSquare ? 0 : undefined }}
+      style={{
+        width: fillContainer ? "100%" : size + 10,
+        height: fillContainer ? "100%" : size + 10,
+        borderRadius: isSquare ? 0 : undefined,
+      }}
       data-testid={`avatar-effect-${userId}`}
     >
       {inner}

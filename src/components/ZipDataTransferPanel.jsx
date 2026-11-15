@@ -52,12 +52,16 @@ export default function ZipDataTransferPanel() {
   const [optUsers, setOptUsers] = useState(true);
   const [optTasks, setOptTasks] = useState(true);
   const [optSubjects, setOptSubjects] = useState(true);
+  const [optSummaries, setOptSummaries] = useState(true);
+  const [optAnnouncements, setOptAnnouncements] = useState(true);
   const [optCompletions, setOptCompletions] = useState(true);
   const [optUploads, setOptUploads] = useState(true);
   const [optButtons, setOptButtons] = useState(true);
   const [optSchedule, setOptSchedule] = useState(true);
+  const [optEffects, setOptEffects] = useState(true);
   const [optWhatsapp, setOptWhatsapp] = useState(true);
   const [optMonthly, setOptMonthly] = useState(true);
+  const [optSettings, setOptSettings] = useState(true);
 
   const fileInputRef = useRef(null);
 
@@ -201,12 +205,16 @@ export default function ZipDataTransferPanel() {
       formData.append("import_users", String(optUsers));
       formData.append("import_tasks", String(optTasks));
       formData.append("import_subjects", String(optSubjects));
+      formData.append("import_summaries", String(optSummaries));
+      formData.append("import_announcements", String(optAnnouncements));
       formData.append("import_completions", String(optCompletions));
       formData.append("import_uploads", String(optUploads));
       formData.append("import_buttons", String(optButtons));
       formData.append("import_schedule", String(optSchedule));
+      formData.append("import_effects", String(optEffects));
       formData.append("import_whatsapp", String(optWhatsapp));
       formData.append("import_monthly", String(optMonthly));
+      formData.append("import_settings", String(optSettings));
 
       const { data } = await api.post("/admin/zip/import", formData, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -234,23 +242,20 @@ export default function ZipDataTransferPanel() {
 
   return (
     <div className="space-y-6 nb-fade-in" data-testid="zip-data-transfer-panel">
-      {/* Top Banner */}
-      <div className="nb-card p-5 sm:p-6 bg-gradient-to-r from-sky-100 via-sky-50 to-amber-100 border-2 border-black">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="space-y-1">
-            <h2 className="text-xl sm:text-2xl font-black font-heading flex items-center gap-2">
-              <FileArchive className="w-6 h-6 text-sky-600" />
-              Transferência de Dados & Backup em Nuvem ou Dispositivo
-            </h2>
-            <p className="text-sm text-neutral-700 max-w-2xl">
-              Exporte seus dados em backup compactado <strong>.ZIP</strong> direto na pasta do seu <strong>Google Drive</strong> ou baixe no seu próprio dispositivo para ter segurança total.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="nb-badge bg-emerald-200 text-emerald-950 font-bold">
+      {/* Cabeçalho */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">
+              Dados ZIP & Backup
+            </h1>
+            <span className="nb-badge bg-emerald-100 text-emerald-950 font-bold text-xs inline-flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5" /> Compatibilidade Total
             </span>
           </div>
+          <p className="text-sm text-neutral-600 mt-0.5 max-w-2xl">
+            Exporte seus dados em backup compactado <strong>.ZIP</strong> no Google Drive ou baixe diretamente no dispositivo.
+          </p>
         </div>
       </div>
 
@@ -374,16 +379,16 @@ export default function ZipDataTransferPanel() {
               <p className="text-xs font-bold text-neutral-800 uppercase tracking-wider">Conteúdo incluído no pacote ZIP:</p>
               <ul className="text-xs space-y-2 text-neutral-700">
                 <li className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-sky-600" />
-                  <span><strong>edutask_backup.json</strong> (Alunos, Tarefas, Matérias, Cronograma, Botões de Alunos, WhatsApp, Ciclo Mensal e Pontos)</span>
+                  <Database className="w-4 h-4 text-sky-600 flex-shrink-0" />
+                  <span><strong>edutask_backup.json</strong> (Alunos, Tarefas, Matérias, Resumos e Tópicos, Avisos e Comentários, Cronograma de Aula, Botões de Alunos, Molduras, Push/IA, WhatsApp, Ciclo Mensal/Anual e Ajustes de Pontos)</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span><strong>Planilhas CSV</strong> (Alunos e Pontos, Tarefas, Entregas Concluídas, Botões de Alunos e Cronograma)</span>
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <span><strong>Planilhas CSV</strong> (Alunos, Matérias, Tarefas, Entregas, Avisos, Resumos, Tópicos, Botões de Alunos, Cronograma Semanal e Ajustes de Pontos)</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4 text-amber-600" />
-                  <span><strong>uploads/</strong> (Fotos de perfil dos alunos e arquivos anexados)</span>
+                  <ImageIcon className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <span><strong>uploads/</strong> (Fotos de perfis, anexos de tarefas, avisos, PDFs e materiais dos resumos)</span>
                 </li>
               </ul>
             </div>
@@ -494,7 +499,7 @@ export default function ZipDataTransferPanel() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                  <div className="grid grid-cols-3 sm:grid-cols-3 gap-2 text-center text-xs">
                     <div className="p-2 bg-white rounded-lg border border-black/10">
                       <p className="font-black text-base text-sky-600">{previewData.counts.users}</p>
                       <p className="text-[10px] text-neutral-500 font-bold">Usuários</p>
@@ -504,8 +509,28 @@ export default function ZipDataTransferPanel() {
                       <p className="text-[10px] text-neutral-500 font-bold">Tarefas</p>
                     </div>
                     <div className="p-2 bg-white rounded-lg border border-black/10">
+                      <p className="font-black text-base text-purple-600">{previewData.counts.summaries ?? 0}</p>
+                      <p className="text-[10px] text-neutral-500 font-bold">Resumos</p>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-black/10">
+                      <p className="font-black text-base text-fuchsia-600">{previewData.counts.summary_topics ?? 0}</p>
+                      <p className="text-[10px] text-neutral-500 font-bold">Tópicos</p>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-black/10">
+                      <p className="font-black text-base text-rose-600">{previewData.counts.announcements ?? 0}</p>
+                      <p className="text-[10px] text-neutral-500 font-bold">Avisos</p>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-black/10">
+                      <p className="font-black text-base text-teal-600">{previewData.counts.schedule_days_configured ?? 0}/5</p>
+                      <p className="text-[10px] text-neutral-500 font-bold">Dias Cronograma</p>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-black/10">
                       <p className="font-black text-base text-indigo-600">{previewData.counts.student_buttons ?? 0}</p>
                       <p className="text-[10px] text-neutral-500 font-bold">Botões de Aluno</p>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-black/10">
+                      <p className="font-black text-base text-orange-600">{previewData.counts.subjects ?? 0}</p>
+                      <p className="text-[10px] text-neutral-500 font-bold">Matérias</p>
                     </div>
                     <div className="p-2 bg-white rounded-lg border border-black/10">
                       <p className="font-black text-base text-emerald-600">{previewData.counts.uploads}</p>
@@ -551,7 +576,7 @@ export default function ZipDataTransferPanel() {
                   {/* Opções Granulares */}
                   <div className="space-y-1.5 pt-1 text-xs">
                     <p className="font-bold text-neutral-800">Selecione o que importar:</p>
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input
                           type="checkbox"
@@ -573,6 +598,33 @@ export default function ZipDataTransferPanel() {
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input
                           type="checkbox"
+                          checked={optSubjects}
+                          onChange={(e) => setOptSubjects(e.target.checked)}
+                          className="rounded text-orange-600"
+                        />
+                        <span>Matérias ({previewData.counts.subjects ?? 0})</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={optSummaries}
+                          onChange={(e) => setOptSummaries(e.target.checked)}
+                          className="rounded text-purple-600"
+                        />
+                        <span>Resumos e Tópicos ({previewData.counts.summaries ?? 0} res. / {previewData.counts.summary_topics ?? 0} tóp.)</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={optAnnouncements}
+                          onChange={(e) => setOptAnnouncements(e.target.checked)}
+                          className="rounded text-rose-600"
+                        />
+                        <span>Avisos e Comentários ({previewData.counts.announcements ?? 0} av. / {previewData.counts.comments ?? 0} com.)</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
                           checked={optButtons}
                           onChange={(e) => setOptButtons(e.target.checked)}
                           className="rounded text-indigo-600"
@@ -586,7 +638,7 @@ export default function ZipDataTransferPanel() {
                           onChange={(e) => setOptSchedule(e.target.checked)}
                           className="rounded text-emerald-600"
                         />
-                        <span>Cronograma ({previewData.counts.schedule_days_configured ?? 0}/5 dias)</span>
+                        <span>Cronograma de Aula ({previewData.counts.schedule_days_configured ?? 0}/5 dias)</span>
                       </label>
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input
@@ -595,7 +647,7 @@ export default function ZipDataTransferPanel() {
                           onChange={(e) => setOptCompletions(e.target.checked)}
                           className="rounded text-sky-600"
                         />
-                        <span>Histórico de Entregas</span>
+                        <span>Histórico de Entregas ({previewData.counts.completions ?? 0})</span>
                       </label>
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input
@@ -605,6 +657,15 @@ export default function ZipDataTransferPanel() {
                           className="rounded text-sky-600"
                         />
                         <span>Fotos e Arquivos ({previewData.counts.uploads})</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={optEffects}
+                          onChange={(e) => setOptEffects(e.target.checked)}
+                          className="rounded text-amber-600"
+                        />
+                        <span>Loja e Molduras</span>
                       </label>
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input
@@ -622,7 +683,16 @@ export default function ZipDataTransferPanel() {
                           onChange={(e) => setOptMonthly(e.target.checked)}
                           className="rounded text-purple-600"
                         />
-                        <span>Ciclo Mensal & Histórico IA</span>
+                        <span>Ciclo Mensal, Anual & Pontos</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer sm:col-span-2">
+                        <input
+                          type="checkbox"
+                          checked={optSettings}
+                          onChange={(e) => setOptSettings(e.target.checked)}
+                          className="rounded text-neutral-700"
+                        />
+                        <span>Configurações do Sistema (Notificações Push, IA & Limpeza)</span>
                       </label>
                     </div>
                   </div>
@@ -660,13 +730,22 @@ export default function ZipDataTransferPanel() {
                     <p>• {importResult.imported.users} usuários sincronizados.</p>
                     <p>• {importResult.imported.tasks} tarefas importadas.</p>
                     <p>• {importResult.imported.subjects} matérias organizadas.</p>
+                    {importResult.imported.summaries !== undefined && (
+                      <p>• {importResult.imported.summaries} resumos e {importResult.imported.summary_topics ?? 0} tópicos restaurados.</p>
+                    )}
+                    {importResult.imported.announcements !== undefined && (
+                      <p>• {importResult.imported.announcements} avisos e {importResult.imported.comments ?? 0} comentários restaurados.</p>
+                    )}
+                    {importResult.imported.completions !== undefined && (
+                      <p>• {importResult.imported.completions} entregas sincronizadas.</p>
+                    )}
                     {importResult.imported.buttons !== undefined && (
                       <p>• {importResult.imported.buttons} botões de alunos sincronizados.</p>
                     )}
                     {importResult.imported.schedule_days !== undefined && (
                       <p>• {importResult.imported.schedule_days} dia(s) de cronograma sincronizados.</p>
                     )}
-                    <p>• {importResult.imported.files} arquivos de mídia e fotos extraídos.</p>
+                    <p>• {importResult.imported.files} arquivos de mídia, PDFs e fotos extraídos.</p>
                   </div>
                   <div className="flex gap-2 pt-1">
                     <button

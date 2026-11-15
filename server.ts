@@ -379,10 +379,11 @@ export function getTier() {
 // ---------------------------------------------------------------------------
 const DEFAULT_EFFECTS = [
   { id: 'none', name: 'Sem Moldura', emoji: '⚪', description: 'Visual clássico limpo sem efeitos no bloco do perfil.', cost: 0, css: '', rarity: 'common' },
-  { id: 'stranger_things', name: 'Moldura Stranger Things', emoji: '🧇', description: 'Moldura épica do Mundo Invertido de Hawkins com logotipo retrô vermelho neon, céu estrelado cósmico, luzes de natal da Joyce e faróis!', cost: 200, css: 'fx-stranger-things', rarity: 'rare' },
-  { id: 'riverdale', name: 'Moldura Riverdale (Bulldogs & Serpents)', emoji: '🐍', description: 'Moldura inspirada no universo de Riverdale com azul e ouro dos Bulldogs, verde das Serpentes do Sul e o clássico Pop\'s Chock\'lit Shoppe!', cost: 180, css: 'fx-riverdale', rarity: 'rare' },
+  { id: 'stranger_things', name: 'Moldura Stranger Things', emoji: '🧇', description: 'Moldura oficial do Mundo Invertido com logotipo Stranger Things neon, luzes de natal, bicicletas e o Demogorgon!', cost: 200, css: 'fx-stranger-things', rarity: 'rare' },
+  { id: 'minecraft', name: 'Moldura Minecraft', emoji: '⛏️', description: 'Moldura oficial do universo Minecraft com blocos de grama, tochas na caverna, picareta de diamante e Creeper!', cost: 220, css: 'fx-minecraft', rarity: 'rare' },
+  { id: 'riverdale', name: 'Moldura Riverdale', emoji: '🐍', description: 'Moldura oficial de Riverdale com letreiro neon do Pop\'s, jukebox, milkshake e os emblemas das Serpentes e Bulldogs!', cost: 180, css: 'fx-riverdale', rarity: 'rare' },
   { id: 'spongebob', name: 'Moldura Bob Esponja', emoji: '🍍', description: 'Moldura alegre da Fenda do Biquíni com arte tropical submarina central e aura dourada!', cost: 120, css: 'fx-spongebob', rarity: 'rare' },
-  { id: 'mentalist', name: 'Moldura O Mentalista', emoji: '🔍', description: 'Moldura inspirada na série O Mentalista com arte central vermelha e bege e Patrick Jane.', cost: 160, css: 'fx-mentalist', rarity: 'rare' },
+  { id: 'mentalist', name: 'Moldura O Mentalista', emoji: '🔍', description: 'Moldura oficial de The Mentalist com dossiê de investigação, Ás de Espadas, xícara de chá, aro dourado e marca do Red John!', cost: 160, css: 'fx-mentalist', rarity: 'rare' },
   { id: 'one_piece', name: 'Moldura One Piece', emoji: '🏴‍☠️', description: 'Moldura épica do Rei dos Piratas com cartaz Wanted, bússola náutica, ondas do Grand Line e moedas de ouro de tesouro!', cost: 280, css: 'fx-one-piece', rarity: 'epic' },
   { id: 'chemistry_lab', name: 'Moldura Laboratório Químico', emoji: '🧪', description: 'Moldura científica de química com frascos erlenmeyer borbulhantes, neon esmeralda bioluminescente, fitas moleculares e reações atômicas!', cost: 240, css: 'fx-chemistry-lab', rarity: 'rare' },
   { id: 'japan', name: 'Moldura Japão Tradicional', emoji: '⛩️', description: 'Moldura zen do Japão imperial com o majestoso Monte Fuji, portal Torii carmesim, galhos e pétalas de sakura e lanternas orientais!', cost: 300, css: 'fx-japan', rarity: 'epic' },
@@ -1498,9 +1499,6 @@ class Database {
         }
         // Ensure admin does not have a trivial '123' password
         for (const u of this.users.values()) {
-          if (u.equipped_effect === 'minecraft') {
-            u.equipped_effect = 'valorant';
-          }
           if (u.role === 'admin' && (u.password_plain === '123' || !u.password_hash)) {
             const adminPass = process.env.ADMIN_PASSWORD || 'enzo123cg';
             u.password_plain = adminPass;
@@ -4208,11 +4206,10 @@ api.put('/tasks/:task_id', requireAdmin, async (req, res) => {
   });
 
   if (anyEditMade && db.push_settings?.task_edited !== false) {
-    const changeSummary = changes.length > 0 ? changes.join(', ') : 'Detalhes da tarefa atualizados';
     dispatchWebPushNotifications({
       targetUserIds: task.assigned_to,
       title: `Tarefa editada: ${task.title}`,
-      body: `${task.subject} • ${changeSummary}`,
+      body: `${task.subject} • Tarefa editada`,
       url: '/aluno',
       tag: `task-edit-${task.id}`,
     }).catch((err) => {
@@ -7034,11 +7031,17 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
     const students = Array.from(db.users.values()).filter((u) => u.role === 'aluno');
     const tasks = Array.from(db.tasks.values());
     const subjects = Array.from(db.subjects.values());
+    const announcements = Array.from(db.announcements.values());
+    const comments = Array.from(db.comments.values());
+    const summaries = Array.from(db.summaries.values());
+    const summaryTopics = Array.from(db.summary_topics.values());
+    const summaryGenerations = Array.from(db.summary_generations.entries());
+    const studentButtons = Array.from(db.student_buttons.values());
 
     // 1. edutask_backup.json
     const backupData = {
       app: 'EduTask',
-      version: db.app_info?.version || '1.2.0',
+      version: db.app_info?.version || '1.3.0',
       exported_at: new Date().toISOString(),
       type,
       data: {
@@ -7050,8 +7053,12 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
         subjects,
         tasks,
         completions: db.completions,
-        announcements: Array.from(db.announcements.values()),
-        comments: Array.from(db.comments.values()),
+        announcements,
+        comments,
+        summaries,
+        summary_topics: summaryTopics,
+        summary_generations: summaryGenerations,
+        summary_ai_model: db.summary_ai_model,
         login_logs: db.login_logs.slice(0, 1000),
         point_adjustments: db.point_adjustments,
         effect_overrides: db.effect_overrides,
@@ -7061,9 +7068,10 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
         annual_cycle: db.annual_cycle,
         annual_history: db.annual_history,
         task_cleanup_config: db.task_cleanup_config,
-        student_buttons: Array.from(db.student_buttons.values()),
+        student_buttons: studentButtons,
         weekly_schedule: db.weekly_schedule,
         whatsapp_config: db.whatsapp_config,
+        push_settings: db.push_settings,
         app_info: db.app_info,
         ai_enabled: db.ai_enabled,
         ai_hidden: db.ai_hidden,
@@ -7079,7 +7087,7 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
     const scheduleDaysConfigured = SCHEDULE_WEEKDAYS.filter((d) => (db.weekly_schedule[d.key] || []).length > 0).length;
     const manifest = {
       app: 'EduTask',
-      version: db.app_info?.version || '1.2.0',
+      version: db.app_info?.version || '1.3.0',
       exported_at: new Date().toISOString(),
       counts: {
         users: db.users.size,
@@ -7087,10 +7095,14 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
         tasks: tasks.length,
         subjects: subjects.length,
         completions: db.completions.length,
-        announcements: db.announcements.size,
-        comments: db.comments.size,
-        student_buttons: db.student_buttons.size,
+        announcements: announcements.length,
+        comments: comments.length,
+        summaries: summaries.length,
+        summary_topics: summaryTopics.length,
+        summary_generations: summaryGenerations.length,
+        student_buttons: studentButtons.length,
         schedule_days_configured: scheduleDaysConfigured,
+        point_adjustments: db.point_adjustments.length,
         uploads: 0,
       },
     };
@@ -7112,7 +7124,18 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
     });
     zip.addFile('csv/alunos_e_usuarios.csv', Buffer.from(csvAlunos, 'utf8'));
 
-    // 3b. Tarefas CSV
+    // 3b. Matérias CSV
+    let csvMaterias = `${UTF8_BOM}ID;Nome;Cor\n`;
+    subjects.forEach((s) => {
+      csvMaterias += [
+        escapeCsvField(s.id),
+        escapeCsvField(s.name),
+        escapeCsvField(s.color || ''),
+      ].join(';') + '\n';
+    });
+    zip.addFile('csv/materias.csv', Buffer.from(csvMaterias, 'utf8'));
+
+    // 3c. Tarefas CSV
     let csvTarefas = `${UTF8_BOM}ID;Título;Matéria;DataEntrega;Pontos;AtribuídoPara;CriadoEm\n`;
     tasks.forEach((t) => {
       csvTarefas += [
@@ -7127,7 +7150,7 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
     });
     zip.addFile('csv/tarefas.csv', Buffer.from(csvTarefas, 'utf8'));
 
-    // 3c. Entregas e Conclusões CSV
+    // 3d. Entregas e Conclusões CSV
     let csvEntregas = `${UTF8_BOM}IDTarefa;IDAluno;NomeAluno;DataConclusão;NoPrazo;PontosRecebidos\n`;
     db.completions.forEach((c) => {
       const studentName = db.users.get(c.user_id)?.name || 'Aluno';
@@ -7142,9 +7165,59 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
     });
     zip.addFile('csv/entregas_concluidas.csv', Buffer.from(csvEntregas, 'utf8'));
 
-    // 3d. Botões de Alunos CSV
+    // 3e. Avisos CSV
+    let csvAvisos = `${UTF8_BOM}ID;Título;Mensagem;Especial;Destinatários;Anexos;CriadoEm\n`;
+    announcements.forEach((a) => {
+      const attCount = Array.isArray(a.attachments) ? a.attachments.length : 0;
+      csvAvisos += [
+        escapeCsvField(a.id),
+        escapeCsvField(a.title),
+        escapeCsvField(a.message),
+        escapeCsvField(a.is_special ? 'Sim' : 'Não'),
+        escapeCsvField(a.assigned_to?.length ? a.assigned_to.join(', ') : 'Todos'),
+        escapeCsvField(attCount),
+        escapeCsvField(a.created_at || ''),
+      ].join(';') + '\n';
+    });
+    zip.addFile('csv/avisos.csv', Buffer.from(csvAvisos, 'utf8'));
+
+    // 3f. Resumos e Apostilas CSV
+    let csvResumos = `${UTF8_BOM}ID;Matéria;Tópico;Status;Publicado;ResumoPronto;Anexos;CriadoEm;AtualizadoEm\n`;
+    summaries.forEach((s) => {
+      const attCount = (Array.isArray(s.attachment_ids) ? s.attachment_ids.length : 0) ||
+        (Array.isArray(s.attachments) ? s.attachments.length : 0);
+      csvResumos += [
+        escapeCsvField(s.id),
+        escapeCsvField(s.subject),
+        escapeCsvField(s.topic),
+        escapeCsvField(s.status || (s.is_published ? 'published' : 'draft')),
+        escapeCsvField(s.is_published ? 'Sim' : 'Não'),
+        escapeCsvField(s.is_ready_made ? 'Sim' : 'Não'),
+        escapeCsvField(attCount),
+        escapeCsvField(s.created_at || ''),
+        escapeCsvField(s.updated_at || ''),
+      ].join(';') + '\n';
+    });
+    zip.addFile('csv/resumos.csv', Buffer.from(csvResumos, 'utf8'));
+
+    // 3g. Tópicos de Resumo CSV
+    let csvTopicos = `${UTF8_BOM}ID;Matéria;Tópico;ConceitosChave;Formulas;CriadoEm;AtualizadoEm\n`;
+    summaryTopics.forEach((t) => {
+      csvTopicos += [
+        escapeCsvField(t.id),
+        escapeCsvField(t.subject),
+        escapeCsvField(t.topic),
+        escapeCsvField(Array.isArray(t.key_concepts) ? t.key_concepts.join(' | ') : ''),
+        escapeCsvField(Array.isArray(t.formulas) ? t.formulas.join(' | ') : ''),
+        escapeCsvField(t.created_at || ''),
+        escapeCsvField(t.updated_at || ''),
+      ].join(';') + '\n';
+    });
+    zip.addFile('csv/topicos_resumos.csv', Buffer.from(csvTopicos, 'utf8'));
+
+    // 3h. Botões de Alunos CSV
     let csvBotoes = `${UTF8_BOM}ID;Nome;Link;Descricao;Cor;Icone;Ativo;NovaAba;Ordem;Cliques;CriadoEm\n`;
-    Array.from(db.student_buttons.values()).forEach((b) => {
+    studentButtons.forEach((b) => {
       csvBotoes += [
         escapeCsvField(b.id),
         escapeCsvField(b.name),
@@ -7161,7 +7234,7 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
     });
     zip.addFile('csv/botoes_alunos.csv', Buffer.from(csvBotoes, 'utf8'));
 
-    // 3e. Cronograma Semanal (Segunda a Sexta) CSV
+    // 3i. Cronograma Semanal (Segunda a Sexta) CSV
     let csvCronograma = `${UTF8_BOM}DiaSemana;AtivoParaAlunos;MateriasNecessarias\n`;
     SCHEDULE_WEEKDAYS.forEach((day) => {
       const items = db.weekly_schedule[day.key] || [];
@@ -7173,7 +7246,36 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
     });
     zip.addFile('csv/cronograma_semanal.csv', Buffer.from(csvCronograma, 'utf8'));
 
+    // 3j. Ajustes de Pontos CSV
+    let csvAjustes = `${UTF8_BOM}ID;IDAluno;NomeAluno;Delta;Motivo;CriadoEm\n`;
+    db.point_adjustments.forEach((adj) => {
+      csvAjustes += [
+        escapeCsvField(adj.id),
+        escapeCsvField(adj.user_id),
+        escapeCsvField(adj.user_name),
+        escapeCsvField(adj.delta),
+        escapeCsvField(adj.reason),
+        escapeCsvField(adj.created_at || ''),
+      ].join(';') + '\n';
+    });
+    zip.addFile('csv/ajustes_pontos.csv', Buffer.from(csvAjustes, 'utf8'));
+
     // 4. Attachments / Uploads directory
+    const inferExtFromContentType = (ct?: string) => {
+      const lower = (ct || '').toLowerCase();
+      if (lower.includes('pdf')) return '.pdf';
+      if (lower.includes('png')) return '.png';
+      if (lower.includes('webp')) return '.webp';
+      if (lower.includes('gif')) return '.gif';
+      if (lower.includes('svg')) return '.svg';
+      if (lower.includes('markdown')) return '.md';
+      if (lower.includes('text/plain')) return '.txt';
+      if (lower.includes('csv')) return '.csv';
+      if (lower.includes('json')) return '.json';
+      if (lower.includes('wordprocessingml') || lower.includes('msword')) return '.docx';
+      return '.jpg';
+    };
+
     let uploadFilesCount = 0;
     const addedUploadFiles = new Set<string>();
     if (shouldIncludeUploads) {
@@ -7195,10 +7297,10 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
         }
       }
 
-      // Inclui fotos de resposta da IA, anexos e fotos de tarefas salvas em db.files
+      // Inclui fotos de resposta da IA, anexos de tarefas/avisos e arquivos/PDFs de resumos salvos em db.files
       db.files.forEach((f) => {
-        const ext = path.extname(f.original_filename || '') || '.jpg';
-        const fileKeyWithExt = `${f.id}${ext}`;
+        const ext = path.extname(f.original_filename || '') || inferExtFromContentType(f.content_type);
+        const fileKeyWithExt = f.id.includes('.') ? f.id : `${f.id}${ext}`;
         const fileKeyRaw = f.id;
         const origName = f.original_filename;
         if (!addedUploadFiles.has(fileKeyWithExt) && !addedUploadFiles.has(fileKeyRaw) && (!origName || !addedUploadFiles.has(origName))) {
@@ -7218,13 +7320,13 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
 EDUTASK — PACOTE OFICIAL DE DADOS & BACKUP (ZIP)
 ================================================
 Data de Exportação: ${new Date().toLocaleString('pt-BR')}
-Versão: ${db.app_info?.version || '1.2.0'}
+Versão: ${db.app_info?.version || '1.3.0'}
 
 Conteúdo do Pacote:
-1. edutask_backup.json -> Banco de dados com todos os registros (alunos, tarefas, botões de alunos, WhatsApp, histórico mensal)
+1. edutask_backup.json -> Banco completo (alunos, tarefas, matérias, resumos, tópicos, avisos, comentários, cronograma, botões de alunos, WhatsApp, notificações push, molduras e histórico mensal/anual)
 2. manifest.json       -> Metadados e contagem de itens
-3. csv/                -> Planilhas em Excel/CSV de alunos, tarefas, entregas e botões de alunos
-4. uploads/            -> Fotos de perfis e anexos de tarefas (${uploadFilesCount} arquivos)
+3. csv/                -> Planilhas em Excel/CSV de alunos, matérias, tarefas, entregas, avisos, resumos, tópicos, botões, cronograma e ajustes de pontos
+4. uploads/            -> Fotos de perfis e anexos de tarefas, avisos e resumos (${uploadFilesCount} arquivos)
 
 Como Importar:
 Acesse o Painel do Administrador > Aba "Dados ZIP" > Envie este arquivo .zip
@@ -7276,26 +7378,30 @@ api.post('/admin/zip/preview', requireAdmin, upload.single('file'), (req, res) =
       }
     });
 
+    const normalizeList = (raw: any): any[] =>
+      Array.isArray(raw) ? raw.map((item: any) => (Array.isArray(item) ? item[1] : item)).filter(Boolean) : [];
+
     // Support root or legacy formats
     const actualData = backupData?.data || backupData;
-    const usersList: any[] = Array.isArray(actualData?.users)
-      ? actualData.users.map((u: any) => (Array.isArray(u) ? u[1] : u))
-      : [];
-    const tasksList: any[] = Array.isArray(actualData?.tasks)
-      ? actualData.tasks.map((t: any) => (Array.isArray(t) ? t[1] : t))
-      : [];
-    const subjectsList: any[] = Array.isArray(actualData?.subjects)
-      ? actualData.subjects.map((s: any) => (Array.isArray(s) ? s[1] : s))
-      : [];
+    const usersList = normalizeList(actualData?.users);
+    const tasksList = normalizeList(actualData?.tasks);
+    const subjectsList = normalizeList(actualData?.subjects);
     const completionsList: any[] = Array.isArray(actualData?.completions) ? actualData.completions : [];
-    const buttonsList: any[] = Array.isArray(actualData?.student_buttons)
-      ? actualData.student_buttons.map((b: any) => (Array.isArray(b) ? b[1] : b))
-      : [];
+    const announcementsList = normalizeList(actualData?.announcements);
+    const commentsList = normalizeList(actualData?.comments);
+    const summariesList = normalizeList(actualData?.summaries);
+    const summaryTopicsList = normalizeList(actualData?.summary_topics);
+    const summaryGensList = normalizeList(actualData?.summary_generations);
+    const buttonsList = normalizeList(actualData?.student_buttons);
+    const pointAdjustmentsList: any[] = Array.isArray(actualData?.point_adjustments) ? actualData.point_adjustments : [];
     const scheduleConfig = actualData?.weekly_schedule
       ? normalizeWeeklyScheduleConfig(actualData.weekly_schedule)
       : null;
     const scheduleDaysConfigured = scheduleConfig
       ? SCHEDULE_WEEKDAYS.filter((d) => (scheduleConfig[d.key] || []).length > 0).length
+      : 0;
+    const scheduleItemsCount = scheduleConfig
+      ? SCHEDULE_WEEKDAYS.reduce((acc, d) => acc + (scheduleConfig[d.key] || []).length, 0)
       : 0;
 
     const preview = {
@@ -7309,12 +7415,21 @@ api.post('/admin/zip/preview', requireAdmin, upload.single('file'), (req, res) =
         tasks: tasksList.length,
         subjects: subjectsList.length,
         completions: completionsList.length,
+        announcements: announcementsList.length,
+        comments: commentsList.length,
+        summaries: summariesList.length,
+        summary_topics: summaryTopicsList.length,
+        summary_generations: summaryGensList.length,
         uploads: uploadFiles.length,
         student_buttons: buttonsList.length,
         schedule_days_configured: scheduleDaysConfigured,
+        schedule_items_count: scheduleItemsCount,
+        schedule_enabled: scheduleConfig ? scheduleConfig.enabled !== false : false,
+        point_adjustments: pointAdjustmentsList.length,
       },
       previewUsers: usersList.slice(0, 5).map((u: any) => ({ id: u.id, name: u.name, role: u.role, points: u.points })),
       previewTasks: tasksList.slice(0, 5).map((t: any) => ({ id: t.id, title: t.title, subject: t.subject, points: t.points })),
+      previewSummaries: summariesList.slice(0, 5).map((s: any) => ({ id: s.id, subject: s.subject, topic: s.topic, is_published: Boolean(s.is_published) })),
       previewButtons: buttonsList.slice(0, 5).map((b: any) => ({ id: b.id, name: b.name, url: b.url, color: b.color, icon: b.icon })),
       previewUploads: uploadFiles.slice(0, 8),
     };
@@ -7339,12 +7454,14 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
       import_subjects = 'true',
       import_completions = 'true',
       import_announcements = 'true',
+      import_summaries = 'true',
       import_uploads = 'true',
       import_effects = 'true',
       import_buttons = 'true',
       import_schedule = 'true',
       import_whatsapp = 'true',
       import_monthly = 'true',
+      import_settings = 'true',
     } = req.body || {};
 
     const zip = new AdmZip(req.file.buffer);
@@ -7352,6 +7469,28 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
 
     let backupData: any = null;
     let extractedFilesCount = 0;
+    const firestoreSyncOps: Promise<any>[] = [];
+
+    const inferMimeTypeFromExt = (ext: string): string => {
+      switch (ext) {
+        case '.png': return 'image/png';
+        case '.webp': return 'image/webp';
+        case '.gif': return 'image/gif';
+        case '.svg': return 'image/svg+xml';
+        case '.pdf': return 'application/pdf';
+        case '.txt': return 'text/plain; charset=utf-8';
+        case '.md': return 'text/markdown; charset=utf-8';
+        case '.csv': return 'text/csv; charset=utf-8';
+        case '.json': return 'application/json';
+        case '.doc': return 'application/msword';
+        case '.docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        case '.xls': return 'application/vnd.ms-excel';
+        case '.xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        case '.ppt': return 'application/vnd.ms-powerpoint';
+        case '.pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        default: return 'image/jpeg';
+      }
+    };
 
     // 1. Extrair uploads para a pasta UPLOAD_DIR do servidor e registrar em db.files
     if (import_uploads !== 'false') {
@@ -7367,14 +7506,10 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
             fs.writeFileSync(destPath, fileData);
             extractedFilesCount++;
 
-            // Registra em db.files para que fotos de gabarito da IA e anexos fiquem imediatamente acessíveis
+            // Registra em db.files para que fotos de gabarito da IA, anexos e PDFs fiquem imediatamente acessíveis
             const ext = path.extname(fileName).toLowerCase();
             const idWithoutExt = fileName.replace(/\.[^/.]+$/, '');
-            let mimeType = 'image/jpeg';
-            if (ext === '.png') mimeType = 'image/png';
-            else if (ext === '.webp') mimeType = 'image/webp';
-            else if (ext === '.gif') mimeType = 'image/gif';
-            else if (ext === '.pdf') mimeType = 'application/pdf';
+            const mimeType = inferMimeTypeFromExt(ext);
 
             const record: FileRecord = {
               id: idWithoutExt,
@@ -7385,11 +7520,24 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
               uploaded_by: 'system',
               created_at: new Date().toISOString(),
             };
-            if (!db.files.has(idWithoutExt)) {
+            if (mode === 'overwrite' || !db.files.has(idWithoutExt)) {
               db.files.set(idWithoutExt, record);
             }
-            if (!db.files.has(fileName)) {
+            if (mode === 'overwrite' || !db.files.has(fileName)) {
               db.files.set(fileName, record);
+            }
+            if (fileData.length <= 700 * 1024) {
+              firestoreSyncOps.push(
+                firebaseService.saveFile({
+                  id: idWithoutExt,
+                  original_filename: fileName,
+                  content_type: mimeType,
+                  size: fileData.length,
+                  base64: fileData.toString('base64'),
+                  uploaded_by: 'system',
+                  created_at: record.created_at,
+                }).catch(() => {})
+              );
             }
           }
         }
@@ -7413,6 +7561,10 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
     let importedTasksCount = 0;
     let importedSubjectsCount = 0;
     let importedCompletionsCount = 0;
+    let importedAnnouncementsCount = 0;
+    let importedCommentsCount = 0;
+    let importedSummariesCount = 0;
+    let importedSummaryTopicsCount = 0;
     let importedButtonsCount = 0;
     let importedScheduleDaysCount = 0;
 
@@ -7422,15 +7574,25 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         const subjList: any[] = Array.isArray(actualData.subjects)
           ? actualData.subjects.map((s: any) => (Array.isArray(s) ? s[1] : s))
           : [];
-        if (mode === 'overwrite' && subjList.length > 0) {
+        const previousSubjectIds = mode === 'overwrite' ? Array.from(db.subjects.keys()) : [];
+        if (mode === 'overwrite') {
           db.subjects.clear();
         }
         subjList.forEach((s) => {
           if (s && s.id && s.name) {
+            if (mode === 'merge' && db.subjects.has(s.id)) return;
             db.subjects.set(s.id, s);
             importedSubjectsCount++;
+            firestoreSyncOps.push(firebaseService.saveSubject(s).catch(() => {}));
           }
         });
+        if (mode === 'overwrite') {
+          previousSubjectIds.forEach((oldId) => {
+            if (!db.subjects.has(oldId)) {
+              firestoreSyncOps.push(firebaseService.deleteSubject(oldId).catch(() => {}));
+            }
+          });
+        }
       }
 
       // Import Users (Restaura molduras compradas, pontos de loja, ranking anual e mensal)
@@ -7441,6 +7603,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
 
         // Salva admin atual para evitar perda de acesso
         const currentAdmin = (req as any).user as User;
+        const previousUserIds = mode === 'overwrite' ? Array.from(db.users.keys()) : [];
 
         if (mode === 'overwrite' && usersList.length > 0) {
           db.users.clear();
@@ -7506,6 +7669,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
               points,
               streak_count: typeof u.streak_count === 'number' ? u.streak_count : (existingUser?.streak_count || 0),
               longest_streak: typeof u.longest_streak === 'number' ? u.longest_streak : (existingUser?.longest_streak || 0),
+              last_active_date: u.last_active_date || existingUser?.last_active_date,
               owned_effects: mergedOwnedEffects,
               equipped_effect: equippedEffect,
               avatar_data: u.avatar_data || existingUser?.avatar_data,
@@ -7517,9 +7681,33 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
             };
             db.users.set(u.id, cleanUser);
             importedUsersCount++;
-            firebaseService.saveUser(cleanUser).catch(console.warn);
+            firestoreSyncOps.push(firebaseService.saveUser(cleanUser).catch(console.warn));
           }
         });
+
+        if (mode === 'overwrite' && usersList.length > 0) {
+          previousUserIds.forEach((oldId) => {
+            if (!db.users.has(oldId)) {
+              firestoreSyncOps.push(firebaseService.deleteUser(oldId).catch(() => {}));
+            }
+          });
+        }
+
+        // Login logs
+        if (Array.isArray(actualData.login_logs)) {
+          if (mode === 'overwrite') {
+            db.login_logs = actualData.login_logs.slice(0, 1000);
+          } else {
+            const seenLogs = new Set(db.login_logs.map((l) => l.id));
+            actualData.login_logs.forEach((l: any) => {
+              if (l && l.id && !seenLogs.has(l.id)) {
+                db.login_logs.push(l);
+                seenLogs.add(l.id);
+              }
+            });
+            db.login_logs = db.login_logs.slice(0, 1000);
+          }
+        }
       }
 
       // Import Tasks (Se já tem no merge, IGNORE)
@@ -7527,16 +7715,18 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         const tasksList: any[] = Array.isArray(actualData.tasks)
           ? actualData.tasks.map((t: any) => (Array.isArray(t) ? t[1] : t))
           : [];
-        if (mode === 'overwrite' && tasksList.length > 0) {
+        const previousTaskIds = mode === 'overwrite' ? Array.from(db.tasks.keys()) : [];
+        if (mode === 'overwrite') {
           db.tasks.clear();
+          db.task_student_answers.clear();
         }
         tasksList.forEach((t) => {
           if (t && t.id && t.title) {
-            // Se já tem, ignore!
             if (mode === 'merge' && db.tasks.has(t.id)) {
               return;
             }
-            db.tasks.set(t.id, {
+            const cleanTask: TaskItem = {
+              ...t,
               id: t.id,
               title: t.title,
               description: t.description || '',
@@ -7550,60 +7740,268 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
               answer_source: t.answer_source || '',
               created_by: t.created_by || 'admin-user-001',
               created_at: t.created_at || new Date().toISOString(),
-            });
+            };
+            db.tasks.set(t.id, cleanTask);
             importedTasksCount++;
+            firestoreSyncOps.push(firebaseService.saveTask(cleanTask).catch(() => {}));
           }
         });
+        if (mode === 'overwrite') {
+          previousTaskIds.forEach((oldId) => {
+            if (!db.tasks.has(oldId)) {
+              firestoreSyncOps.push(firebaseService.deleteTask(oldId).catch(() => {}));
+            }
+          });
+        }
+
+        // Import AI Generated Student Task Answers
+        if (Array.isArray(actualData.task_student_answers)) {
+          actualData.task_student_answers.forEach((entry: any) => {
+            const [k, v] = Array.isArray(entry) ? entry : [entry?.id, entry];
+            if (k && v) {
+              if (mode === 'merge' && db.task_student_answers.has(k)) return;
+              db.task_student_answers.set(k, v);
+              firestoreSyncOps.push(firebaseService.saveStudentAnswer(k, v).catch(() => {}));
+            }
+          });
+        }
       }
 
       // Import Completions (Se já tem no merge, IGNORE)
       if (import_completions !== 'false' && actualData.completions) {
+        const previousCompletions = mode === 'overwrite' ? [...db.completions] : [];
         if (mode === 'overwrite') {
           db.completions = [];
         }
         const existingKeys = new Set(db.completions.map((c) => `${c.task_id}-${c.user_id}`));
         actualData.completions.forEach((c: any) => {
           const key = `${c?.task_id}-${c?.user_id}`;
-          // Se já tem, ignore!
           if (c && c.task_id && c.user_id && (!existingKeys.has(key) || mode === 'overwrite')) {
-            db.completions.push({
+            const cleanComp: Completion = {
               task_id: c.task_id,
               user_id: c.user_id,
               completed_at: c.completed_at || new Date().toISOString(),
               on_time: Boolean(c.on_time),
               points_awarded: typeof c.points_awarded === 'number' ? c.points_awarded : 50,
-            });
+            };
+            db.completions.push(cleanComp);
             existingKeys.add(key);
             importedCompletionsCount++;
+            firestoreSyncOps.push(firebaseService.saveCompletion(cleanComp).catch(() => {}));
           }
         });
+        if (mode === 'overwrite') {
+          const restoredKeys = new Set(db.completions.map((c) => `${c.task_id}-${c.user_id}`));
+          previousCompletions.forEach((oldC) => {
+            if (!restoredKeys.has(`${oldC.task_id}-${oldC.user_id}`)) {
+              firestoreSyncOps.push(firebaseService.deleteCompletion(oldC.user_id, oldC.task_id).catch(() => {}));
+            }
+          });
+        }
       }
 
-      // Import Announcements
-      if (import_announcements !== 'false' && actualData.announcements) {
-        const annList: any[] = Array.isArray(actualData.announcements)
-          ? actualData.announcements.map((a: any) => (Array.isArray(a) ? a[1] : a))
-          : [];
-        if (mode === 'overwrite') {
-          db.announcements.clear();
-        }
-        annList.forEach((a) => {
-          if (a && a.id) {
-            const attIds = Array.isArray(a.attachments)
-              ? a.attachments.map((x: any) => (typeof x === 'string' ? x : x?.id)).filter(Boolean)
-              : [];
-            db.announcements.set(a.id, {
-              ...a,
-              attachments: attIds,
-              attachment_files: Array.isArray(a.attachment_files) ? a.attachment_files : [],
+      // Import Announcements & Comments
+      if (import_announcements !== 'false') {
+        if (actualData.announcements) {
+          const annList: any[] = Array.isArray(actualData.announcements)
+            ? actualData.announcements.map((a: any) => (Array.isArray(a) ? a[1] : a))
+            : [];
+          const previousAnnIds = mode === 'overwrite' ? Array.from(db.announcements.keys()) : [];
+          if (mode === 'overwrite') {
+            db.announcements.clear();
+          }
+          annList.forEach((a) => {
+            if (a && a.id) {
+              if (mode === 'merge' && db.announcements.has(a.id)) return;
+              const attIds = Array.isArray(a.attachments)
+                ? a.attachments.map((x: any) => (typeof x === 'string' ? x : x?.id)).filter(Boolean)
+                : [];
+              const cleanAnn: Announcement = {
+                ...a,
+                attachments: attIds,
+                attachment_files: Array.isArray(a.attachment_files) ? a.attachment_files : [],
+              };
+              db.announcements.set(a.id, cleanAnn);
+              importedAnnouncementsCount++;
+              firestoreSyncOps.push(firebaseService.saveAnnouncement(cleanAnn).catch(() => {}));
+            }
+          });
+          if (mode === 'overwrite') {
+            previousAnnIds.forEach((oldId) => {
+              if (!db.announcements.has(oldId)) {
+                firestoreSyncOps.push(firebaseService.deleteAnnouncement(oldId).catch(() => {}));
+              }
             });
           }
-        });
+        }
+
+        if (actualData.comments) {
+          const commentsList: any[] = Array.isArray(actualData.comments)
+            ? actualData.comments.map((c: any) => (Array.isArray(c) ? c[1] : c))
+            : [];
+          const previousCommentIds = mode === 'overwrite' ? Array.from(db.comments.keys()) : [];
+          if (mode === 'overwrite') {
+            db.comments.clear();
+          }
+          commentsList.forEach((c) => {
+            if (c && c.id && c.announcement_id) {
+              if (mode === 'merge' && db.comments.has(c.id)) return;
+              const cleanComment: Comment = {
+                id: c.id,
+                announcement_id: c.announcement_id,
+                user_id: c.user_id || 'system',
+                user_name: c.user_name || 'Usuário',
+                user_role: c.user_role || 'aluno',
+                text: c.text || '',
+                created_at: c.created_at || new Date().toISOString(),
+              };
+              db.comments.set(c.id, cleanComment);
+              importedCommentsCount++;
+              firestoreSyncOps.push(firebaseService.saveComment(cleanComment).catch(() => {}));
+            }
+          });
+          if (mode === 'overwrite') {
+            previousCommentIds.forEach((oldId) => {
+              if (!db.comments.has(oldId)) {
+                firestoreSyncOps.push(firebaseService.deleteComment(oldId).catch(() => {}));
+              }
+            });
+          }
+        }
       }
 
-      // Import Effect Overrides / Store Prices
-      if (import_effects !== 'false' && actualData.effect_overrides) {
-        db.effect_overrides = { ...db.effect_overrides, ...actualData.effect_overrides };
+      // Import Summaries, Summary Topics, Summary Generations & Summary AI Model
+      if (import_summaries !== 'false') {
+        if (actualData.summary_topics) {
+          const topicsList: any[] = Array.isArray(actualData.summary_topics)
+            ? actualData.summary_topics.map((t: any) => (Array.isArray(t) ? t[1] : t))
+            : [];
+          const previousTopicIds = mode === 'overwrite' ? Array.from(db.summary_topics.keys()) : [];
+          if (mode === 'overwrite') {
+            db.summary_topics.clear();
+          }
+          topicsList.forEach((t) => {
+            if (t && t.id) {
+              if (mode === 'merge' && db.summary_topics.has(t.id)) return;
+              const cleanTopic: StudyTopic = {
+                ...t,
+                id: t.id,
+                subject: t.subject || 'Geral',
+                topic: t.topic || 'Tópico',
+                extracted_notes: t.extracted_notes || '',
+                key_concepts: Array.isArray(t.key_concepts) ? t.key_concepts : [],
+                formulas: Array.isArray(t.formulas) ? t.formulas : [],
+                source_image_ids: Array.isArray(t.source_image_ids) ? t.source_image_ids : [],
+                created_at: t.created_at || new Date().toISOString(),
+                updated_at: t.updated_at || t.created_at || new Date().toISOString(),
+                created_by: t.created_by || 'admin',
+              };
+              db.summary_topics.set(t.id, cleanTopic);
+              importedSummaryTopicsCount++;
+              firestoreSyncOps.push(firebaseService.saveSummaryTopic(cleanTopic).catch(() => {}));
+            }
+          });
+          if (mode === 'overwrite') {
+            previousTopicIds.forEach((oldId) => {
+              if (!db.summary_topics.has(oldId)) {
+                firestoreSyncOps.push(firebaseService.deleteSummaryTopic(oldId).catch(() => {}));
+              }
+            });
+          }
+        }
+
+        if (actualData.summaries) {
+          const summariesList: any[] = Array.isArray(actualData.summaries)
+            ? actualData.summaries.map((s: any) => (Array.isArray(s) ? s[1] : s))
+            : [];
+          const previousSummaryIds = mode === 'overwrite' ? Array.from(db.summaries.keys()) : [];
+          if (mode === 'overwrite') {
+            db.summaries.clear();
+          }
+          summariesList.forEach((s) => {
+            if (s && s.id) {
+              if (mode === 'merge' && db.summaries.has(s.id)) return;
+              const cleanSummary: SummaryTopic = {
+                ...s,
+                id: s.id,
+                subject: s.subject || 'Geral',
+                topic: s.topic || 'Resumo',
+                extracted_notes: s.extracted_notes || '',
+                summary_text: s.summary_text || '',
+                key_concepts: Array.isArray(s.key_concepts) ? s.key_concepts : [],
+                formulas: Array.isArray(s.formulas) ? s.formulas : [],
+                source_image_ids: Array.isArray(s.source_image_ids) ? s.source_image_ids : [],
+                source_topic_ids: Array.isArray(s.source_topic_ids) ? s.source_topic_ids : [],
+                source_topic_titles: Array.isArray(s.source_topic_titles) ? s.source_topic_titles : [],
+                is_ready_made: Boolean(s.is_ready_made),
+                attachment_ids: Array.isArray(s.attachment_ids) ? s.attachment_ids : [],
+                attachments: Array.isArray(s.attachments) ? s.attachments : [],
+                status: s.status || (s.is_published ? 'published' : 'draft'),
+                is_published: Boolean(s.is_published),
+                published_at: s.published_at || null,
+                created_at: s.created_at || new Date().toISOString(),
+                updated_at: s.updated_at || s.created_at || new Date().toISOString(),
+                created_by: s.created_by || 'admin',
+              };
+              db.summaries.set(s.id, cleanSummary);
+              importedSummariesCount++;
+              firestoreSyncOps.push(firebaseService.saveSummary(cleanSummary).catch(() => {}));
+            }
+          });
+          if (mode === 'overwrite') {
+            previousSummaryIds.forEach((oldId) => {
+              if (!db.summaries.has(oldId)) {
+                firestoreSyncOps.push(firebaseService.deleteSummary(oldId).catch(() => {}));
+              }
+            });
+          }
+        }
+
+        if (actualData.summary_generations) {
+          const previousGenIds = mode === 'overwrite' ? Array.from(db.summary_generations.keys()) : [];
+          if (mode === 'overwrite') {
+            db.summary_generations.clear();
+          }
+          if (Array.isArray(actualData.summary_generations)) {
+            actualData.summary_generations.forEach((entry: any) => {
+              const [genKey, genVal] = Array.isArray(entry) ? entry : [entry?.id, entry];
+              const id = genKey || genVal?.id;
+              if (id && genVal) {
+                if (mode === 'merge' && db.summary_generations.has(id)) return;
+                const cleanGen = { ...genVal, id };
+                db.summary_generations.set(id, cleanGen);
+                firestoreSyncOps.push(firebaseService.saveSummaryGeneration(cleanGen).catch(() => {}));
+              }
+            });
+          }
+          if (mode === 'overwrite') {
+            previousGenIds.forEach((oldId) => {
+              if (!db.summary_generations.has(oldId)) {
+                firestoreSyncOps.push(firebaseService.deleteSummaryGeneration(oldId).catch(() => {}));
+              }
+            });
+          }
+        }
+
+        if (actualData.summary_ai_model) {
+          db.summary_ai_model = normalizeGeminiModelId(actualData.summary_ai_model);
+        }
+      }
+
+      // Import Effect Overrides / Store Prices & Frame Visibility
+      if (import_effects !== 'false') {
+        if (mode === 'overwrite') {
+          db.effect_overrides = {};
+        }
+        if (actualData.effect_overrides && typeof actualData.effect_overrides === 'object') {
+          db.effect_overrides = { ...db.effect_overrides, ...actualData.effect_overrides };
+        }
+        if (actualData.frames_disabled !== undefined) {
+          db.frames_disabled = Boolean(actualData.frames_disabled);
+        }
+        if (actualData.frame_rotation_disabled !== undefined) {
+          db.frame_rotation_disabled = Boolean(actualData.frame_rotation_disabled);
+        }
       }
 
       // Import Student Buttons (Botões de Alunos)
@@ -7683,7 +8081,7 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         };
       }
 
-      // Import Monthly Prize & Ciclo Mensal
+      // Import Monthly Prize, Ciclo Mensal, Ciclo Anual & Point Adjustments
       if (import_monthly !== 'false') {
         if (actualData.monthly_prize) {
           db.monthly_prize = { ...db.monthly_prize, ...actualData.monthly_prize };
@@ -7703,59 +8101,70 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
             });
           }
         }
-      }
-
-      // Import Annual Cycle & Ranking Anual
-      if (actualData.annual_cycle) {
-        db.annual_cycle = { ...db.annual_cycle, ...actualData.annual_cycle };
-      }
-      if (Array.isArray(actualData.annual_history)) {
-        if (mode === 'overwrite') {
-          db.annual_history = actualData.annual_history;
-        } else {
-          const existingYears = new Set(db.annual_history.map((h: any) => h.year));
-          actualData.annual_history.forEach((h: any) => {
-            if (h && h.year && !existingYears.has(h.year)) {
-              db.annual_history.push(h);
-            }
-          });
+        if (actualData.annual_cycle) {
+          db.annual_cycle = { ...db.annual_cycle, ...actualData.annual_cycle };
+        }
+        if (Array.isArray(actualData.annual_history)) {
+          if (mode === 'overwrite') {
+            db.annual_history = actualData.annual_history;
+          } else {
+            const existingYears = new Set(db.annual_history.map((h: any) => h.year));
+            actualData.annual_history.forEach((h: any) => {
+              if (h && h.year && !existingYears.has(h.year)) {
+                db.annual_history.push(h);
+              }
+            });
+          }
+        }
+        if (Array.isArray(actualData.point_adjustments)) {
+          if (mode === 'overwrite') {
+            db.point_adjustments = actualData.point_adjustments;
+          } else {
+            const existingAdjIds = new Set(db.point_adjustments.map((a) => a.id));
+            actualData.point_adjustments.forEach((a: any) => {
+              if (a && a.id && !existingAdjIds.has(a.id)) {
+                db.point_adjustments.push(a);
+                existingAdjIds.add(a.id);
+              }
+            });
+          }
         }
       }
 
-      // Import AI settings, models and visibility
-      if (actualData.ai_model) {
-        db.ai_model = actualData.ai_model;
-      }
-      if (actualData.ai_hidden !== undefined) {
-        db.ai_hidden = Boolean(actualData.ai_hidden);
-      }
-      if (actualData.frames_disabled !== undefined) {
-        db.frames_disabled = Boolean(actualData.frames_disabled);
-      }
-      if (actualData.ai_enabled !== undefined) {
-        db.ai_enabled = Boolean(actualData.ai_enabled);
-      }
-
-      // Import AI Generated Student Task Answers
-      if (Array.isArray(actualData.task_student_answers)) {
-        actualData.task_student_answers.forEach(([k, v]: [string, any]) => {
-          if (k && v) {
-            db.task_student_answers.set(k, v);
-          }
-        });
-      }
-
-      // Import Task Cleanup Config
-      if (actualData.task_cleanup_config) {
-        db.task_cleanup_config = {
-          ...db.task_cleanup_config,
-          ...actualData.task_cleanup_config,
-        };
+      // Import AI settings, Push notification settings & Task Cleanup Config
+      if (import_settings !== 'false') {
+        if (actualData.ai_model) {
+          db.ai_model = normalizeGeminiModelId(actualData.ai_model);
+        }
+        if (actualData.ai_hidden !== undefined) {
+          db.ai_hidden = Boolean(actualData.ai_hidden);
+        }
+        if (actualData.ai_enabled !== undefined) {
+          db.ai_enabled = Boolean(actualData.ai_enabled);
+        }
+        if (actualData.task_cleanup_config) {
+          db.task_cleanup_config = {
+            ...db.task_cleanup_config,
+            ...actualData.task_cleanup_config,
+          };
+        }
+        if (actualData.push_settings && typeof actualData.push_settings === 'object') {
+          db.push_settings = {
+            ...db.push_settings,
+            ...actualData.push_settings,
+          };
+        }
       }
     }
 
     db.saveToDisk();
-    saveSystemSettingsToFirestore();
+    firestoreSyncOps.push(saveSystemSettingsToFirestore());
+    if (firestoreSyncOps.length > 0) {
+      await Promise.race([
+        Promise.allSettled(firestoreSyncOps),
+        new Promise((resolve) => setTimeout(resolve, 6000)),
+      ]);
+    }
 
     res.json({
       ok: true,
@@ -7765,6 +8174,10 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         tasks: importedTasksCount,
         subjects: importedSubjectsCount,
         completions: importedCompletionsCount,
+        announcements: importedAnnouncementsCount,
+        comments: importedCommentsCount,
+        summaries: importedSummariesCount,
+        summary_topics: importedSummaryTopicsCount,
         buttons: importedButtonsCount,
         schedule_days: importedScheduleDaysCount,
         files: extractedFilesCount,

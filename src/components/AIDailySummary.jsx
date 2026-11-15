@@ -20,7 +20,7 @@ export default function AIDailySummary() {
 
   return (
     <div
-      className="nb-card p-4 sm:p-5 mb-6 bg-gradient-to-br from-violet-200 via-pink-100 to-amber-100 relative overflow-hidden"
+      className="nb-card mentalist-surface-ai p-4 sm:p-5 mb-6 bg-gradient-to-br from-violet-200 via-pink-100 to-amber-100 relative overflow-hidden"
       data-testid="ai-daily-summary"
     >
       <div className="absolute -top-2 -right-2 opacity-15 select-none pointer-events-none">

@@ -151,16 +151,13 @@ export default function AIAdminPanel() {
   return (
     <div className="space-y-6 nb-fade-in" data-testid="ai-admin-panel">
       {/* Top Banner */}
-      <div className="nb-card p-6 sm:p-8 bg-gradient-to-r from-violet-200 via-pink-100 to-sky-100 border-2 border-black flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-[6px_6px_0_0_#000]">
-        <div className="space-y-2 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-black text-white rounded-full font-heading font-black text-xs uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Painel de Inteligência Artificial
-          </div>
-          <h1 className="font-heading font-black text-2xl sm:text-4xl text-neutral-950 tracking-tight">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="min-w-0 max-w-2xl">
+          <h1 className="font-heading font-black text-2xl sm:text-3xl text-neutral-900 tracking-tight">
             Controle da IA (Google Gemini)
           </h1>
-          <p className="text-xs sm:text-sm text-neutral-800 leading-relaxed font-medium">
-            Selecione qual versão do Gemini será usada para gerar respostas e resoluções, emita avaliações pedagógicas individuais por IA de cada aluno e ative ou oculte as funções da IA em todo o sistema.
+          <p className="text-sm text-neutral-600 mt-0.5">
+            Selecione o modelo do Gemini, emita avaliações individuais por aluno e gerencie a visibilidade dos recursos de IA.
           </p>
         </div>
       </div>

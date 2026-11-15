@@ -515,40 +515,33 @@ export default function WhatsAppConfigPanel() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto nb-fade-in" data-testid="whatsapp-config-panel">
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4 border-b-2 border-black pb-5">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-400 text-emerald-950 border-2 border-black flex items-center justify-center shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-              <MessageSquare className="w-6 h-6" strokeWidth={2.5} />
-            </div>
-            <div>
-              <h1 className="font-heading font-black text-2xl sm:text-4xl tracking-tight text-neutral-900">
-                WhatsApp & Automações
-              </h1>
-              <p className="text-sm text-neutral-600 mt-0.5">
-                Fotos universais pré-definidas para o Grupo 2, conexão persistente 24/7 e lembretes automáticos.
-              </p>
-            </div>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 border-b border-slate-200 pb-4">
+        <div className="min-w-0">
+          <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">
+            WhatsApp & Automações
+          </h1>
+          <p className="text-sm text-neutral-600 mt-0.5">
+            Fotos universais pré-definidas para o Grupo 2, conexão persistente e lembretes automáticos.
+          </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <button
             onClick={() => loadStatus()}
-            className="nb-btn bg-white hover:bg-neutral-100 px-3 py-2 text-xs flex items-center gap-1.5"
+            className="nb-btn bg-white hover:bg-slate-50 px-3 py-2 text-xs font-bold flex items-center gap-1.5"
             title="Atualizar Status"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            Atualizar
+            <span>Atualizar</span>
           </button>
           <button
             onClick={() => saveAllConfig()}
             disabled={savingConfig}
-            className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 px-5 py-2 text-sm font-heading font-black flex items-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+            className="nb-btn admin-btn-primary px-4 py-2 text-xs sm:text-sm flex items-center gap-2"
             data-testid="save-whatsapp-all-config-btn"
           >
             <Save className={`w-4 h-4 ${savingConfig ? "animate-spin" : ""}`} />
-            {savingConfig ? "Salvando..." : "Salvar Configurações"}
+            <span>{savingConfig ? "Salvando..." : "Salvar Configurações"}</span>
           </button>
         </div>
       </div>

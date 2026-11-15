@@ -84,68 +84,67 @@ export default function AnnualRankingPanel() {
   return (
     <div className="space-y-6" data-testid="annual-ranking-panel">
       {/* Header Banner */}
-      <div className="nb-card bg-gradient-to-r from-amber-300 via-amber-200 to-sky-200 p-6 relative overflow-hidden border-4 border-black shadow-[6px_6px_0_0_#000]">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
-          <div>
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <span className="nb-badge bg-black text-white border-2 border-black font-black text-xs px-3 py-1 uppercase tracking-wider shadow-[2px_2px_0_0_#000]">
-                <Trophy className="w-3.5 h-3.5 text-amber-300 inline mr-1" />
-                <span className="text-white font-black">ANO LETIVO {cycle.active_year}</span>
-              </span>
-              <span className={`nb-badge font-black text-xs px-3 py-1 inline-flex items-center gap-1.5 ${cycle.is_closed ? "bg-red-500 text-white" : "bg-emerald-400 text-black"} border-black`}>
-                {cycle.is_closed ? (
-                  <>
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>Encerrado / App Desativado para Alunos</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Ano Ativo / Alunos Liberados</span>
-                  </>
-                )}
-              </span>
-            </div>
-            <h2 className="font-heading font-black text-3xl text-black leading-tight drop-shadow-[1px_1px_0_#fff]">
-              Ranking Anual dos Alunos
-            </h2>
-            <p className="text-neutral-900 font-semibold text-sm mt-1 max-w-2xl">
-              O Ranking Anual avalia o cumprimento de <strong>tarefas feitas</strong> e <strong>tarefas pendentes</strong> no registro permanente de cada aluno (permanecem salvas mesmo após tarefas serem apagadas). Os pontos são exclusivos para compra na Loja de Molduras.
-            </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            <span className="nb-badge bg-slate-900 text-white font-bold text-xs px-2.5 py-0.5 uppercase tracking-wider">
+              <Trophy className="w-3.5 h-3.5 text-amber-300 inline mr-1" />
+              Ano Letivo {cycle.active_year}
+            </span>
+            <span className={`nb-badge font-bold text-xs px-2.5 py-0.5 inline-flex items-center gap-1.5 ${cycle.is_closed ? "bg-red-100 text-red-900" : "bg-emerald-100 text-emerald-900"}`}>
+              {cycle.is_closed ? (
+                <>
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Encerrado / App Desativado para Alunos</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Ano Ativo / Alunos Liberados</span>
+                </>
+              )}
+            </span>
           </div>
+          <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">
+            Ranking Anual dos Alunos
+          </h1>
+          <p className="text-neutral-600 text-sm mt-0.5 max-w-2xl">
+            Avalia <strong>tarefas feitas</strong> e <strong>pendentes</strong> no registro permanente de cada aluno. Os pontos são exclusivos para compra na Loja de Molduras.
+          </p>
+        </div>
 
-          <div className="flex flex-wrap gap-2 w-full md:w-auto">
-            {!cycle.is_closed ? (
-              <button
-                onClick={() => {
-                  setCloseConfirmationText("");
-                  setConfirmCloseOpen(true);
-                }}
-                className="nb-btn bg-red-500 hover:bg-red-600 text-white px-5 py-3 text-sm flex items-center justify-center gap-2 font-black shadow-[3px_3px_0_0_#000] active:translate-x-[2px] active:translate-y-[2px] w-full sm:w-auto"
-                data-testid="btn-close-annual-cycle"
-              >
-                <Lock className="w-4 h-4" />
-                Encerrar Ranking Anual
-              </button>
-            ) : (
-              <button
-                onClick={() => setConfirmNextYearOpen(true)}
-                className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-black px-5 py-3 text-sm flex items-center justify-center gap-2 font-black shadow-[3px_3px_0_0_#000] active:translate-x-[2px] active:translate-y-[2px] w-full sm:w-auto"
-                data-testid="btn-start-next-year"
-              >
-                <Play className="w-4 h-4" />
-                Iniciar Ranking do Próximo Ano ({cycle.active_year + 1})
-              </button>
-            )}
-
+        <div className="flex flex-wrap gap-2 w-full md:w-auto flex-shrink-0">
+          {!cycle.is_closed ? (
             <button
-              onClick={loadRanking}
-              className="nb-btn bg-white hover:bg-neutral-100 text-black px-3.5 py-3 text-sm flex items-center justify-center gap-1.5 font-bold shadow-[3px_3px_0_0_#000]"
-              title="Atualizar dados"
+              onClick={() => {
+                setCloseConfirmationText("");
+                setConfirmCloseOpen(true);
+              }}
+              className="nb-btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-xs sm:text-sm flex items-center justify-center gap-2 font-bold w-full sm:w-auto"
+              data-testid="btn-close-annual-cycle"
             >
-              <RefreshCw className="w-4 h-4" />
+              <Lock className="w-4 h-4" />
+              <span>Encerrar Ranking Anual</span>
             </button>
-          </div>
+          ) : (
+            <button
+              onClick={() => setConfirmNextYearOpen(true)}
+              className="nb-btn admin-btn-primary px-4 py-2 text-xs sm:text-sm flex items-center justify-center gap-2 w-full sm:w-auto"
+              data-testid="btn-start-next-year"
+            >
+              <Play className="w-4 h-4" />
+              <span>Iniciar Ranking {cycle.active_year + 1}</span>
+            </button>
+          )}
+
+          <button
+            onClick={loadRanking}
+            className="nb-btn bg-white hover:bg-slate-50 text-black px-3 py-2 text-xs sm:text-sm flex items-center justify-center gap-1.5 font-bold"
+            title="Atualizar dados"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span className="sm:hidden">Atualizar</span>
+          </button>
         </div>
       </div>
 

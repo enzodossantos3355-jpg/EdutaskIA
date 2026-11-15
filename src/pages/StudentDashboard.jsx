@@ -21,6 +21,7 @@ import AIChatDialog from "@/components/AIChatDialog";
 import SpecialAnnouncementModal from "@/components/SpecialAnnouncementModal";
 import AppDeactivatedScreen from "@/components/AppDeactivatedScreen";
 import MobileBottomNav from "@/components/MobileBottomNav";
+import MentalistMotifs from "@/components/MentalistMotifs";
 import { getButtonColorStyle } from "@/components/StudentButtonsPanel";
 import { getPriority, formatDateBR, daysUntil } from "@/lib/priority";
 import { fireConfetti } from "@/lib/celebrate";
@@ -774,23 +775,19 @@ export default function StudentDashboard() {
     pullScreenToStore();
   };
 
-  const markUpdateRead = async (taskId) => {
-    try {
-      await api.post(`/tasks/${taskId}/mark-update-read`);
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId ? { ...t, has_unread_update: false, update_changes: [] } : t
-        )
-      );
-    } catch {}
-  };
-
   if (annualCycle?.is_closed) {
     return <AppDeactivatedScreen onCheckStatus={load} annualCycle={annualCycle} />;
   }
 
+  const isMentalistTheme = !framesDisabled && user?.equipped_effect === "mentalist";
+
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
+    <div
+      className={`min-h-screen relative overflow-x-hidden ${
+        isMentalistTheme ? "theme-mentalist" : "bg-[#FAFAFA]"
+      }`}
+    >
+      {isMentalistTheme && <MentalistMotifs variant="dashboard" />}
       <AppHeader title="Minhas tarefas" />
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-28 sm:pb-8 relative z-10 page-enter">
         {/* Navigation Bar */}
@@ -798,11 +795,17 @@ export default function StudentDashboard() {
           <button
             onClick={() => setTab("tasks")}
             className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
-              tab === "tasks" ? "bg-sky-400 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"
+              tab === "tasks"
+                ? isMentalistTheme
+                  ? "mentalist-btn-crimson"
+                  : "bg-sky-400 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                : isMentalistTheme
+                ? "bg-[#fbf5e8] text-[#240707]"
+                : "bg-white"
             }`}
             data-testid="student-tab-tasks"
           >
-            <Gem className="w-4 h-4 text-cyan-800 flex-shrink-0" />
+            <Gem className={`w-4 h-4 flex-shrink-0 ${tab === "tasks" && isMentalistTheme ? "text-[#f5c451]" : "text-cyan-800"}`} />
             <span>Minhas tarefas</span>
           </button>
           <button
@@ -812,9 +815,13 @@ export default function StudentDashboard() {
             }}
             className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 transition-all ${
               tab === "announcements"
-                ? "bg-violet-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                ? isMentalistTheme
+                  ? "mentalist-btn-crimson"
+                  : "bg-violet-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                 : hasUnreadAnnouncements
                 ? "bg-violet-200 border-2 border-violet-950 font-black shadow-[3px_3px_0px_0px_rgba(109,40,217,1)] ring-2 ring-violet-500 animate-pulse"
+                : isMentalistTheme
+                ? "bg-[#fbf5e8] text-[#240707]"
                 : "bg-white"
             }`}
             data-testid="student-tab-announcements"
@@ -830,44 +837,68 @@ export default function StudentDashboard() {
           <button
             onClick={() => setTab("resumos")}
             className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
-              tab === "resumos" ? "bg-yellow-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"
+              tab === "resumos"
+                ? isMentalistTheme
+                  ? "mentalist-btn-crimson"
+                  : "bg-yellow-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                : isMentalistTheme
+                ? "bg-[#fbf5e8] text-[#240707]"
+                : "bg-white"
             }`}
             data-testid="student-tab-resumos"
           >
-            <BookOpen className="w-4 h-4 text-yellow-900 flex-shrink-0" />
+            <BookOpen className={`w-4 h-4 flex-shrink-0 ${tab === "resumos" && isMentalistTheme ? "text-[#f5c451]" : "text-yellow-900"}`} />
             <span>Resumos de Estudo</span>
           </button>
           {!framesDisabled && (
             <button
               onClick={handleOpenStore}
               className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
-                tab === "store" ? "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"
+                tab === "store"
+                  ? isMentalistTheme
+                    ? "mentalist-btn-crimson"
+                    : "bg-amber-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                  : isMentalistTheme
+                  ? "bg-[#fbf5e8] text-[#240707]"
+                  : "bg-white"
               }`}
               data-testid="student-tab-store"
             >
-              <ShoppingBag className="w-4 h-4 text-amber-900 flex-shrink-0" />
+              <ShoppingBag className={`w-4 h-4 flex-shrink-0 ${tab === "store" && isMentalistTheme ? "text-[#f5c451]" : "text-amber-900"}`} />
               <span>Loja de Molduras</span>
             </button>
           )}
           <button
             onClick={() => setTab("profile")}
             className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
-              tab === "profile" ? "bg-emerald-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-white"
+              tab === "profile"
+                ? isMentalistTheme
+                  ? "mentalist-btn-crimson"
+                  : "bg-emerald-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                : isMentalistTheme
+                ? "bg-[#fbf5e8] text-[#240707]"
+                : "bg-white"
             }`}
             data-testid="student-tab-profile"
           >
-            <Bot className="w-4 h-4 text-emerald-900 flex-shrink-0" />
+            <Bot className={`w-4 h-4 flex-shrink-0 ${tab === "profile" && isMentalistTheme ? "text-[#f5c451]" : "text-emerald-900"}`} />
             <span>Meu Perfil</span>
           </button>
           {!aiHidden && (
             <button
               onClick={() => setTab("stats")}
               className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
-                tab === "stats" ? "bg-violet-300 font-bold" : "bg-white"
+                tab === "stats"
+                  ? isMentalistTheme
+                    ? "mentalist-btn-crimson"
+                    : "bg-violet-300 font-bold"
+                  : isMentalistTheme
+                  ? "bg-[#fbf5e8] text-[#240707]"
+                  : "bg-white"
               }`}
               data-testid="student-tab-stats"
             >
-              <BarChart3 className="w-4 h-4 text-violet-900 flex-shrink-0" />
+              <BarChart3 className={`w-4 h-4 flex-shrink-0 ${tab === "stats" && isMentalistTheme ? "text-[#f5c451]" : "text-violet-900"}`} />
               <span>Estatísticas & Líder IA</span>
             </button>
           )}
@@ -1193,7 +1224,15 @@ export default function StudentDashboard() {
             <button
               key={k}
               onClick={() => setFilter(k)}
-              className={`nb-btn px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm ${filter === k ? "bg-sky-400" : "bg-white"}`}
+              className={`nb-btn px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm ${
+                filter === k
+                  ? isMentalistTheme
+                    ? "mentalist-btn-crimson"
+                    : "bg-sky-400"
+                  : isMentalistTheme
+                  ? "bg-[#fbf5e8] text-[#240707]"
+                  : "bg-white"
+              }`}
               data-testid={`filter-${k}`}
             >
               {label}
@@ -1203,7 +1242,9 @@ export default function StudentDashboard() {
             <select
               value={subjectFilter}
               onChange={(e) => setSubjectFilter(e.target.value)}
-              className="nb-btn bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm cursor-pointer"
+              className={`nb-btn px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm cursor-pointer ${
+                isMentalistTheme ? "bg-[#fbf5e8] text-[#240707]" : "bg-white"
+              }`}
               data-testid="subject-filter"
             >
               {subjects.map((s) => (
@@ -1214,14 +1255,30 @@ export default function StudentDashboard() {
           <div className="w-full sm:w-auto sm:ml-auto flex gap-2 mt-1 sm:mt-0">
             <button
               onClick={() => setView("cards")}
-              className={`nb-btn px-3 py-1.5 sm:py-2 text-xs sm:text-sm flex items-center gap-1.5 ${view === "cards" ? "bg-sky-400" : "bg-white"}`}
+              className={`nb-btn px-3 py-1.5 sm:py-2 text-xs sm:text-sm flex items-center gap-1.5 ${
+                view === "cards"
+                  ? isMentalistTheme
+                    ? "mentalist-btn-crimson"
+                    : "bg-sky-400"
+                  : isMentalistTheme
+                  ? "bg-[#fbf5e8] text-[#240707]"
+                  : "bg-white"
+              }`}
               data-testid="view-cards"
             >
               <LayoutGrid className="w-4 h-4" /> Cartões
             </button>
             <button
               onClick={() => setView("calendar")}
-              className={`nb-btn px-3 py-1.5 sm:py-2 text-xs sm:text-sm flex items-center gap-1.5 ${view === "calendar" ? "bg-amber-300" : "bg-white"}`}
+              className={`nb-btn px-3 py-1.5 sm:py-2 text-xs sm:text-sm flex items-center gap-1.5 ${
+                view === "calendar"
+                  ? isMentalistTheme
+                    ? "mentalist-btn-gold"
+                    : "bg-amber-300"
+                  : isMentalistTheme
+                  ? "bg-[#fbf5e8] text-[#240707]"
+                  : "bg-white"
+              }`}
               data-testid="view-calendar"
             >
               <CalendarDays className="w-4 h-4" /> Calendário
@@ -1284,8 +1341,8 @@ export default function StudentDashboard() {
                   task={t}
                   onToggle={() => toggle(t)}
                   onAskDoubt={(task) => setChatTask(task)}
-                  onMarkUpdateRead={(id) => markUpdateRead(id)}
                   index={i}
+                  isMentalist={isMentalistTheme}
                 />
               </div>
             ))}
@@ -1304,6 +1361,7 @@ export default function StudentDashboard() {
         }}
         framesDisabled={framesDisabled}
         hasUnreadAnnouncements={hasUnreadAnnouncements}
+        isMentalist={isMentalistTheme}
       />
 
       {/* Special Announcement Pop-up Modal (appears automatically once on app load or on demand) */}
@@ -1351,7 +1409,7 @@ function StatCard({ label, value, bg, testId }) {
   );
 }
 
-function StudentTaskCard({ task, onToggle, onAskDoubt, onMarkUpdateRead, index }) {
+function StudentTaskCard({ task, onToggle, onAskDoubt, index, isMentalist = false }) {
   const { enabled: aiEnabled, hidden: aiHidden, aiHidden: aiHiddenAlt } = useAIStatus();
   const hasAiSource = Boolean(
     task.has_ai_source ||
@@ -1376,40 +1434,6 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, onMarkUpdateRead, index }
       data-testid={`student-task-card-${task.id}`}
     >
       <div>
-        {/* Banner de alteração efetuada pelo professor */}
-        {task.has_unread_update && task.update_changes?.length > 0 && (
-          <div
-            className="mb-3 nb-card bg-amber-300 border-2 border-black p-2.5 shadow-[2px_2px_0_0_#000] flex items-center justify-between gap-2 animate-in fade-in duration-200"
-            data-testid={`task-update-banner-${task.id}`}
-          >
-            <div className="flex items-center gap-1.5 flex-wrap text-xs font-bold text-amber-950">
-              <span className="nb-badge bg-black text-white text-[10px] font-black uppercase inline-flex items-center gap-1">
-                <Zap className="w-3 h-3 text-amber-300" />
-                <span>Alteração</span>
-              </span>
-              {task.update_changes.map((c, idx) => (
-                <span key={idx} className="nb-badge bg-white text-black border border-black text-[10px] font-bold">
-                  {c}
-                </span>
-              ))}
-            </div>
-            {onMarkUpdateRead && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMarkUpdateRead(task.id);
-                }}
-                className="nb-btn bg-white hover:bg-neutral-100 text-[10px] font-black px-2 py-0.5 border border-black shadow-[1px_1px_0_0_#000] flex-shrink-0"
-                data-testid={`mark-update-read-${task.id}`}
-                title="Marcar como lida"
-              >
-                Entendi
-              </button>
-            )}
-          </div>
-        )}
-
         <div className="flex items-center gap-2 mb-2 sm:mb-3 flex-wrap">
           <span className={`nb-badge ${colorFor(task.subject)}`}>{task.subject}</span>
           <span className={`nb-badge ${priority.bg}`} data-testid={`student-task-priority-${task.id}`}>
@@ -1419,7 +1443,7 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, onMarkUpdateRead, index }
             <span
               className="nb-badge bg-amber-200 text-amber-950 border border-black inline-flex items-center gap-1"
               data-testid={`student-task-edited-${task.id}`}
-              title={`Editada em ${formatDateBR(task.edited_at || task.last_updated_at, true)}`}
+              title="Tarefa editada"
             >
               <Pencil className="w-3 h-3" />
               <span>Editada</span>
@@ -1462,7 +1486,13 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, onMarkUpdateRead, index }
         <button
           type="button"
           onClick={onToggle}
-          className={`nb-btn w-full px-3 py-2 sm:py-2.5 flex items-center justify-center gap-2 text-xs sm:text-sm font-bold transition-all duration-200 ease-out ${task.completed ? "bg-white text-neutral-800" : "bg-emerald-300 text-black hover:bg-emerald-400"}`}
+          className={`nb-btn w-full px-3 py-2 sm:py-2.5 flex items-center justify-center gap-2 text-xs sm:text-sm font-bold transition-all duration-200 ease-out ${
+            task.completed
+              ? "bg-white text-neutral-800"
+              : isMentalist
+              ? "mentalist-btn-gold"
+              : "bg-emerald-300 text-black hover:bg-emerald-400"
+          }`}
           data-testid={`toggle-complete-${task.id}`}
         >
           <span className={`inline-flex items-center justify-center transition-transform duration-200 ${task.completed ? "animate-check-pop text-emerald-600" : ""}`}>

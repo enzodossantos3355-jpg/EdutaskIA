@@ -974,30 +974,25 @@ export default function AdminResumosPanel() {
   return (
     <div className="space-y-6" data-testid="admin-resumos-panel">
       {/* Header Banner */}
-      <div className="nb-card bg-amber-300 p-5 sm:p-6 rounded-2xl border-2 border-black shadow-[4px_4px_0_0_#000] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="w-11 h-11 rounded-xl bg-amber-400 text-black border-2 border-black flex items-center justify-center shrink-0 shadow-[2px_2px_0_0_#000]">
-            <BookOpen className="w-6 h-6 text-black" />
-          </span>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-heading font-black text-black uppercase tracking-tight">
-              Tópicos & Resumos por Matéria
-            </h1>
-            <p className="text-xs sm:text-sm font-bold text-neutral-800 mt-0.5 font-body">
-              Tópicos separados dos Resumos: extraia e escolha os tópicos desejados para gerar o resumo e depois disponibilize aos alunos.
-            </p>
-          </div>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">
+            Tópicos & Resumos por Matéria
+          </h1>
+          <p className="text-sm text-neutral-600 mt-0.5">
+            Extraia tópicos das matérias para gerar resumos ou publique resumos prontos diretamente aos alunos.
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setShowInfraConfig((v) => !v)}
-            className={`nb-btn px-3.5 py-2 text-xs font-heading font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5 ${
-              showInfraConfig ? "bg-sky-300 text-black" : "bg-white hover:bg-neutral-100 text-black"
+            className={`nb-btn px-3 py-2 text-xs font-bold flex items-center gap-1.5 ${
+              showInfraConfig ? "bg-sky-100 text-sky-950" : "bg-white hover:bg-slate-50 text-neutral-900"
             }`}
           >
-            <SlidersHorizontal className="w-4 h-4" />
+            <SlidersHorizontal className="w-3.5 h-3.5" />
             <span>Drive & Modelo IA</span>
             {showInfraConfig ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
@@ -1006,39 +1001,39 @@ export default function AdminResumosPanel() {
             type="button"
             onClick={handleDeduplicate}
             disabled={deduplicating}
-            className="nb-btn px-3.5 py-2 bg-white hover:bg-neutral-100 text-black font-heading font-black rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5 text-xs uppercase"
+            className="nb-btn px-3 py-2 bg-white hover:bg-slate-50 text-neutral-900 font-bold flex items-center gap-1.5 text-xs"
           >
-            {deduplicating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4 text-sky-600" />}
+            {deduplicating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5 text-sky-600" />}
             <span>{deduplicating ? "Mesclando..." : "Mesclar Duplicados"}</span>
           </button>
 
           <button
             type="button"
             onClick={openCreateTopicModal}
-            className="nb-btn px-3.5 py-2 bg-amber-400 hover:bg-amber-200 text-black font-heading font-black rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5 text-xs uppercase"
+            className="nb-btn px-3 py-2 bg-white hover:bg-amber-50 text-neutral-900 font-bold flex items-center gap-1.5 text-xs"
             data-testid="create-manual-topic-btn"
           >
-            <Plus className="w-4 h-4 stroke-[3]" />
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Novo Tópico</span>
           </button>
 
           <button
             type="button"
             onClick={() => openCreateSummaryModal({ readyMade: true })}
-            className="nb-btn px-3.5 py-2 bg-emerald-400 hover:bg-emerald-300 text-black font-heading font-black rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5 text-xs uppercase"
+            className="nb-btn px-3 py-2 bg-emerald-200 hover:bg-emerald-300 text-emerald-950 font-bold flex items-center gap-1.5 text-xs"
             data-testid="open-ready-summary-btn"
           >
-            <Upload className="w-4 h-4 stroke-[2.5]" />
+            <Upload className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Colocar Resumo Pronto</span>
           </button>
 
           <button
             type="button"
             onClick={() => openCreateSummaryModal({ readyMade: false })}
-            className="nb-btn px-3.5 py-2 bg-white hover:bg-emerald-100 text-black font-heading font-black rounded-xl border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5 text-xs uppercase"
+            className="nb-btn admin-btn-primary px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5"
             data-testid="create-manual-summary-btn"
           >
-            <Plus className="w-4 h-4 stroke-[3]" />
+            <Plus className="w-4 h-4" strokeWidth={2.5} />
             <span>Novo Resumo</span>
           </button>
         </div>

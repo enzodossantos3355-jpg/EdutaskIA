@@ -74,7 +74,7 @@ export default function PrizeBanner() {
 
   return (
     <div
-      className="nb-card p-3 sm:p-4 mb-4 sm:mb-6 bg-gradient-to-br from-amber-200 via-amber-100 to-amber-200 relative overflow-hidden transition-all"
+      className="nb-card mentalist-surface-prize p-3 sm:p-4 mb-4 sm:mb-6 bg-gradient-to-br from-amber-200 via-amber-100 to-amber-200 relative overflow-hidden transition-all"
       data-testid="prize-banner"
     >
       <div className="absolute top-0 right-0 w-32 h-32 opacity-15 select-none pointer-events-none flex items-center justify-center">

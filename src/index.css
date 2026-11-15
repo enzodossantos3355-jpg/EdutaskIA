@@ -181,6 +181,9 @@ h4,
 .text-cyan-900, .text-cyan-900 *, [class*="card-moldura-"] .text-cyan-900, [class*="card-moldura-"] .text-cyan-900 * { color: #164e63 !important; }
 .text-red-950, .text-red-950 *, [class*="card-moldura-"] .text-red-950, [class*="card-moldura-"] .text-red-950 * { color: #450a0a !important; }
 .text-red-900, .text-red-900 *, [class*="card-moldura-"] .text-red-900, [class*="card-moldura-"] .text-red-900 * { color: #7f1d1d !important; }
+.text-red-200, .text-red-200 *, [class*="card-moldura-"] .text-red-200, [class*="card-moldura-"] .text-red-200 * { color: #fecaca !important; }
+.text-amber-100, .text-amber-100 *, [class*="card-moldura-"] .text-amber-100, [class*="card-moldura-"] .text-amber-100 * { color: #fef3c7 !important; }
+.text-blue-950, .text-blue-950 *, [class*="card-moldura-"] .text-blue-950, [class*="card-moldura-"] .text-blue-950 * { color: #172554 !important; }
 .text-orange-950, .text-orange-950 *, [class*="card-moldura-"] .text-orange-950, [class*="card-moldura-"] .text-orange-950 * { color: #431407 !important; }
 .text-orange-900, .text-orange-900 *, [class*="card-moldura-"] .text-orange-900, [class*="card-moldura-"] .text-orange-900 * { color: #7c2d12 !important; }
 .text-neutral-950, .text-neutral-950 *, [class*="card-moldura-"] .text-neutral-950, [class*="card-moldura-"] .text-neutral-950 * { color: #0a0a0a !important; }
@@ -612,6 +615,18 @@ body.fx-no-spin .fx-spin,
   animation: fx-mentalist 2.2s ease-in-out infinite, fx-spin 5s linear infinite;
 }
 
+/* 19b. Minecraft — Grass & Diamond Ore glowing ring */
+@keyframes fx-minecraft {
+  0%, 100% { box-shadow: 0 0 0 3px #22c55e, 0 0 20px 5px rgba(34,197,94,0.75); }
+  50% { box-shadow: 0 0 0 4.5px #22d3ee, 0 0 30px 8px rgba(34,211,238,0.85); }
+}
+.fx-minecraft {
+  padding: 3.5px;
+  background: conic-gradient(from 0deg, #16a34a, #22d3ee, #4ade80, #0e7490, #16a34a);
+  border-radius: 50%;
+  animation: fx-minecraft 2s ease-in-out infinite, fx-spin 5s linear infinite;
+}
+
 /* 20. One Piece — Grand Line treasure gold ring */
 @keyframes fx-one-piece {
   0%, 100% { box-shadow: 0 0 0 3px #f59e0b, 0 0 22px 6px rgba(245,158,11,0.8); }
@@ -667,6 +682,7 @@ body.fx-no-spin .fx-spin,
 .card-moldura-spongebob,
 .card-moldura-mentalist,
 .card-moldura-stranger-things,
+.card-moldura-minecraft,
 .card-moldura-riverdale,
 .card-moldura-one-piece,
 .card-moldura-chemistry,
@@ -681,6 +697,10 @@ body.fx-no-spin .fx-spin,
   position: relative !important;
   overflow: hidden !important;
   transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.card-moldura-image-bleed {
+  padding: 0 !important;
 }
 
 .card-moldura-neon {
@@ -796,10 +816,10 @@ body.fx-no-spin .fx-spin,
 }
 
 .card-moldura-mentalist {
-  background: linear-gradient(145deg, #7f1d1d 0%, #450a0a 60%, #2b0606 100%) !important;
-  border-color: #b91c1c !important;
-  color: #ffffff !important;
-  box-shadow: 0 0 20px rgba(185,28,28,0.7), 3px 3px 0px 0px rgba(69,10,10,1) !important;
+  background: linear-gradient(145deg, #f5e6c8 0%, #ead6b3 60%, #dfc396 100%) !important;
+  border-color: #7f1d1d !important;
+  color: #3b0707 !important;
+  box-shadow: 0 0 20px rgba(185,28,28,0.5), 3px 3px 0px 0px rgba(69,10,10,1) !important;
 }
 
 .card-moldura-stranger-things {
@@ -807,6 +827,13 @@ body.fx-no-spin .fx-spin,
   border-color: #dc2626 !important;
   color: #ffffff !important;
   box-shadow: 0 0 22px rgba(220,38,38,0.7), 3px 3px 0px 0px rgba(127,29,29,1) !important;
+}
+
+.card-moldura-minecraft {
+  background: linear-gradient(180deg, #1e293b 0%, #374151 55%, #1f2937 100%) !important;
+  border-color: #16a34a !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 18px rgba(34,197,94,0.55), 3px 3px 0px 0px rgba(21,128,61,1) !important;
 }
 
 .card-moldura-riverdale {
@@ -848,8 +875,8 @@ body.fx-no-spin .fx-spin,
 .card-moldura-riverdale h4,
 .card-moldura-stranger-things,
 .card-moldura-stranger-things h1, .card-moldura-stranger-things h2, .card-moldura-stranger-things h3, .card-moldura-stranger-things h4, .card-moldura-stranger-things p,
-.card-moldura-mentalist,
-.card-moldura-mentalist h1, .card-moldura-mentalist h2, .card-moldura-mentalist h3, .card-moldura-mentalist h4, .card-moldura-mentalist p,
+.card-moldura-minecraft,
+.card-moldura-minecraft h1, .card-moldura-minecraft h2, .card-moldura-minecraft h3, .card-moldura-minecraft h4, .card-moldura-minecraft p,
 .card-moldura-one-piece,
 .card-moldura-one-piece h1, .card-moldura-one-piece h2, .card-moldura-one-piece h3, .card-moldura-one-piece h4, .card-moldura-one-piece p,
 .card-moldura-chemistry,
@@ -878,9 +905,7 @@ body.fx-no-spin .fx-spin,
 }
 
 /* Explicit badge exemption to keep default identification block styling for Admin / Aluno */
-.nb-badge,
 .nb-badge *,
-[class*="card-moldura-"] .nb-badge,
 [class*="card-moldura-"] .nb-badge * {
   color: inherit;
 }
@@ -897,4 +922,171 @@ body.fx-no-spin .fx-spin,
   color: #451a03 !important;
 }
 
+/* Preserve frame-specific avatar initial coloration inside dark/light card-moldura blocks */
+.fx-avatar-initial,
+.fx-avatar-wrapper .fx-avatar-initial,
+[class*="card-moldura-"] .fx-avatar-initial {
+  color: var(--avatar-initial-color, inherit) !important;
+}
 
+/* =========================================================================
+   Admin Dashboard Scoped Workspace Polish (150-250ms transitions & calmer UI)
+   ========================================================================= */
+.admin-workspace {
+  background-color: #f4f6f9;
+}
+
+.admin-workspace .nb-card:not([class*="card-moldura-"]):not(.nb-card-strong) {
+  border-width: 1.5px;
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.admin-workspace .nb-card.nb-card-hover:not([class*="card-moldura-"]):hover {
+  transform: translateY(-1px);
+  border-color: rgba(15, 23, 42, 0.28);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+}
+
+.admin-workspace .nb-btn:not(.nb-btn-primary):not(.admin-btn-primary) {
+  border-width: 1.5px;
+  border-color: rgba(15, 23, 42, 0.22);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.admin-workspace .nb-btn:not(.nb-btn-primary):not(.admin-btn-primary):hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(15, 23, 42, 0.1);
+}
+
+.admin-workspace .nb-btn:not(.nb-btn-primary):not(.admin-btn-primary):active:not(:disabled) {
+  transform: scale(0.98);
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.08);
+}
+
+.admin-btn-primary {
+  background-color: #38bdf8 !important;
+  color: #0a0a0a !important;
+  border: 2px solid #0a0a0a !important;
+  box-shadow: 2px 2px 0 0 #0a0a0a !important;
+  font-weight: 700;
+}
+
+.admin-btn-primary:hover:not(:disabled) {
+  background-color: #0ea5e9 !important;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 0 #0a0a0a !important;
+}
+
+.admin-workspace .nb-badge:not([class*="card-moldura-"] .nb-badge) {
+  border-width: 1px;
+  border-color: rgba(15, 23, 42, 0.2);
+}
+
+.admin-workspace .nb-input {
+  border-width: 1.5px;
+  border-color: rgba(15, 23, 42, 0.25);
+}
+
+.admin-workspace .nb-input:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+}
+
+.admin-drawer-backdrop {
+  transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), visibility 200ms;
+}
+
+.admin-drawer-panel {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), visibility 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-drawer-backdrop,
+  .admin-drawer-panel,
+  .expandable-grid {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* =========================================================================
+   Tema O Mentalista — Inspired dossier palette with EduTask block essence
+   ========================================================================= */
+.theme-mentalist {
+  background-color: #f3ead5;
+  background-image:
+    radial-gradient(rgba(91, 14, 20, 0.05) 1px, transparent 1px),
+    linear-gradient(180deg, #f6eedb 0%, #efe2c6 100%);
+  background-size: 22px 22px, 100% 100%;
+  color: #240707;
+}
+
+.theme-mentalist .nb-card:not([class*="card-moldura-"]):not(.mentalist-surface-keep) {
+  background-color: #fbf5e8;
+  border: 2px solid #2b0909;
+  box-shadow: 4px 4px 0px 0px #2b0909;
+  color: #240707;
+}
+
+.theme-mentalist .nb-card.nb-card-hover:not([class*="card-moldura-"]):hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0px 0px #2b0909;
+}
+
+.theme-mentalist .nb-btn:not(.mentalist-btn-keep) {
+  border: 2px solid #1f0505;
+  box-shadow: 2px 2px 0px 0px #1f0505;
+}
+
+.theme-mentalist .nb-btn:not(.mentalist-btn-keep):hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px 0px #1f0505;
+}
+
+.theme-mentalist .nb-btn:not(.mentalist-btn-keep):active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px 0px #1f0505;
+}
+
+.theme-mentalist .nb-input {
+  background-color: #fffdf8;
+  border: 2px solid #2b0909;
+  color: #240707;
+}
+
+.theme-mentalist .nb-input:focus {
+  border-color: #7f1d1d;
+  box-shadow: 0 0 0 3px rgba(212, 160, 40, 0.35);
+}
+
+.theme-mentalist .mentalist-btn-gold {
+  background-color: #e2b03a !important;
+  color: #1f0505 !important;
+  border: 2px solid #0a0a0a !important;
+  box-shadow: 3px 3px 0px 0px #0a0a0a !important;
+  font-weight: 800;
+}
+
+.theme-mentalist .mentalist-btn-gold:hover:not(:disabled) {
+  background-color: #d4a028 !important;
+}
+
+.theme-mentalist .mentalist-btn-crimson {
+  background-color: #6e141a !important;
+  color: #fdf6e7 !important;
+  border: 2px solid #0a0a0a !important;
+  box-shadow: 2px 2px 0px 0px #0a0a0a !important;
+  font-weight: 800;
+}
+
+.theme-mentalist .mentalist-surface-prize {
+  background: linear-gradient(135deg, #f5e6c5 0%, #ebd3a2 100%) !important;
+  border: 2px solid #2b0909 !important;
+  box-shadow: 4px 4px 0px 0px #2b0909 !important;
+}
+
+.theme-mentalist .mentalist-surface-ai {
+  background: linear-gradient(135deg, #fbf3df 0%, #f3dfc3 100%) !important;
+  border: 2px solid #5b0e14 !important;
+  box-shadow: 4px 4px 0px 0px #2b0909 !important;
+}
