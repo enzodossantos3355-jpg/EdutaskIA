@@ -110,6 +110,8 @@ export default function WhatsAppConfigPanel() {
   const [testingGroup1, setTestingGroup1] = useState(false);
   const [testingGroup2, setTestingGroup2] = useState(false);
 
+  const [activeTab, setActiveTab] = useState("conexao");
+
   const taskPhotoInputRef = useRef(null);
   const announcementPhotoInputRef = useRef(null);
   const tomorrowPhotoInputRef = useRef(null);
@@ -512,8 +514,15 @@ export default function WhatsAppConfigPanel() {
   const isQrReady = statusData?.status === "qr_ready";
   const isConnecting = statusData?.status === "connecting";
 
+  const whatsappTabs = [
+    { id: "conexao", label: "Conexão", icon: Smartphone },
+    { id: "grupos", label: "Grupos", icon: Users },
+    { id: "agendamentos", label: "Agendamentos", icon: Clock },
+    { id: "mensagens", label: "Mensagens", icon: MessageSquare },
+  ];
+
   return (
-    <div className="space-y-6 max-w-5xl mx-auto nb-fade-in" data-testid="whatsapp-config-panel">
+    <div className="space-y-5 max-w-5xl mx-auto nb-fade-in" data-testid="whatsapp-config-panel">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 border-b border-slate-200 pb-4">
         <div className="min-w-0">
@@ -521,12 +530,13 @@ export default function WhatsAppConfigPanel() {
             WhatsApp & Automações
           </h1>
           <p className="text-sm text-neutral-600 mt-0.5">
-            Fotos universais pré-definidas para o Grupo 2, conexão persistente e lembretes automáticos.
+            Conexão do WhatsApp, configuração dos dois grupos, agendamentos e modelos de mensagens.
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <button
+            type="button"
             onClick={() => loadStatus()}
             className="nb-btn bg-white hover:bg-slate-50 px-3 py-2 text-xs font-bold flex items-center gap-1.5"
             title="Atualizar Status"
@@ -535,6 +545,7 @@ export default function WhatsAppConfigPanel() {
             <span>Atualizar</span>
           </button>
           <button
+            type="button"
             onClick={() => saveAllConfig()}
             disabled={savingConfig}
             className="nb-btn admin-btn-primary px-4 py-2 text-xs sm:text-sm flex items-center gap-2"
@@ -561,147 +572,197 @@ export default function WhatsAppConfigPanel() {
         </div>
       )}
 
-      {/* Grid: Conexão e Grupos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Coluna 1: Status & QR Code */}
-        <div className="lg:col-span-1 space-y-4">
-          <div className="nb-card bg-white p-5 space-y-4">
-            <h3 className="font-heading font-black text-lg flex items-center gap-2">
-              <Smartphone className="w-5 h-5 text-emerald-600" />
-              Status da Conexão
-            </h3>
-
-            {/* Status Badge */}
-            <div
-              className={`p-3.5 rounded-xl border-2 border-black flex items-center gap-3 ${
-                isConnected
-                  ? "bg-emerald-100 text-emerald-950"
-                  : isQrReady || isConnecting
-                  ? "bg-amber-100 text-amber-950 animate-pulse"
-                  : "bg-red-100 text-red-950"
+      {/* Barra de Navegação das 4 Abas */}
+      <div
+        role="tablist"
+        aria-label="Seções de WhatsApp e Automações"
+        className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 bg-slate-100/90 p-2 rounded-2xl border-2 border-black"
+        data-testid="whatsapp-tabs-bar"
+      >
+        {whatsappTabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveTab(tab.id)}
+              data-testid={`whatsapp-tab-${tab.id}`}
+              className={`min-h-[44px] px-2.5 sm:px-3.5 py-2 rounded-xl font-heading font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 transition-all border-2 ${
+                isActive
+                  ? "admin-btn-primary border-black shadow-[2px_2px_0_0_rgba(0,0,0,1)]"
+                  : "bg-white hover:bg-slate-50 text-neutral-700 border-transparent hover:border-black/30"
               }`}
             >
-              <div
-                className={`w-3.5 h-3.5 rounded-full border border-black ${
-                  isConnected ? "bg-emerald-500 animate-pulse" : isQrReady ? "bg-amber-500" : "bg-red-500"
-                }`}
-              />
-              <div className="text-xs">
-                <div className="font-black uppercase tracking-wide">
-                  {isConnected
-                    ? "Conectado & Ativo 24/7"
-                    : isQrReady
-                    ? "Aguardando leitura do QR Code"
-                    : isConnecting
-                    ? "Conectando / Mantendo sessão..."
-                    : "Desconectado"}
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{tab.label}</span>
+              {tab.id === "conexao" && (
+                <span
+                  className={`w-2 h-2 rounded-full flex-shrink-0 border border-black/40 ${
+                    isConnected ? "bg-emerald-500" : isQrReady || isConnecting ? "bg-amber-400" : "bg-red-500"
+                  }`}
+                  aria-hidden="true"
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ABA 1: CONEXÃO */}
+      {activeTab === "conexao" && (
+        <div className="space-y-5" data-testid="whatsapp-panel-conexao">
+          <div className="nb-card bg-white p-5 sm:p-6 space-y-5">
+            <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-200 pb-3">
+              <h3 className="font-heading font-black text-lg flex items-center gap-2 text-neutral-900">
+                <Smartphone className="w-5 h-5 text-emerald-600" />
+                Status e Controles da Sessão
+              </h3>
+              <span className="text-xs font-bold text-neutral-500">
+                Conexão manual, QR Code e temporizador da sessão
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+              {/* Status Badge + Ações Manuais */}
+              <div className="space-y-4">
+                <div
+                  className={`p-3.5 rounded-xl border-2 border-black flex items-center gap-3 ${
+                    isConnected
+                      ? "bg-emerald-100 text-emerald-950"
+                      : isQrReady || isConnecting
+                      ? "bg-amber-100 text-amber-950 animate-pulse"
+                      : "bg-red-100 text-red-950"
+                  }`}
+                >
+                  <div
+                    className={`w-3.5 h-3.5 rounded-full border border-black flex-shrink-0 ${
+                      isConnected ? "bg-emerald-500 animate-pulse" : isQrReady ? "bg-amber-500" : "bg-red-500"
+                    }`}
+                  />
+                  <div className="text-xs min-w-0">
+                    <div className="font-black uppercase tracking-wide">
+                      {isConnected
+                        ? "Conectado & Ativo 24/7"
+                        : isQrReady
+                        ? "Aguardando leitura do QR Code"
+                        : isConnecting
+                        ? "Conectando / Mantendo sessão..."
+                        : "Desconectado"}
+                    </div>
+                    {isConnected && statusData?.user && (
+                      <div className="text-[11px] font-medium text-emerald-800 mt-0.5 truncate">
+                        {statusData.user.name} (+{statusData.user.phone})
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {isConnected && statusData?.user && (
-                  <div className="text-[11px] font-medium text-emerald-800 mt-0.5">
-                    {statusData.user.name} (+{statusData.user.phone})
+
+                {/* Botões de Ação de Conexão */}
+                <div className="space-y-2">
+                  {!isConnected ? (
+                    <button
+                      type="button"
+                      onClick={handleConnect}
+                      disabled={connecting || isConnecting}
+                      className="w-full nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 py-3 font-heading font-black text-sm flex items-center justify-center gap-2"
+                      data-testid="connect-whatsapp-button"
+                    >
+                      <QrCode className="w-4 h-4" />
+                      {connecting ? "Gerando QR Code..." : "Conectar WhatsApp (Gerar QR Code)"}
+                    </button>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        type="button"
+                        onClick={handlePauseStandby}
+                        disabled={pausingStandby}
+                        className="flex-1 nb-btn bg-amber-200 hover:bg-amber-300 text-amber-950 py-2.5 font-bold text-xs flex items-center justify-center gap-1.5"
+                        title="Pausa a conexão sem deslogar (mantém credenciais em disco)"
+                      >
+                        <Clock className="w-3.5 h-3.5" />
+                        {pausingStandby ? "..." : "Pausar (Standby)"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDisconnect}
+                        disabled={disconnecting}
+                        className="flex-1 nb-btn bg-red-200 hover:bg-red-300 text-red-950 py-2.5 font-bold text-xs flex items-center justify-center gap-1.5"
+                        data-testid="disconnect-whatsapp-button"
+                        title="Desconecta e apaga as credenciais salvas"
+                      >
+                        <Power className="w-3.5 h-3.5" />
+                        {disconnecting ? "..." : "Deslogar"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Explicação de Keepalive & Janela Ativa */}
+              <div className="p-4 bg-emerald-50 rounded-xl border-2 border-emerald-300 text-[11px] text-emerald-900 space-y-3">
+                <div className="flex items-center gap-1.5 font-bold text-xs">
+                  <ShieldCheck className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                  <span>Auto-Reconexão & Sessão em Disco</span>
+                </div>
+                <p className="text-emerald-800 leading-relaxed">
+                  As credenciais ficam salvas em disco. Quando o horário programado chegar, o sistema conecta sozinho automaticamente sem precisar escanear QR Code de novo!
+                </p>
+
+                {/* Status do Temporizador / Janela Ativa */}
+                {statusData?.isWindowActive ? (
+                  <div className="bg-emerald-200/80 p-3 rounded-lg border border-emerald-500 text-emerald-950 font-bold space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-ping inline-block" />
+                        <span>Janela Ativa:</span>
+                      </span>
+                      <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-600 text-[11px]">
+                        ~{statusData.remainingMinutes || 20} min restantes
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-emerald-900 font-normal">
+                      Garantido pelo menos 20 min ativo desde a inicialização.
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleExtendTimer(20)}
+                        disabled={extendingTimer}
+                        className="nb-btn bg-white hover:bg-emerald-100 text-emerald-950 px-2.5 py-1.5 text-[11px] font-bold flex-1"
+                      >
+                        {extendingTimer ? "..." : "+20 min"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handlePauseStandby}
+                        disabled={pausingStandby}
+                        className="nb-btn bg-amber-100 hover:bg-amber-200 text-amber-950 px-2.5 py-1.5 text-[11px] font-bold flex-1"
+                      >
+                        {pausingStandby ? "..." : "Repouso"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white/90 p-3 rounded-lg border border-neutral-300 text-neutral-800 text-[11px] space-y-1.5">
+                    <div className="font-bold flex items-center justify-between">
+                      <span>Modo Temporizador:</span>
+                      <span className="text-[10px] text-neutral-600">Mínimo 20 min</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleActivateTimer(autoActivationDuration || 20)}
+                      disabled={activatingTimer}
+                      className="w-full nb-btn bg-emerald-300 hover:bg-emerald-400 text-emerald-950 py-2 text-xs font-bold flex items-center justify-center gap-1.5 mt-1"
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      {activatingTimer ? "Ativando..." : `Ativar Agora por ${Math.max(20, autoActivationDuration || 20)} min`}
+                    </button>
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Explicação de Keepalive & Janela Ativa */}
-            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-300 text-[11px] text-emerald-900 space-y-2">
-              <div className="flex items-center gap-1.5 font-bold">
-                <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                <span>Auto-Reconexão & Sessão em Disco</span>
-              </div>
-              <p className="text-emerald-800 leading-relaxed">
-                As credenciais ficam salvas em disco. Quando o horário programado chegar, o sistema conecta sozinho automaticamente sem precisar escanear QR Code de novo!
-              </p>
-
-              {/* Status do Temporizador / Janela Ativa */}
-              {statusData?.isWindowActive ? (
-                <div className="bg-emerald-200/80 p-2.5 rounded-lg border border-emerald-500 text-emerald-950 font-bold space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-ping inline-block" />
-                      <span>Janela Ativa:</span>
-                    </span>
-                    <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-600 text-[11px]">
-                      ~{statusData.remainingMinutes || 20} min restantes
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-emerald-900 font-normal">
-                    Garantido pelo menos 20 min ativo desde a inicialização.
-                  </div>
-                  <div className="flex items-center gap-1.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => handleExtendTimer(20)}
-                      disabled={extendingTimer}
-                      className="nb-btn bg-white hover:bg-emerald-100 text-emerald-950 px-2 py-1 text-[10px] font-bold flex-1"
-                    >
-                      {extendingTimer ? "..." : "+20 min"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handlePauseStandby}
-                      disabled={pausingStandby}
-                      className="nb-btn bg-amber-100 hover:bg-amber-200 text-amber-950 px-2 py-1 text-[10px] font-bold flex-1"
-                    >
-                      {pausingStandby ? "..." : "Repouso"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-neutral-100 p-2.5 rounded-lg border border-neutral-300 text-neutral-800 text-[11px] space-y-1">
-                  <div className="font-bold flex items-center justify-between">
-                    <span>Modo Temporizador:</span>
-                    <span className="text-[10px] text-neutral-600">Mínimo 20 min</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleActivateTimer(autoActivationDuration || 20)}
-                    disabled={activatingTimer}
-                    className="w-full nb-btn bg-emerald-300 hover:bg-emerald-400 text-emerald-950 py-1.5 text-xs font-bold flex items-center justify-center gap-1 mt-1"
-                  >
-                    <Zap className="w-3 h-3" />
-                    {activatingTimer ? "Ativando..." : `Ativar Agora por ${Math.max(20, autoActivationDuration || 20)} min`}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Botões de Ação de Conexão */}
-            <div className="space-y-2">
-              {!isConnected ? (
-                <button
-                  onClick={handleConnect}
-                  disabled={connecting || isConnecting}
-                  className="w-full nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 py-3 font-heading font-black text-sm flex items-center justify-center gap-2"
-                  data-testid="connect-whatsapp-button"
-                >
-                  <QrCode className="w-4 h-4" />
-                  {connecting ? "Gerando QR Code..." : "Conectar WhatsApp (Gerar QR Code)"}
-                </button>
-              ) : (
-                <div className="flex gap-2">
-                  <button
-                    onClick={handlePauseStandby}
-                    disabled={pausingStandby}
-                    className="flex-1 nb-btn bg-amber-200 hover:bg-amber-300 text-amber-950 py-2 font-bold text-xs flex items-center justify-center gap-1"
-                    title="Pausa a conexão sem deslogar (mantém credenciais em disco)"
-                  >
-                    <Clock className="w-3.5 h-3.5" />
-                    {pausingStandby ? "..." : "Pausar (Standby)"}
-                  </button>
-                  <button
-                    onClick={handleDisconnect}
-                    disabled={disconnecting}
-                    className="flex-1 nb-btn bg-red-200 hover:bg-red-300 text-red-950 py-2 font-bold text-xs flex items-center justify-center gap-1"
-                    data-testid="disconnect-whatsapp-button"
-                    title="Desconecta e apaga as credenciais salvas"
-                  >
-                    <Power className="w-3.5 h-3.5" />
-                    {disconnecting ? "..." : "Deslogar"}
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Exibição do QR Code */}
@@ -726,9 +787,11 @@ export default function WhatsAppConfigPanel() {
             )}
           </div>
         </div>
+      )}
 
-        {/* Coluna 2 e 3: Configuração dos 2 Grupos */}
-        <div className="lg:col-span-2 space-y-5">
+      {/* ABA 2: GRUPOS */}
+      {activeTab === "grupos" && (
+        <div className="space-y-5" data-testid="whatsapp-panel-grupos">
           <div className="nb-card bg-white p-5 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="font-heading font-black text-lg flex items-center gap-2">
@@ -737,6 +800,7 @@ export default function WhatsAppConfigPanel() {
               </h3>
               {isConnected && (
                 <button
+                  type="button"
                   onClick={handleFetchGroups}
                   disabled={loadingGroups}
                   className="nb-btn bg-sky-200 hover:bg-sky-300 px-3 py-1.5 text-xs font-bold flex items-center gap-1.5"
@@ -951,13 +1015,14 @@ export default function WhatsAppConfigPanel() {
                 <span className="text-xs font-black uppercase text-neutral-800">
                   Grupos Detectados no WhatsApp ({filteredGroups.length})
                 </span>
-                <div className="relative w-48 sm:w-64">
+                <div className="relative w-full sm:w-64">
                   <input
                     type="text"
                     value={groupSearch}
                     onChange={(e) => setGroupSearch(e.target.value)}
                     placeholder="Filtrar grupos..."
                     className="nb-input bg-white text-xs py-1 pl-7"
+                    data-testid="input-search-groups"
                   />
                   <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2 top-2" />
                 </div>
@@ -968,14 +1033,14 @@ export default function WhatsAppConfigPanel() {
                   Nenhum grupo detectado ainda. Clique em <b>"Buscar Meus Grupos"</b>, cole o link de convite acima ou envie qualquer mensagem no grupo pelo WhatsApp!
                 </div>
               ) : (
-                <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
                   {filteredGroups.map((g) => (
                     <div
                       key={g.id}
-                      className="nb-card bg-white p-2.5 flex items-center justify-between gap-3 text-xs border border-neutral-300"
+                      className="nb-card bg-white p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs border border-neutral-300"
                     >
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-bold truncate text-neutral-900">{g.subject}</span>
                           {g.participantsCount > 0 && (
                             <span className="text-[10px] text-neutral-500 font-medium bg-neutral-100 px-1.5 py-0.2 rounded">
@@ -996,7 +1061,7 @@ export default function WhatsAppConfigPanel() {
                           </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
                         <button
                           type="button"
                           onClick={() => assignGroup(1, g)}
@@ -1021,19 +1086,22 @@ export default function WhatsAppConfigPanel() {
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* SEÇÃO PRINCIPAL: FOTOS UNIVERSAIS PRÉ-DEFINIDAS PARA O GRUPO 2 */}
-      <div className="nb-card bg-white p-6 space-y-5 border-2 border-black">
-        <div className="flex items-center justify-between flex-wrap gap-2 border-b-2 border-black pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-violet-300 text-violet-950 border-2 border-black flex items-center justify-center">
-              <ImageIcon className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-heading font-black text-xl text-neutral-900">
-                Fotos Universais Pré-Definidas (Exclusivas do Grupo 2)
-              </h3>
+      {/* ABA 4: MENSAGENS */}
+      {activeTab === "mensagens" && (
+        <div className="space-y-6" data-testid="whatsapp-panel-mensagens">
+          {/* SEÇÃO PRINCIPAL: FOTOS UNIVERSAIS PRÉ-DEFINIDAS PARA O GRUPO 2 */}
+          <div className="nb-card bg-white p-5 sm:p-6 space-y-5 border-2 border-black">
+            <div className="flex items-center justify-between flex-wrap gap-2 border-b-2 border-black pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-violet-300 text-violet-950 border-2 border-black flex items-center justify-center flex-shrink-0">
+                  <ImageIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-black text-xl text-neutral-900">
+                    Fotos Universais Pré-Definidas (Exclusivas do Grupo 2)
+                  </h3>
               <p className="text-xs text-neutral-600">
                 As fotos programadas são enviadas exclusivamente para o <b>Grupo 2</b> com seus enunciados. O Grupo 1 sempre recebe os comunicados e tarefas em texto completo.
               </p>
@@ -1224,290 +1292,6 @@ export default function WhatsAppConfigPanel() {
               />
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* SEÇÃO: SISTEMA DE AUTO-ATIVAÇÃO PROGRAMADA COM JANELA MÍNIMA DE 20 MINUTOS */}
-      <div className="nb-card bg-gradient-to-br from-emerald-50 via-teal-50 to-sky-100 p-6 space-y-5 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-        <div className="flex items-center justify-between flex-wrap gap-3 border-b-2 border-black/20 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-400 text-emerald-950 border-2 border-black flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-              <Zap className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-heading font-black text-xl leading-tight text-neutral-900 flex items-center gap-2">
-                ⏰ Auto-Ativação Automática do WhatsApp (Janela Mínima de 20 Minutos)
-              </h3>
-              <p className="text-xs text-neutral-600">
-                Ativa o WhatsApp automaticamente em um horário diário programado e mantém a sessão ativa por pelo menos 20 minutos.
-              </p>
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer font-bold text-xs bg-white px-3 py-1.5 rounded-xl border border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-            <input
-              type="checkbox"
-              checked={autoActivationEnabled}
-              onChange={(e) => setAutoActivationEnabled(e.target.checked)}
-              className="w-4 h-4 rounded border-2 border-black text-emerald-600 focus:ring-0 cursor-pointer"
-            />
-            <span>Ativar Agendamento de Inicialização</span>
-          </label>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          {/* Horário Programado */}
-          <div className="space-y-1">
-            <label className="block text-xs font-bold text-neutral-800 flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5 text-emerald-700" /> Horário de Ativação Automática
-            </label>
-            <input
-              type="time"
-              value={autoActivationTime}
-              onChange={(e) => setAutoActivationTime(e.target.value)}
-              className="nb-input bg-white text-sm font-bold"
-            />
-            <p className="text-[10px] text-neutral-600">
-              O robô ligará o Baileys automaticamente todos os dias neste horário.
-            </p>
-          </div>
-
-          {/* Duração Mínima Ativa */}
-          <div className="space-y-1">
-            <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
-              <span>Duração Ativa da Janela (Minutos)</span>
-              <span className="nb-badge bg-emerald-200 text-emerald-950 text-[9px] font-black">Mín. 20 min</span>
-            </label>
-            <div className="flex items-center gap-1.5">
-              <input
-                type="number"
-                min="20"
-                step="5"
-                value={autoActivationDuration}
-                onChange={(e) => setAutoActivationDuration(Math.max(20, parseInt(e.target.value) || 20))}
-                className="nb-input bg-white text-sm font-bold w-24"
-              />
-              <div className="flex gap-1 flex-wrap">
-                {[20, 30, 45, 60].map((mins) => (
-                  <button
-                    key={mins}
-                    type="button"
-                    onClick={() => setAutoActivationDuration(mins)}
-                    className={`px-2 py-1 rounded-md text-[10px] font-bold border border-black ${
-                      autoActivationDuration === mins ? "bg-emerald-400 text-emerald-950" : "bg-white hover:bg-neutral-100"
-                    }`}
-                  >
-                    {mins}m
-                  </button>
-                ))}
-              </div>
-            </div>
-            <p className="text-[10px] text-neutral-600">
-              Permanece ativo por pelo menos {Math.max(20, autoActivationDuration || 20)} minutos após ser ligado.
-            </p>
-          </div>
-
-          {/* Opções de Operação */}
-          <div className="space-y-2 bg-white/70 p-3 rounded-xl border border-black/20">
-            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-neutral-800">
-              <input
-                type="checkbox"
-                checked={dispatchReminderOnActivation}
-                onChange={(e) => setDispatchReminderOnActivation(e.target.checked)}
-                className="w-4 h-4 rounded border-2 border-black text-emerald-600 focus:ring-0 cursor-pointer"
-              />
-              <span>Disparar tarefas de amanhã ao ativar</span>
-            </label>
-
-            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-neutral-800">
-              <input
-                type="checkbox"
-                checked={stayConnected247}
-                onChange={(e) => setStayConnected247(e.target.checked)}
-                className="w-4 h-4 rounded border-2 border-black text-emerald-600 focus:ring-0 cursor-pointer"
-              />
-              <span>Permanecer Conectado 24/7 (Sem repouso)</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Live Controls & Test Action */}
-        <div className="flex items-center justify-between flex-wrap gap-3 pt-3 border-t border-emerald-300">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => handleActivateTimer(autoActivationDuration || 20)}
-              disabled={activatingTimer}
-              className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 px-4 py-2 text-xs font-heading font-black flex items-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-            >
-              <Zap className={`w-3.5 h-3.5 ${activatingTimer ? "animate-spin" : ""}`} />
-              {activatingTimer ? "Ativando..." : `Ativar Agora por ${Math.max(20, autoActivationDuration || 20)} Minutos`}
-            </button>
-
-            {statusData?.isWindowActive && (
-              <button
-                type="button"
-                onClick={() => handleExtendTimer(20)}
-                disabled={extendingTimer}
-                className="nb-btn bg-white hover:bg-neutral-100 text-neutral-900 px-3 py-2 text-xs font-bold flex items-center gap-1"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                {extendingTimer ? "Estendendo..." : "+20 Minutos"}
-              </button>
-            )}
-          </div>
-
-          <div className="text-[11px] font-medium text-emerald-950 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-            <span>
-              {autoActivationEnabled
-                ? `Próxima auto-ativação programada para as ${autoActivationTime} (duração de ${Math.max(20, autoActivationDuration || 20)} min)`
-                : "Agendamento automático pausado"}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* SEÇÃO: LEMBRETE DIÁRIO AUTOMÁTICO DE TAREFAS PARA AMANHÃ */}
-      <div className="nb-card bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 p-6 space-y-4 border-2 border-black">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-400 text-amber-950 border-2 border-black flex items-center justify-center">
-              <Bell className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-heading font-black text-xl leading-tight text-neutral-900">
-                ⏰ Lembrete Diário: Tarefas para o Dia Seguinte (Amanhã)
-              </h3>
-              <p className="text-xs text-neutral-600">
-                Dispara automaticamente todos os dias no horário configurado avisando a turma das tarefas de amanhã.
-              </p>
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer font-bold text-xs bg-white/90 px-3 py-1.5 rounded-xl border border-black">
-            <input
-              type="checkbox"
-              checked={dailyReminderEnabled}
-              onChange={(e) => setDailyReminderEnabled(e.target.checked)}
-              className="w-4 h-4 rounded border-2 border-black text-amber-600 focus:ring-0 cursor-pointer"
-            />
-            <span>Ativar Lembrete Diário Automático</span>
-          </label>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
-          <div>
-            <label className="block text-xs font-bold mb-1 text-neutral-800 flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> Horário do Disparo Diário
-            </label>
-            <input
-              type="time"
-              value={dailyReminderTime}
-              onChange={(e) => setDailyReminderTime(e.target.value)}
-              className="nb-input bg-white text-sm font-bold"
-              data-testid="input-daily-reminder-time"
-            />
-            <p className="text-[10px] text-neutral-600 mt-1">
-              Verifica diariamente se há tarefas para o dia seguinte e envia aos 2 grupos no horário exato.
-            </p>
-          </div>
-
-          <div className="sm:col-span-2 space-y-1">
-            <label className="block text-xs font-bold text-neutral-800">
-              Enunciado / Legenda Pré-Pronta do Lembrete de Amanhã (Grupo 2)
-            </label>
-            <textarea
-              rows={3}
-              value={tomorrowCaption}
-              onChange={(e) => setTomorrowCaption(e.target.value)}
-              className="nb-input bg-white text-xs font-sans resize-y"
-              placeholder="Digite o modelo de texto..."
-            />
-            <p className="text-[10px] text-neutral-600">
-              Tags dinâmicas: <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{data_amanha}"}</code>, <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{total_tarefas}"}</code>, <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{lista_tarefas}"}</code>
-            </p>
-          </div>
-        </div>
-
-        {/* Mensagem Extra para o Grupo 1 (sem interferir na pré-pronta do Grupo 1) */}
-        <div className="mt-3 pt-3 border-t border-amber-300/80 space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <label className="block text-xs font-heading font-black text-amber-950 flex items-center gap-1.5">
-                <Pin className="w-3.5 h-3.5 text-amber-800" />
-                <span>Mensagem Extra para o Grupo 1 (Lembrete de Tarefas de Amanhã)</span>
-              </label>
-              <p className="text-[11px] text-amber-900 font-medium">
-                Esta mensagem é anexada ao final do lembrete oficial no <b>Grupo 1</b> sem interferir na mensagem pré-pronta original (que lista as tarefas, matérias, prazos e notas).
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                setGroup1TomorrowExtra(
-                  "📌 *Aviso Extra da Turma:*\nOrganizem seus horários para não deixar nada para a última hora!"
-                )
-              }
-              className="nb-btn bg-white hover:bg-amber-100 text-[10px] font-bold px-2 py-1 border border-black"
-            >
-              Restaurar Mensagem Padrão
-            </button>
-          </div>
-
-          <textarea
-            rows={3}
-            value={group1TomorrowExtra}
-            onChange={(e) => setGroup1TomorrowExtra(e.target.value)}
-            className="nb-input bg-white text-xs font-sans resize-y"
-            placeholder="Digite a mensagem extra que deseja anexar ao lembrete do Grupo 1 (opcional)..."
-            data-testid="input-daily-reminder-group1-extra"
-          />
-
-          {/* Prévia Grupo 1: Mostra o texto oficial pré-pronto intacto + mensagem extra */}
-          <div className="bg-neutral-900 text-neutral-100 p-3.5 rounded-xl text-xs space-y-1.5 font-mono border-2 border-black">
-            <div className="flex items-center justify-between text-[10px] font-black uppercase text-emerald-400">
-              <span className="inline-flex items-center gap-1.5">
-                <Smartphone className="w-3.5 h-3.5" /> Prévia do Lembrete no Grupo 1 (Texto Pré-Pronto + Sua Mensagem Extra):
-              </span>
-              <span className="text-[9px] bg-emerald-950/80 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30">Texto Base 100% Preservado</span>
-            </div>
-            <div className="whitespace-pre-wrap font-sans text-xs pt-1 leading-relaxed text-neutral-200">
-              {`🚨 *LEMBRETE DIÁRIO DE TAREFAS*\n\n` +
-               `📅 *Entrega Amanhã:* 09/10/2026\n` +
-               `📚 *Total de Tarefas:* 2\n\n` +
-               `🔹 *1. [Matemática] Frações e Equações*\n   🎁 *Pontos:* 10 pts\n` +
-               `🔹 *2. [História] Capítulo 1 de História*\n   🎁 *Pontos:* 10 pts\n\n` +
-               `👉 _Acessem o Edutask para conferir as questões e enviar suas respostas no prazo!_`}
-            </div>
-            {group1TomorrowExtra ? (
-              <div className="mt-2 pt-2 border-t border-dashed border-emerald-500/40 text-emerald-300 font-sans text-xs whitespace-pre-wrap bg-emerald-950/40 p-2 rounded">
-                <span className="text-[9px] uppercase font-bold text-amber-300 block mb-1">Sua Mensagem Extra Anexada:</span>
-                {group1TomorrowExtra}
-              </div>
-            ) : (
-              <div className="text-[10px] text-neutral-400 italic pt-1 border-t border-neutral-700">
-                (Nenhuma mensagem extra digitada. O Grupo 1 receberá apenas a estrutura oficial pré-pronta.)
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Botão de Teste Imediato */}
-        <div className="flex items-center justify-between pt-3 border-t border-amber-300">
-          <button
-            type="button"
-            onClick={handleTestTomorrowReminder}
-            disabled={testingTomorrow || !isConnected}
-            className="nb-btn bg-amber-300 hover:bg-amber-400 text-amber-950 px-4 py-2 text-xs font-heading font-black flex items-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-            data-testid="test-tomorrow-reminder-btn"
-          >
-            <Sparkles className={`w-3.5 h-3.5 ${testingTomorrow ? "animate-spin" : ""}`} />
-            {testingTomorrow ? "Disparando Lembrete..." : "Testar Disparo de Lembrete de Amanhã Agora"}
-          </button>
-          <span className="text-[11px] text-amber-900 font-medium">
-            Envia para o Grupo 1 (Aviso Completo) e Grupo 2 (Foto Universal + Enunciado)
-          </span>
         </div>
       </div>
 
@@ -1825,6 +1609,220 @@ export default function WhatsAppConfigPanel() {
           </div>
         </div>
       </div>
+        </div>
+      )}
+
+      {/* ABA 3: AGENDAMENTOS */}
+      {activeTab === "agendamentos" && (
+        <div className="space-y-6" data-testid="whatsapp-panel-agendamentos">
+          {/* SEÇÃO: SISTEMA DE AUTO-ATIVAÇÃO PROGRAMADA COM JANELA MÍNIMA DE 20 MINUTOS */}
+          <div className="nb-card bg-gradient-to-br from-emerald-50 via-teal-50 to-sky-100 p-5 sm:p-6 space-y-5 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <div className="flex items-center justify-between flex-wrap gap-3 border-b-2 border-black/20 pb-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-emerald-400 text-emerald-950 border-2 border-black flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex-shrink-0">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-heading font-black text-lg sm:text-xl leading-tight text-neutral-900">
+                    Auto-Ativação Automática do WhatsApp (Janela Mínima de 20 Minutos)
+                  </h3>
+                  <p className="text-xs text-neutral-600">
+                    Ativa o WhatsApp automaticamente em um horário diário programado e mantém a sessão ativa por pelo menos 20 minutos.
+                  </p>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-xs bg-white px-3 py-1.5 rounded-xl border border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                <input
+                  type="checkbox"
+                  checked={autoActivationEnabled}
+                  onChange={(e) => setAutoActivationEnabled(e.target.checked)}
+                  className="w-4 h-4 rounded border-2 border-black text-emerald-600 focus:ring-0 cursor-pointer"
+                  data-testid="checkbox-auto-activation-enabled"
+                />
+                <span>Ativar Agendamento de Inicialização</span>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {/* Horário Programado */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-neutral-800 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-emerald-700" /> Horário de Ativação Automática
+                </label>
+                <input
+                  type="time"
+                  value={autoActivationTime}
+                  onChange={(e) => setAutoActivationTime(e.target.value)}
+                  className="nb-input bg-white text-sm font-bold"
+                  data-testid="input-auto-activation-time"
+                />
+                <p className="text-[10px] text-neutral-600">
+                  O robô ligará o Baileys automaticamente todos os dias neste horário.
+                </p>
+              </div>
+
+              {/* Duração Mínima Ativa */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between gap-2">
+                  <span>Duração Ativa da Janela (Minutos)</span>
+                  <span className="nb-badge bg-emerald-200 text-emerald-950 text-[9px] font-black flex-shrink-0">Mín. 20 min</span>
+                </label>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <input
+                    type="number"
+                    min="20"
+                    step="5"
+                    value={autoActivationDuration}
+                    onChange={(e) => setAutoActivationDuration(Math.max(20, parseInt(e.target.value) || 20))}
+                    className="nb-input bg-white text-sm font-bold w-24"
+                    data-testid="input-auto-activation-duration"
+                  />
+                  <div className="flex gap-1 flex-wrap">
+                    {[20, 30, 45, 60].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => setAutoActivationDuration(mins)}
+                        data-testid={`btn-duration-preset-${mins}`}
+                        className={`px-2 py-1 rounded-md text-[10px] font-bold border border-black ${
+                          autoActivationDuration === mins ? "bg-emerald-400 text-emerald-950" : "bg-white hover:bg-neutral-100"
+                        }`}
+                      >
+                        {mins}m
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-[10px] text-neutral-600">
+                  Permanece ativo por pelo menos {Math.max(20, autoActivationDuration || 20)} minutos após ser ligado.
+                </p>
+              </div>
+
+              {/* Opções de Operação */}
+              <div className="space-y-2.5 bg-white/70 p-3 rounded-xl border border-black/20">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-neutral-800">
+                  <input
+                    type="checkbox"
+                    checked={dispatchReminderOnActivation}
+                    onChange={(e) => setDispatchReminderOnActivation(e.target.checked)}
+                    className="w-4 h-4 rounded border-2 border-black text-emerald-600 focus:ring-0 cursor-pointer"
+                    data-testid="checkbox-dispatch-reminder-on-activation"
+                  />
+                  <span>Disparar tarefas de amanhã ao ativar</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-neutral-800">
+                  <input
+                    type="checkbox"
+                    checked={stayConnected247}
+                    onChange={(e) => setStayConnected247(e.target.checked)}
+                    className="w-4 h-4 rounded border-2 border-black text-emerald-600 focus:ring-0 cursor-pointer"
+                    data-testid="checkbox-stay-connected-247"
+                  />
+                  <span>Permanecer Conectado 24/7 (Sem repouso)</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between flex-wrap gap-2 pt-3 border-t border-emerald-300 text-[11px] font-medium text-emerald-950">
+              <div className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full inline-block ${autoActivationEnabled ? "bg-emerald-500" : "bg-neutral-400"}`} />
+                <span>
+                  {autoActivationEnabled
+                    ? `Próxima auto-ativação programada para as ${autoActivationTime} (duração de ${Math.max(20, autoActivationDuration || 20)} min)`
+                    : "Agendamento automático pausado"}
+                </span>
+              </div>
+              <span className="text-emerald-900">
+                Ativação manual da sessão disponível na aba <b>Conexão</b>.
+              </span>
+            </div>
+          </div>
+
+          {/* SEÇÃO: LEMBRETE DIÁRIO AUTOMÁTICO DE TAREFAS PARA AMANHÃ */}
+          <div className="nb-card bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 p-5 sm:p-6 space-y-4 border-2 border-black">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-amber-400 text-amber-950 border-2 border-black flex items-center justify-center flex-shrink-0">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-heading font-black text-lg sm:text-xl leading-tight text-neutral-900">
+                    Lembrete Diário: Tarefas para o Dia Seguinte (Amanhã)
+                  </h3>
+                  <p className="text-xs text-neutral-600">
+                    Dispara automaticamente todos os dias no horário configurado avisando a turma das tarefas de amanhã.
+                  </p>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-xs bg-white/90 px-3 py-1.5 rounded-xl border border-black">
+                <input
+                  type="checkbox"
+                  checked={dailyReminderEnabled}
+                  onChange={(e) => setDailyReminderEnabled(e.target.checked)}
+                  className="w-4 h-4 rounded border-2 border-black text-amber-600 focus:ring-0 cursor-pointer"
+                  data-testid="checkbox-daily-reminder-enabled"
+                />
+                <span>Ativar Lembrete Diário Automático</span>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 items-start">
+              <div>
+                <label className="block text-xs font-bold mb-1 text-neutral-800 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5" /> Horário do Disparo Diário
+                </label>
+                <input
+                  type="time"
+                  value={dailyReminderTime}
+                  onChange={(e) => setDailyReminderTime(e.target.value)}
+                  className="nb-input bg-white text-sm font-bold"
+                  data-testid="input-daily-reminder-time"
+                />
+                <p className="text-[10px] text-neutral-600 mt-1">
+                  Verifica diariamente se há tarefas para o dia seguinte e envia aos 2 grupos no horário exato.
+                </p>
+              </div>
+
+              <div className="bg-white/80 p-3.5 rounded-xl border border-amber-300 text-xs text-amber-950 space-y-1.5">
+                <div className="font-heading font-black flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5 text-amber-800" />
+                  <span>Textos e Foto do Lembrete</span>
+                </div>
+                <p className="text-[11px] text-neutral-700 leading-relaxed">
+                  A foto universal, o enunciado do Grupo 2 e o texto extra do Grupo 1 para este lembrete são editados com prévia completa na aba <b>Mensagens</b>.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("mensagens")}
+                  className="text-[11px] font-bold text-sky-700 hover:underline inline-flex items-center gap-1"
+                >
+                  <span>Ir para aba Mensagens</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Botão de Teste Imediato */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3 border-t border-amber-300">
+              <button
+                type="button"
+                onClick={handleTestTomorrowReminder}
+                disabled={testingTomorrow || !isConnected}
+                className="nb-btn bg-amber-300 hover:bg-amber-400 text-amber-950 px-4 py-2 text-xs font-heading font-black flex items-center justify-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                data-testid="test-tomorrow-reminder-btn"
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${testingTomorrow ? "animate-spin" : ""}`} />
+                {testingTomorrow ? "Disparando Lembrete..." : "Testar Disparo de Lembrete de Amanhã Agora"}
+              </button>
+              <span className="text-[11px] text-amber-900 font-medium">
+                Envia para o Grupo 1 (Aviso Completo) e Grupo 2 (Foto Universal + Enunciado)
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

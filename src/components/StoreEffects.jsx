@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 
 export default function StoreEffects({ user: propUser, refresh: propRefresh }) {
-  const { user: authUser, refresh: authRefresh } = useAuth();
+  const { user: authUser, refresh: authRefresh, updateLocalUser } = useAuth();
   const {
     framesDisabled,
     frameRotationDisabled,
@@ -147,6 +147,10 @@ export default function StoreEffects({ user: propUser, refresh: propRefresh }) {
       toast.success(data.message || "Moldura adquirida com sucesso!");
       setUnlocked((prev) => [...prev, eff.id]);
       if (data.points !== undefined) setUserPoints(data.points);
+      updateLocalUser({
+        ...(data.points !== undefined ? { points: data.points } : {}),
+        ...(Array.isArray(data.owned_effects) ? { owned_effects: data.owned_effects } : {}),
+      });
       if (refresh) refresh();
       window.dispatchEvent(new Event("profile-updated"));
     } catch (e) {
@@ -164,7 +168,9 @@ export default function StoreEffects({ user: propUser, refresh: propRefresh }) {
       const { data } = await api.post(`/effects/equip/${effId}`);
       toast.success(data.message || "Moldura equipada com sucesso!");
       setEquipped(effId);
+      updateLocalUser({ equipped_effect: effId });
       if (refresh) refresh();
+      window.dispatchEvent(new Event("profile-updated"));
     } catch (e) {
       toast.error(
         formatApiError(e?.response?.data?.detail) || "Erro ao equipar moldura"

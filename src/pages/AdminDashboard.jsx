@@ -26,6 +26,7 @@ import NotificationsAdminPanel from "@/components/NotificationsAdminPanel";
 import ScheduleAdminPanel from "@/components/ScheduleAdminPanel";
 import { useAIStatus } from "@/context/AIStatusContext";
 import { usePWA } from "@/context/PWAContext";
+import MolduraArtCenter from "@/components/MolduraArtCenter";
 import { effectClass, effectCardClass, getTheme, isDarkTheme, pullScreenToStore } from "@/lib/effects";
 import { getPriority, formatDateBR } from "@/lib/priority";
 import { SUBJECT_COLOR_OPTIONS, colorFor, getSubjectColorConfig, getSubjectCardClass, getSubjectBadgeClass, setCachedSubjects } from "@/lib/subjectColors";
@@ -225,47 +226,57 @@ export default function AdminDashboard() {
         {user && (
           <div className="p-3 border-b border-slate-200 flex-shrink-0">
             <div
-              className={`rounded-xl p-2.5 transition-colors ${compactProfileCls}`}
+              className={`relative overflow-hidden rounded-xl p-2.5 transition-colors ${compactProfileCls}`}
               data-testid="admin-compact-profile"
             >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Avatar
-                  userId={user.id}
-                  name={user.name}
-                  size={38}
-                  hasAvatar={user.has_avatar}
-                  bg="bg-red-300"
-                  effect={effectClass(user.equipped_effect)}
+              {hasCustomFrame && <MolduraArtCenter effectId={user.equipped_effect} />}
+              {hasCustomFrame && (
+                <div
+                  className={`absolute inset-0 z-[1] pointer-events-none ${
+                    darkProfileFrame ? "bg-black/45" : "bg-white/45"
+                  }`}
                 />
-                <div className="min-w-0 flex-1">
-                  <div
-                    className={`font-heading font-bold text-sm leading-tight truncate ${
-                      darkProfileFrame ? "text-white" : "text-neutral-900"
-                    }`}
-                  >
-                    {user.name}
-                  </div>
-                  <div
-                    className={`text-[11px] font-semibold truncate ${
-                      darkProfileFrame ? "text-white/80" : "text-neutral-600"
-                    }`}
-                  >
-                    Administrador{currentTheme?.id && currentTheme.id !== "none" ? ` • ${currentTheme.name.replace("Moldura ", "")}` : ""}
+              )}
+              <div className="relative z-10">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Avatar
+                    userId={user.id}
+                    name={user.name}
+                    size={38}
+                    hasAvatar={user.has_avatar}
+                    bg="bg-red-300"
+                    effect={effectClass(user.equipped_effect)}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className={`font-heading font-bold text-sm leading-tight truncate ${
+                        darkProfileFrame ? "text-white drop-shadow-sm" : "text-neutral-900"
+                      }`}
+                    >
+                      {user.name}
+                    </div>
+                    <div
+                      className={`text-[11px] font-semibold truncate ${
+                        darkProfileFrame ? "text-white/90 drop-shadow-sm" : "text-neutral-700"
+                      }`}
+                    >
+                      Administrador{hasCustomFrame && currentTheme?.id && currentTheme.id !== "none" ? ` • ${currentTheme.name.replace("Moldura ", "")}` : ""}
+                    </div>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setEditProfileOpen(true);
+                  }}
+                  className="mt-2.5 w-full rounded-lg bg-white hover:bg-sky-50 text-neutral-950 border border-neutral-900 px-2.5 py-1.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-[1px_1px_0_0_#000]"
+                  data-testid="open-edit-profile-button"
+                >
+                  <Pencil className="w-3.5 h-3.5 text-sky-700" />
+                  <span>Editar perfil</span>
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setEditProfileOpen(true);
-                }}
-                className="mt-2.5 w-full rounded-lg bg-white hover:bg-sky-50 text-neutral-950 border border-neutral-900 px-2.5 py-1.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-[1px_1px_0_0_#000]"
-                data-testid="open-edit-profile-button"
-              >
-                <Pencil className="w-3.5 h-3.5 text-sky-700" />
-                <span>Editar perfil</span>
-              </button>
             </div>
           </div>
         )}

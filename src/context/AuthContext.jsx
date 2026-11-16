@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import api from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import bcrypt from "bcryptjs";
@@ -10,6 +10,7 @@ const AuthContext = createContext({
   logout: () => {},
   refreshUser: async () => {},
   refresh: async () => {},
+  updateLocalUser: () => {},
 });
 
 function sanitizeUserForStorage(u) {
@@ -32,10 +33,31 @@ function saveCachedUser(u) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const userRef = useRef(null);
+
+  const setAndCacheUser = useCallback((nextUser) => {
+    userRef.current = nextUser;
+    setUser(nextUser);
+    if (nextUser) {
+      saveCachedUser(nextUser);
+    }
+  }, []);
+
+  const updateLocalUser = useCallback((patch) => {
+    if (!patch || typeof patch !== "object") return;
+    setUser((prev) => {
+      if (!prev) return prev;
+      const merged = sanitizeUserForStorage({ ...prev, ...patch });
+      userRef.current = merged;
+      saveCachedUser(merged);
+      return merged;
+    });
+  }, []);
 
   const refreshUser = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
     if (!token) {
+      userRef.current = null;
       setUser(null);
       setLoading(false);
       return;
@@ -48,8 +70,13 @@ export function AuthProvider({ children }) {
         const parsed = JSON.parse(cachedRaw);
         if (parsed && parsed.id) {
           cachedParsed = sanitizeUserForStorage(parsed);
-          setUser(cachedParsed);
-          setLoading(false);
+          // Only hydrate from cache on cold mount (when user state isn't populated yet)
+          // to avoid flashing back to a stale equipped_effect during live refresh().
+          if (!userRef.current) {
+            userRef.current = cachedParsed;
+            setUser(cachedParsed);
+            setLoading(false);
+          }
         }
       } catch {
         localStorage.removeItem("cached_user");
@@ -73,8 +100,7 @@ export function AuthProvider({ children }) {
             owned_effects: remote.owned_effects ?? targetUser.owned_effects ?? ["none"],
             has_avatar: Boolean(remote.avatar_data || targetUser.has_avatar),
           });
-          setUser(updated);
-          saveCachedUser(updated);
+          setAndCacheUser(updated);
         }
         return true;
       } catch {
@@ -86,8 +112,7 @@ export function AuthProvider({ children }) {
       const { data } = await api.get("/auth/me", { timeout: 8000 });
       if (data && typeof data === "object" && data.id) {
         const sanitized = sanitizeUserForStorage(data);
-        setUser(sanitized);
-        saveCachedUser(sanitized);
+        setAndCacheUser(sanitized);
         setLoading(false);
         return;
       }
@@ -101,20 +126,23 @@ export function AuthProvider({ children }) {
       if (isLiveBackendJsonRejection) {
         localStorage.removeItem("auth_token");
         localStorage.removeItem("cached_user");
+        userRef.current = null;
         setUser(null);
         setLoading(false);
         return;
       }
-      if (cachedParsed) {
-        await syncUserFromFirestore(cachedParsed);
+      const fallbackTarget = userRef.current || cachedParsed;
+      if (fallbackTarget) {
+        await syncUserFromFirestore(fallbackTarget);
       } else {
         localStorage.removeItem("auth_token");
+        userRef.current = null;
         setUser(null);
       }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setAndCacheUser]);
 
   useEffect(() => {
     refreshUser();
@@ -126,8 +154,7 @@ export function AuthProvider({ children }) {
       if (data.token) {
         const sanitized = sanitizeUserForStorage(data.user);
         localStorage.setItem("auth_token", data.token);
-        saveCachedUser(sanitized);
-        setUser(sanitized);
+        setAndCacheUser(sanitized);
       }
       return data.user || data;
     } catch (apiErr) {
@@ -194,8 +221,7 @@ export function AuthProvider({ children }) {
 
       const token = `token_${match.id}_${Date.now()}`;
       localStorage.setItem("auth_token", token);
-      saveCachedUser(clientUser);
-      setUser(clientUser);
+      setAndCacheUser(clientUser);
       return clientUser;
     }
   };
@@ -203,12 +229,13 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("cached_user");
+    userRef.current = null;
     setUser(null);
     api.post("/auth/logout").catch(() => {});
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser, refresh: refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser, refresh: refreshUser, updateLocalUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -494,16 +494,18 @@ export default function StudentDashboard() {
           }
           if (sysSettings.weekly_schedule) {
             const ws = sysSettings.weekly_schedule;
-            const dayMap = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-            const labelMap = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+            const dayMap = ["monday", "tuesday", "wednesday", "thursday", "friday", null, null];
+            const labelMap = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sexta-feira", "Sábado"];
             const nowBr = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
             const dow = nowBr.getDay();
             const key = dayMap[dow];
-            const isWeekend = dow === 0 || dow === 6;
-            const subjectsToday = !isWeekend && Array.isArray(ws[key]) ? ws[key] : [];
+            const isWeekend = dow === 5 || dow === 6; // Sexta e Sábado não exibem pois amanhã não há aula; Domingo antecipa Segunda-feira
+            const isTomorrow = !isWeekend;
+            const subjectsToday = !isWeekend && key && Array.isArray(ws[key]) ? ws[key] : [];
             setDailySchedule({
               enabled: ws.enabled !== false,
               is_weekend: isWeekend,
+              is_tomorrow: isTomorrow,
               today_key: isWeekend ? null : key,
               today_label: labelMap[dow],
               today_subjects: subjectsToday,
@@ -1141,7 +1143,7 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {/* Cronograma do Dia (bloco compacto acima das tarefas; somente Segunda a Sexta quando habilitado) */}
+        {/* Cronograma do Dia (bloco compacto acima das tarefas; Segunda a Sexta e no Domingo antecipa Segunda) */}
         {dailySchedule?.schedule?.enabled !== false &&
           !dailySchedule?.is_weekend &&
           Array.isArray(dailySchedule?.today_subjects) &&
@@ -1154,7 +1156,11 @@ export default function StudentDashboard() {
                 <div className="flex flex-wrap items-center gap-2 min-w-0">
                   <span className="inline-flex items-center gap-1.5 font-heading font-bold text-xs sm:text-sm text-neutral-900">
                     <CalendarDays className="w-4 h-4 text-emerald-700 flex-shrink-0" />
-                    <span>Matérias de hoje ({dailySchedule.today_label}):</span>
+                    <span>
+                      {dailySchedule.is_tomorrow
+                        ? `Matérias de amanhã (${dailySchedule.today_label}):`
+                        : `Matérias de hoje (${dailySchedule.today_label}):`}
+                    </span>
                   </span>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {dailySchedule.today_subjects.map((subj) => {
@@ -1200,7 +1206,11 @@ export default function StudentDashboard() {
                       >
                         <div className="font-bold text-[11px] text-neutral-900 mb-1 flex items-center justify-between">
                           <span>{label}</span>
-                          {isToday && <span className="text-[10px] text-emerald-800 font-black">Hoje</span>}
+                          {isToday && (
+                            <span className="text-[10px] text-emerald-800 font-black">
+                              {dailySchedule.is_tomorrow ? "Amanhã" : "Hoje"}
+                            </span>
+                          )}
                         </div>
                         {list.length === 0 ? (
                           <p className="text-[11px] text-neutral-400">—</p>

@@ -34,7 +34,7 @@ const EMPTY_SCHEDULE = {
 
 export default function ScheduleAdminPanel() {
   const [schedule, setSchedule] = useState(EMPTY_SCHEDULE);
-  const [todayInfo, setTodayInfo] = useState({ today_key: null, today_label: "", is_weekend: false });
+  const [todayInfo, setTodayInfo] = useState({ today_key: null, today_label: "", is_weekend: false, is_tomorrow: false });
   const [subjects, setSubjects] = useState([]);
   const [customInputs, setCustomInputs] = useState({});
   const [loading, setLoading] = useState(true);
@@ -64,6 +64,7 @@ export default function ScheduleAdminPanel() {
         today_key: data?.today_key || null,
         today_label: data?.today_label || "",
         is_weekend: Boolean(data?.is_weekend),
+        is_tomorrow: Boolean(data?.is_tomorrow),
       });
       const subjList = Array.isArray(subjRes?.data) ? subjRes.data : [];
       setSubjects(subjList);
@@ -86,6 +87,18 @@ export default function ScheduleAdminPanel() {
             friday: Array.isArray(ws.friday) ? ws.friday : [],
           });
         }
+        const dayMap = ["monday", "tuesday", "wednesday", "thursday", "friday", null, null];
+        const labelMap = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sexta-feira", "Sábado"];
+        const nowBr = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+        const dow = nowBr.getDay();
+        const key = dayMap[dow];
+        const isWeekend = dow === 5 || dow === 6;
+        setTodayInfo({
+          today_key: isWeekend ? null : key,
+          today_label: labelMap[dow],
+          is_weekend: isWeekend,
+          is_tomorrow: !isWeekend,
+        });
         const safeSubjs = Array.isArray(subjList) ? subjList : [];
         setSubjects(safeSubjs);
         setCachedSubjects(safeSubjs);
@@ -190,11 +203,16 @@ export default function ScheduleAdminPanel() {
             </span>
           </div>
           <p className="text-sm text-neutral-600">
-            Configure as matérias de cada dia da semana. O painel do aluno exibe automaticamente apenas o dia útil atual.
+            Configure as matérias de cada dia da semana. O painel do aluno exibe sempre os materiais do dia seguinte (de domingo para segunda até quinta para sexta).
           </p>
           {todayInfo.is_weekend && (
             <p className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-2.5 py-1 inline-block mt-1">
-              Hoje é {todayInfo.today_label}: finais de semana não exibem cronograma aos alunos.
+              Hoje é {todayInfo.today_label}: como amanhã não há aula, o cronograma fica oculto aos alunos e volta no domingo exibindo Segunda-feira.
+            </p>
+          )}
+          {!todayInfo.is_weekend && todayInfo.is_tomorrow && todayInfo.today_label && (
+            <p className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-1 inline-block mt-1">
+              Exibindo agora para os alunos: matérias de amanhã ({todayInfo.today_label}) para prepararem os materiais.
             </p>
           )}
         </div>
@@ -255,7 +273,7 @@ export default function ScheduleAdminPanel() {
                     </h3>
                     {isToday && (
                       <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-950 border border-black">
-                        Hoje
+                        {todayInfo.is_tomorrow ? "Amanhã" : "Hoje"}
                       </span>
                     )}
                   </div>

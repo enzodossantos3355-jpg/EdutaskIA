@@ -1793,6 +1793,11 @@ api.post('/auth/login', (req, res) => {
       name: user.name,
       role: user.role,
       status: user.status,
+      points: user.points || 0,
+      streak_count: user.streak_count || 0,
+      longest_streak: user.longest_streak || 0,
+      equipped_effect: user.equipped_effect || 'none',
+      owned_effects: user.owned_effects || ['none'],
       created_at: user.created_at,
       has_avatar: Boolean(user.avatar_data),
     },
@@ -5137,7 +5142,7 @@ api.post('/student-buttons/:btn_id/click', requireAuth, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Cronograma Escolar Semanal (Segunda a Sexta; finais de semana não contam)
+// Cronograma Escolar Semanal (Dia Seguinte: Domingo->Segunda até Quinta->Sexta; Sexta e Sábado ocultos pois amanhã não há aula)
 // ---------------------------------------------------------------------------
 function getTodayScheduleContext() {
   const shortWeekday = new Intl.DateTimeFormat('en-US', {
@@ -5145,23 +5150,24 @@ function getTodayScheduleContext() {
     weekday: 'short',
   }).format(new Date());
 
-  const dayMap: Record<string, { key: WeekdayKey | null; label: string; is_weekend: boolean }> = {
-    Mon: { key: 'monday', label: 'Segunda-feira', is_weekend: false },
-    Tue: { key: 'tuesday', label: 'Terça-feira', is_weekend: false },
-    Wed: { key: 'wednesday', label: 'Quarta-feira', is_weekend: false },
-    Thu: { key: 'thursday', label: 'Quinta-feira', is_weekend: false },
-    Fri: { key: 'friday', label: 'Sexta-feira', is_weekend: false },
-    Sat: { key: null, label: 'Sábado', is_weekend: true },
-    Sun: { key: null, label: 'Domingo', is_weekend: true },
+  const dayMap: Record<string, { key: WeekdayKey | null; label: string; is_weekend: boolean; is_tomorrow?: boolean }> = {
+    Sun: { key: 'monday', label: 'Segunda-feira', is_weekend: false, is_tomorrow: true },
+    Mon: { key: 'tuesday', label: 'Terça-feira', is_weekend: false, is_tomorrow: true },
+    Tue: { key: 'wednesday', label: 'Quarta-feira', is_weekend: false, is_tomorrow: true },
+    Wed: { key: 'thursday', label: 'Quinta-feira', is_weekend: false, is_tomorrow: true },
+    Thu: { key: 'friday', label: 'Sexta-feira', is_weekend: false, is_tomorrow: true },
+    Fri: { key: null, label: 'Sexta-feira', is_weekend: true, is_tomorrow: false },
+    Sat: { key: null, label: 'Sábado', is_weekend: true, is_tomorrow: false },
   };
 
-  const info = dayMap[shortWeekday] || { key: null, label: '', is_weekend: true };
+  const info = dayMap[shortWeekday] || { key: null, label: '', is_weekend: true, is_tomorrow: false };
   const todaySubjects = !info.is_weekend && info.key ? (db.weekly_schedule[info.key] || []) : [];
 
   return {
     today_key: info.key,
     today_label: info.label,
     is_weekend: info.is_weekend,
+    is_tomorrow: Boolean(info.is_tomorrow),
     today_subjects: todaySubjects,
   };
 }
