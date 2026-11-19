@@ -6,7 +6,7 @@ import { Calendar as CalendarIcon, Paperclip, Check, BookOpen, Filter, Megaphone
 import api, { API, formatApiError } from "@/lib/api";
 import { firebaseService } from "@/lib/firebaseService";
 import { useAuth } from "@/context/AuthContext";
-import { useAIStatus } from "@/context/AIStatusContext";
+import { useAIStatus, getFirstActiveStudentArea, STUDENT_AREA_LABELS } from "@/context/AIStatusContext";
 import { usePWA } from "@/context/PWAContext";
 import AppHeader from "@/components/AppHeader";
 import MyProfileBanner from "@/components/MyProfileBanner";
@@ -20,6 +20,7 @@ import StudentResumosPanel from "@/components/StudentResumosPanel";
 import AIChatDialog from "@/components/AIChatDialog";
 import SpecialAnnouncementModal from "@/components/SpecialAnnouncementModal";
 import AppDeactivatedScreen from "@/components/AppDeactivatedScreen";
+import LockedAreaScreen from "@/components/LockedAreaScreen";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import MentalistMotifs from "@/components/MentalistMotifs";
 import { getButtonColorStyle } from "@/components/StudentButtonsPanel";
@@ -178,7 +179,7 @@ function StudentAnnouncementAttachments({ announcement }) {
               data-testid={`attachment-${att.id}`}
             >
               <img
-                src={`/api/files/${att.id}`}
+                src={`/api/files/${att.id}?auth=${encodeURIComponent(token || "")}`}
                 alt={att.original_filename}
                 className="w-full h-full object-cover group-hover:opacity-80"
               />
@@ -340,7 +341,16 @@ function StudentAnnouncementsView({ announcements, specialAnnouncements, regular
 
 export default function StudentDashboard() {
   const { user } = useAuth();
-  const { enabled: aiEnabled, hidden: aiHidden, framesDisabled } = useAIStatus();
+  const {
+    enabled: aiEnabled,
+    hidden: aiHidden,
+    framesDisabled,
+    studentAreas,
+    loading: aiStatusLoading,
+  } = useAIStatus();
+  const tasksEnabled = studentAreas?.tasks !== false;
+  const announcementsEnabled = studentAreas?.announcements !== false;
+  const resumosEnabled = studentAreas?.resumos !== false;
   const {
     canInstallOrGuide,
     installApp,
@@ -354,17 +364,17 @@ export default function StudentDashboard() {
     testPush,
   } = usePWA();
   const [searchParams] = useSearchParams();
-  const initialTab = (() => {
-    const t = searchParams.get("tab");
-    return ["tasks", "announcements", "resumos", "store", "profile", "stats"].includes(t) ? t : "tasks";
-  })();
+  const urlTabParam = searchParams.get("tab");
+  const validTabs = ["tasks", "announcements", "resumos", "store", "profile", "stats"];
+  const explicitUrlTab = validTabs.includes(urlTabParam) ? urlTabParam : null;
+  const hasExplicitTabRef = useRef(Boolean(explicitUrlTab));
   const [tasks, setTasks] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("todas");
   const [subjectFilter, setSubjectFilter] = useState("todas");
   const [view, setView] = useState("cards"); // "cards" | "calendar"
-  const [tab, setTab] = useState(initialTab); // "tasks" | "store" | "stats"
+  const [tab, setTab] = useState(() => explicitUrlTab || "tasks");
   const [chatTask, setChatTask] = useState(null);
   const [globalChatOpen, setGlobalChatOpen] = useState(false);
   const [specialModalAnnouncement, setSpecialModalAnnouncement] = useState(null);
@@ -375,6 +385,70 @@ export default function StudentDashboard() {
 
   const [loadError, setLoadError] = useState(null);
   const [isOfflineData, setIsOfflineData] = useState(false);
+
+  const handleSelectTab = useCallback(
+    (nextTab) => {
+      hasExplicitTabRef.current = true;
+      setTab(nextTab);
+      if (user?.id && validTabs.includes(nextTab)) {
+        const isAreaLocked =
+          (["tasks", "announcements", "resumos"].includes(nextTab) && studentAreas?.[nextTab] === false) ||
+          (nextTab === "store" && framesDisabled);
+        if (!isAreaLocked) {
+          try {
+            localStorage.setItem(`edutask_preferred_tab_${user.id}`, nextTab);
+          } catch {}
+        }
+      }
+    },
+    [user?.id, studentAreas, framesDisabled]
+  );
+
+  // Sync URL query param (?tab=...) when navigated externally or via deep link
+  useEffect(() => {
+    if (explicitUrlTab) {
+      hasExplicitTabRef.current = true;
+      setTab(explicitUrlTab);
+    }
+  }, [explicitUrlTab]);
+
+  // Resolve initial entry tab using priority (tasks -> announcements -> resumos) and saved preference fallback
+  const initialRouteResolvedRef = useRef(false);
+  useEffect(() => {
+    if (aiStatusLoading || !user?.id) return;
+    if (explicitUrlTab) {
+      initialRouteResolvedRef.current = true;
+      return;
+    }
+    if (initialRouteResolvedRef.current || hasExplicitTabRef.current) return;
+
+    const firstActive = getFirstActiveStudentArea(studentAreas);
+    let targetTab = firstActive;
+
+    try {
+      const savedPref = localStorage.getItem(`edutask_preferred_tab_${user.id}`);
+      if (savedPref && validTabs.includes(savedPref)) {
+        const isPrefAreaDisabled =
+          ["tasks", "announcements", "resumos"].includes(savedPref) &&
+          studentAreas?.[savedPref] === false;
+        const isPrefStoreBlocked = savedPref === "store" && framesDisabled;
+        const isPrefStatsBlocked = savedPref === "stats" && aiHidden;
+        if (!isPrefAreaDisabled && !isPrefStoreBlocked && !isPrefStatsBlocked) {
+          targetTab = savedPref;
+        }
+      }
+    } catch {}
+
+    initialRouteResolvedRef.current = true;
+    setTab(targetTab);
+  }, [aiStatusLoading, user?.id, explicitUrlTab, studentAreas, framesDisabled, aiHidden]);
+
+  // If store is disabled while student is on store tab, redirect cleanly to an active area
+  useEffect(() => {
+    if (tab === "store" && framesDisabled) {
+      setTab(getFirstActiveStudentArea(studentAreas));
+    }
+  }, [tab, framesDisabled, studentAreas]);
 
   const [seenAnnIds, setSeenAnnIds] = useState(() => {
     if (!user?.id) return [];
@@ -397,51 +471,72 @@ export default function StudentDashboard() {
   }, [user?.id]);
 
   const unreadAnnouncementsCount = useMemo(() => {
-    if (!announcements || announcements.length === 0) return 0;
+    if (!announcementsEnabled || !announcements || announcements.length === 0) return 0;
     const seenSet = new Set(seenAnnIds);
     return announcements.filter((a) => !seenSet.has(a.id)).length;
-  }, [announcements, seenAnnIds]);
+  }, [announcements, seenAnnIds, announcementsEnabled]);
 
-  const hasUnreadAnnouncements = unreadAnnouncementsCount > 0;
+  const hasUnreadAnnouncements = announcementsEnabled && unreadAnnouncementsCount > 0;
 
   const markAnnouncementsAsSeen = useCallback(() => {
-    if (!user?.id || !announcements || announcements.length === 0) return;
+    if (!announcementsEnabled || !user?.id || !announcements || announcements.length === 0) return;
     const allIds = announcements.map((a) => a.id);
     setSeenAnnIds(allIds);
     try {
       localStorage.setItem(`edutask_seen_ann_ids_${user.id}`, JSON.stringify(allIds));
     } catch {}
-  }, [user?.id, announcements]);
+  }, [announcementsEnabled, user?.id, announcements]);
 
   useEffect(() => {
-    if (tab === "announcements" && hasUnreadAnnouncements) {
+    if (announcementsEnabled && tab === "announcements" && hasUnreadAnnouncements) {
       markAnnouncementsAsSeen();
     }
-  }, [tab, hasUnreadAnnouncements, markAnnouncementsAsSeen]);
+  }, [announcementsEnabled, tab, hasUnreadAnnouncements, markAnnouncementsAsSeen]);
 
   const [activeCollectionPrefix, setActiveCollectionPrefix] = useState(() => firebaseService.getCollectionPrefix());
 
+  // Immediately clear any in-memory content when an area is disabled live
+  useEffect(() => {
+    if (!tasksEnabled) {
+      setTasks([]);
+      setCustomButtons([]);
+      setDailySchedule(null);
+      setChatTask(null);
+    }
+  }, [tasksEnabled]);
+
+  useEffect(() => {
+    if (!announcementsEnabled) {
+      setAnnouncements([]);
+      setSpecialModalAnnouncement(null);
+    }
+  }, [announcementsEnabled]);
+
   const load = useCallback(async ({ silent = false } = {}) => {
-    if (!user?.id) return; // Prevent race condition when auth profile is not yet loaded
+    if (!user?.id || aiStatusLoading) return; // Prevent race condition when auth profile or areas are not yet loaded
     if (!silent) setLoading(true);
     setLoadError(null);
     try {
-      const [{ data: t }, { data: a }, btnRes, statusRes, subjRes, schedRes] = await Promise.all([
-        api.get("/tasks"),
-        api.get("/announcements"),
-        api.get("/student-buttons").catch(() => ({ data: [] })),
+      const [tasksRes, annRes, btnRes, statusRes, subjRes, schedRes] = await Promise.all([
+        tasksEnabled ? api.get("/tasks") : Promise.resolve({ data: [] }),
+        announcementsEnabled ? api.get("/announcements") : Promise.resolve({ data: [] }),
+        tasksEnabled ? api.get("/student-buttons").catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
         api.get("/app-status").catch(() => ({ data: null })),
         api.get("/subjects").catch(() => ({ data: [] })),
-        api.get("/schedule").catch(() => ({ data: null })),
+        tasksEnabled ? api.get("/schedule").catch(() => ({ data: null })) : Promise.resolve({ data: null }),
       ]);
-      if (!Array.isArray(t) || !Array.isArray(a)) {
+      const t = tasksRes?.data;
+      const a = annRes?.data;
+      if ((tasksEnabled && !Array.isArray(t)) || (announcementsEnabled && !Array.isArray(a))) {
         throw new Error("Resposta inválida do servidor");
       }
-      setTasks(t);
-      setAnnouncements(a);
-      setCustomButtons(Array.isArray(btnRes?.data) ? btnRes.data : []);
-      if (schedRes?.data && typeof schedRes.data === "object") {
+      setTasks(tasksEnabled && Array.isArray(t) ? t : []);
+      setAnnouncements(announcementsEnabled && Array.isArray(a) ? a : []);
+      setCustomButtons(tasksEnabled && Array.isArray(btnRes?.data) ? btnRes.data : []);
+      if (tasksEnabled && schedRes?.data && typeof schedRes.data === "object") {
         setDailySchedule(schedRes.data);
+      } else if (!tasksEnabled) {
+        setDailySchedule(null);
       }
       if (Array.isArray(subjRes?.data)) {
         setCachedSubjects(subjRes.data);
@@ -458,41 +553,61 @@ export default function StudentDashboard() {
       }
       setIsOfflineData(false);
     } catch (e) {
+      // Never bypass server 403 block via Firestore fallback
+      if (e?.response?.status === 403) {
+        if (!tasksEnabled) {
+          setTasks([]);
+          setCustomButtons([]);
+          setDailySchedule(null);
+        }
+        if (!announcementsEnabled) {
+          setAnnouncements([]);
+          setSpecialModalAnnouncement(null);
+        }
+        setLoading(false);
+        return;
+      }
       try {
         const [allTasks, allAnnouncements, allCompletions, allSubjects, sysSettings] = await Promise.all([
-          firebaseService.getAllTasks(),
-          firebaseService.getAllAnnouncements(),
-          firebaseService.getAllCompletions(),
+          tasksEnabled ? firebaseService.getAllTasks() : Promise.resolve([]),
+          announcementsEnabled ? firebaseService.getAllAnnouncements() : Promise.resolve([]),
+          tasksEnabled ? firebaseService.getAllCompletions() : Promise.resolve([]),
           firebaseService.getAllSubjects().catch(() => []),
           firebaseService.getSettings("system").catch(() => null),
         ]);
         const currentUserId = user?.id;
-        const mapped = (allTasks || [])
-          .filter((t) => {
-            const validAssigned = (t.assigned_to || []).filter((id) => id && typeof id === "string" && id.trim().length > 0);
-            if (validAssigned.length === 0) return true;
-            return validAssigned.some((id) => String(id).trim() === String(currentUserId).trim());
-          })
-          .map((t) => {
-            const comp = (allCompletions || []).find((c) => c.task_id === t.id && c.user_id === currentUserId);
-            return {
-              ...t,
-              completed: Boolean(comp),
-              completed_at: comp?.completed_at,
-              points_awarded: comp?.points_awarded,
-            };
-          });
-        setTasks(mapped);
-        setAnnouncements(allAnnouncements || []);
+        if (tasksEnabled) {
+          const mapped = (allTasks || [])
+            .filter((t) => {
+              const validAssigned = (t.assigned_to || []).filter((id) => id && typeof id === "string" && id.trim().length > 0);
+              if (validAssigned.length === 0) return true;
+              return validAssigned.some((id) => String(id).trim() === String(currentUserId).trim());
+            })
+            .map((t) => {
+              const comp = (allCompletions || []).find((c) => c.task_id === t.id && c.user_id === currentUserId);
+              return {
+                ...t,
+                completed: Boolean(comp),
+                completed_at: comp?.completed_at,
+                points_awarded: comp?.points_awarded,
+              };
+            });
+          setTasks(mapped);
+        } else {
+          setTasks([]);
+        }
+        setAnnouncements(announcementsEnabled ? (allAnnouncements || []) : []);
         if (Array.isArray(allSubjects) && allSubjects.length > 0) {
           setCachedSubjects(allSubjects);
         }
         if (sysSettings) {
           if (sysSettings.annual_cycle) setAnnualCycle(sysSettings.annual_cycle);
-          if (Array.isArray(sysSettings.student_buttons)) {
+          if (tasksEnabled && Array.isArray(sysSettings.student_buttons)) {
             setCustomButtons(sysSettings.student_buttons.filter((b) => b && b.active !== false));
+          } else if (!tasksEnabled) {
+            setCustomButtons([]);
           }
-          if (sysSettings.weekly_schedule) {
+          if (tasksEnabled && sysSettings.weekly_schedule) {
             const ws = sysSettings.weekly_schedule;
             const dayMap = ["monday", "tuesday", "wednesday", "thursday", "friday", null, null];
             const labelMap = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sexta-feira", "Sábado"];
@@ -511,6 +626,8 @@ export default function StudentDashboard() {
               today_subjects: subjectsToday,
               schedule: ws,
             });
+          } else if (!tasksEnabled) {
+            setDailySchedule(null);
           }
         }
         setIsOfflineData(true);
@@ -521,7 +638,7 @@ export default function StudentDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, aiStatusLoading, tasksEnabled, announcementsEnabled]);
 
   const handleCustomButtonClick = (btn) => {
     try {
@@ -532,9 +649,25 @@ export default function StudentDashboard() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Reload content automatically without re-login when an area transitions from disabled -> enabled
+  const prevAreasRef = useRef({ tasks: true, announcements: true, resumos: true });
+  useEffect(() => {
+    const prev = prevAreasRef.current;
+    const tasksReactivated = !prev.tasks && tasksEnabled;
+    const annReactivated = !prev.announcements && announcementsEnabled;
+    prevAreasRef.current = {
+      tasks: tasksEnabled,
+      announcements: announcementsEnabled,
+      resumos: resumosEnabled,
+    };
+    if (tasksReactivated || annReactivated) {
+      load({ silent: true });
+    }
+  }, [tasksEnabled, announcementsEnabled, resumosEnabled, load]);
+
   // Subscrições em Tempo Real (ignora snapshots em cache local e sempre usa o prefixo do ambiente confirmado)
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || aiStatusLoading) return;
 
     let unsubTasks = null;
     let unsubAnnouncements = null;
@@ -551,35 +684,39 @@ export default function StudentDashboard() {
 
     try {
       firebaseService.setCollectionPrefix(activeCollectionPrefix);
-      unsubTasks = firebaseService.subscribeToTasks(
-        user.id,
-        (_remoteTasks, fromCache) => {
-          if (fromCache) return;
-          if (firstTaskSnap) {
-            firstTaskSnap = false;
-            return;
+      if (tasksEnabled) {
+        unsubTasks = firebaseService.subscribeToTasks(
+          user.id,
+          (_remoteTasks, fromCache) => {
+            if (fromCache) return;
+            if (firstTaskSnap) {
+              firstTaskSnap = false;
+              return;
+            }
+            triggerLiveRefresh();
+          },
+          (err) => {
+            console.warn("[StudentDashboard] Fallback em erro de subscription tasks:", err);
           }
-          triggerLiveRefresh();
-        },
-        (err) => {
-          console.warn("[StudentDashboard] Fallback em erro de subscription tasks:", err);
-        }
-      );
+        );
+      }
 
-      unsubAnnouncements = firebaseService.subscribeToAnnouncements(
-        user.id,
-        (_remoteAnn, fromCache) => {
-          if (fromCache) return;
-          if (firstAnnSnap) {
-            firstAnnSnap = false;
-            return;
+      if (announcementsEnabled) {
+        unsubAnnouncements = firebaseService.subscribeToAnnouncements(
+          user.id,
+          (_remoteAnn, fromCache) => {
+            if (fromCache) return;
+            if (firstAnnSnap) {
+              firstAnnSnap = false;
+              return;
+            }
+            triggerLiveRefresh();
+          },
+          (err) => {
+            console.warn("[StudentDashboard] Fallback em erro de subscription announcements:", err);
           }
-          triggerLiveRefresh();
-        },
-        (err) => {
-          console.warn("[StudentDashboard] Fallback em erro de subscription announcements:", err);
-        }
-      );
+        );
+      }
     } catch (err) {
       console.warn("[StudentDashboard] Não foi possível iniciar snapshot listeners:", err);
     }
@@ -589,7 +726,7 @@ export default function StudentDashboard() {
       if (unsubTasks) unsubTasks();
       if (unsubAnnouncements) unsubAnnouncements();
     };
-  }, [user?.id, load, activeCollectionPrefix]);
+  }, [user?.id, load, activeCollectionPrefix, aiStatusLoading, tasksEnabled, announcementsEnabled]);
 
   // Listener para auto-atualização de tarefas quando criadas/modificadas pelo professor ou ao focar a aba
   const lastFocusRefreshRef = useRef(0);
@@ -613,15 +750,19 @@ export default function StudentDashboard() {
   useEffect(() => {
     const handleStoreTabEvent = () => {
       if (framesDisabled) return;
-      setTab("store");
+      handleSelectTab("store");
       pullScreenToStore();
     };
     window.addEventListener("open-store-tab", handleStoreTabEvent);
     return () => window.removeEventListener("open-store-tab", handleStoreTabEvent);
-  }, [framesDisabled]);
+  }, [framesDisabled, handleSelectTab]);
 
-  // Automatic one-time pop-up trigger on app launch for special announcements
+  // Automatic one-time pop-up trigger on app launch for special announcements (suppressed when Avisos is disabled)
   useEffect(() => {
+    if (!announcementsEnabled) {
+      setSpecialModalAnnouncement(null);
+      return;
+    }
     const list = Array.isArray(announcements) ? announcements : [];
     if (!user?.id || list.length === 0) return;
     const unseenSpecial = list.find((a) => {
@@ -632,7 +773,7 @@ export default function StudentDashboard() {
     if (unseenSpecial) {
       setSpecialModalAnnouncement(unseenSpecial);
     }
-  }, [announcements, user?.id]);
+  }, [announcements, user?.id, announcementsEnabled]);
 
   const handleCloseSpecialModal = () => {
     if (specialModalAnnouncement && user?.id) {
@@ -642,14 +783,16 @@ export default function StudentDashboard() {
   };
 
   const specialAnnouncements = useMemo(() => {
+    if (!announcementsEnabled) return [];
     const list = Array.isArray(announcements) ? announcements : [];
     return list.filter((a) => a.is_special);
-  }, [announcements]);
+  }, [announcements, announcementsEnabled]);
 
   const regularAnnouncements = useMemo(() => {
+    if (!announcementsEnabled) return [];
     const list = Array.isArray(announcements) ? announcements : [];
     return list.filter((a) => !a.is_special);
-  }, [announcements]);
+  }, [announcements, announcementsEnabled]);
 
   const subjects = useMemo(() => {
     const s = new Set(tasks.map((t) => t.subject));
@@ -773,7 +916,7 @@ export default function StudentDashboard() {
 
   const handleOpenStore = () => {
     if (framesDisabled) return;
-    setTab("store");
+    handleSelectTab("store");
     pullScreenToStore();
   };
 
@@ -781,7 +924,23 @@ export default function StudentDashboard() {
     return <AppDeactivatedScreen onCheckStatus={load} annualCycle={annualCycle} />;
   }
 
+  if (aiStatusLoading) {
+    return (
+      <div className="min-h-screen bg-[#FAFAFA]" data-testid="student-status-loading">
+        <AppHeader title="Minhas tarefas" />
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-12 flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-neutral-300 border-t-neutral-900 rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
   const isMentalistTheme = !framesDisabled && user?.equipped_effect === "mentalist";
+  const firstActiveAreaKey = getFirstActiveStudentArea(studentAreas);
+  const availableAreaInfo = {
+    key: firstActiveAreaKey,
+    label: STUDENT_AREA_LABELS[firstActiveAreaKey] || "Área disponível",
+  };
 
   return (
     <div
@@ -795,31 +954,53 @@ export default function StudentDashboard() {
         {/* Navigation Bar */}
         <div className="flex items-center gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2 scrollbar-none sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0 relative z-20">
           <button
-            onClick={() => setTab("tasks")}
+            onClick={() => handleSelectTab("tasks")}
             className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
               tab === "tasks"
-                ? isMentalistTheme
+                ? !tasksEnabled
+                  ? "bg-neutral-300 text-neutral-900 border-2 border-neutral-800 font-bold shadow-[2px_2px_0px_0px_#262626]"
+                  : isMentalistTheme
                   ? "mentalist-btn-crimson"
                   : "bg-sky-400 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                : !tasksEnabled
+                ? "bg-neutral-100 text-neutral-600 border-neutral-400"
                 : isMentalistTheme
                 ? "bg-[#fbf5e8] text-[#240707]"
                 : "bg-white"
             }`}
             data-testid="student-tab-tasks"
           >
-            <Gem className={`w-4 h-4 flex-shrink-0 ${tab === "tasks" && isMentalistTheme ? "text-[#f5c451]" : "text-cyan-800"}`} />
+            <Gem
+              className={`w-4 h-4 flex-shrink-0 ${
+                !tasksEnabled
+                  ? "text-neutral-500"
+                  : tab === "tasks" && isMentalistTheme
+                  ? "text-[#f5c451]"
+                  : "text-cyan-800"
+              }`}
+            />
             <span>Minhas tarefas</span>
+            {!tasksEnabled && (
+              <Lock
+                className="w-3.5 h-3.5 text-neutral-600 flex-shrink-0"
+                data-testid="desktop-nav-lock-tasks"
+              />
+            )}
           </button>
           <button
             onClick={() => {
-              setTab("announcements");
-              markAnnouncementsAsSeen();
+              handleSelectTab("announcements");
+              if (announcementsEnabled) markAnnouncementsAsSeen();
             }}
             className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 transition-all ${
               tab === "announcements"
-                ? isMentalistTheme
+                ? !announcementsEnabled
+                  ? "bg-neutral-300 text-neutral-900 border-2 border-neutral-800 font-bold shadow-[2px_2px_0px_0px_#262626]"
+                  : isMentalistTheme
                   ? "mentalist-btn-crimson"
                   : "bg-violet-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                : !announcementsEnabled
+                ? "bg-neutral-100 text-neutral-600 border-neutral-400"
                 : hasUnreadAnnouncements
                 ? "bg-violet-200 border-2 border-violet-950 font-black shadow-[3px_3px_0px_0px_rgba(109,40,217,1)] ring-2 ring-violet-500 animate-pulse"
                 : isMentalistTheme
@@ -828,29 +1009,61 @@ export default function StudentDashboard() {
             }`}
             data-testid="student-tab-announcements"
           >
-            <Megaphone className={`w-4 h-4 flex-shrink-0 ${hasUnreadAnnouncements && tab !== "announcements" ? "text-violet-950 animate-bounce" : "text-violet-900"}`} />
-            <span>Avisos ({announcements.length})</span>
-            {hasUnreadAnnouncements && tab !== "announcements" && (
+            <Megaphone
+              className={`w-4 h-4 flex-shrink-0 ${
+                !announcementsEnabled
+                  ? "text-neutral-500"
+                  : hasUnreadAnnouncements && tab !== "announcements"
+                  ? "text-violet-950 animate-bounce"
+                  : "text-violet-900"
+              }`}
+            />
+            <span>{announcementsEnabled ? `Avisos (${announcements.length})` : "Avisos"}</span>
+            {!announcementsEnabled && (
+              <Lock
+                className="w-3.5 h-3.5 text-neutral-600 flex-shrink-0"
+                data-testid="desktop-nav-lock-announcements"
+              />
+            )}
+            {announcementsEnabled && hasUnreadAnnouncements && tab !== "announcements" && (
               <span className="nb-badge bg-red-500 text-white border border-black text-[10px] font-black px-1.5 py-0.5 ml-1 animate-none">
                 Novo!
               </span>
             )}
           </button>
           <button
-            onClick={() => setTab("resumos")}
+            onClick={() => handleSelectTab("resumos")}
             className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
               tab === "resumos"
-                ? isMentalistTheme
+                ? !resumosEnabled
+                  ? "bg-neutral-300 text-neutral-900 border-2 border-neutral-800 font-bold shadow-[2px_2px_0px_0px_#262626]"
+                  : isMentalistTheme
                   ? "mentalist-btn-crimson"
                   : "bg-yellow-300 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                : !resumosEnabled
+                ? "bg-neutral-100 text-neutral-600 border-neutral-400"
                 : isMentalistTheme
                 ? "bg-[#fbf5e8] text-[#240707]"
                 : "bg-white"
             }`}
             data-testid="student-tab-resumos"
           >
-            <BookOpen className={`w-4 h-4 flex-shrink-0 ${tab === "resumos" && isMentalistTheme ? "text-[#f5c451]" : "text-yellow-900"}`} />
+            <BookOpen
+              className={`w-4 h-4 flex-shrink-0 ${
+                !resumosEnabled
+                  ? "text-neutral-500"
+                  : tab === "resumos" && isMentalistTheme
+                  ? "text-[#f5c451]"
+                  : "text-yellow-900"
+              }`}
+            />
             <span>Resumos de Estudo</span>
+            {!resumosEnabled && (
+              <Lock
+                className="w-3.5 h-3.5 text-neutral-600 flex-shrink-0"
+                data-testid="desktop-nav-lock-resumos"
+              />
+            )}
           </button>
           {!framesDisabled && (
             <button
@@ -871,7 +1084,7 @@ export default function StudentDashboard() {
             </button>
           )}
           <button
-            onClick={() => setTab("profile")}
+            onClick={() => handleSelectTab("profile")}
             className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
               tab === "profile"
                 ? isMentalistTheme
@@ -888,7 +1101,7 @@ export default function StudentDashboard() {
           </button>
           {!aiHidden && (
             <button
-              onClick={() => setTab("stats")}
+              onClick={() => handleSelectTab("stats")}
               className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 ${
                 tab === "stats"
                   ? isMentalistTheme
@@ -931,16 +1144,32 @@ export default function StudentDashboard() {
         {tab === "store" && !framesDisabled ? (
           <StoreEffects />
         ) : tab === "announcements" ? (
-          <StudentAnnouncementsView
-            announcements={announcements}
-            specialAnnouncements={specialAnnouncements}
-            regularAnnouncements={regularAnnouncements}
-            onOpenSpecialModal={(a) => setSpecialModalAnnouncement(a)}
-          />
+          announcementsEnabled ? (
+            <StudentAnnouncementsView
+              announcements={announcements}
+              specialAnnouncements={specialAnnouncements}
+              regularAnnouncements={regularAnnouncements}
+              onOpenSpecialModal={(a) => setSpecialModalAnnouncement(a)}
+            />
+          ) : (
+            <LockedAreaScreen
+              areaKey="announcements"
+              availableArea={availableAreaInfo}
+              onGoToAvailableArea={(k) => handleSelectTab(k)}
+            />
+          )
         ) : tab === "stats" ? (
           <StudentAIStatsView />
         ) : tab === "resumos" ? (
-          <StudentResumosPanel />
+          resumosEnabled ? (
+            <StudentResumosPanel />
+          ) : (
+            <LockedAreaScreen
+              areaKey="resumos"
+              availableArea={availableAreaInfo}
+              onGoToAvailableArea={(k) => handleSelectTab(k)}
+            />
+          )
         ) : tab === "profile" ? (
           <div className="space-y-6">
             <MyProfileBanner onOpenStore={!framesDisabled ? handleOpenStore : null} showStatsDetails={true} />
@@ -1085,6 +1314,12 @@ export default function StudentDashboard() {
             )}
             <StudentAIStatsView />
           </div>
+        ) : !tasksEnabled ? (
+          <LockedAreaScreen
+            areaKey="tasks"
+            availableArea={availableAreaInfo}
+            onGoToAvailableArea={(k) => handleSelectTab(k)}
+          />
         ) : (<>
         {/* Banner do Perfil Compacto (apenas saldo/pontos) no topo da aba de tarefas */}
         <MyProfileBanner onOpenStore={!framesDisabled ? handleOpenStore : null} showStatsDetails={false} />
@@ -1366,23 +1601,24 @@ export default function StudentDashboard() {
       <MobileBottomNav
         activeTab={tab}
         onTabChange={(newTab) => {
-          setTab(newTab);
-          if (newTab === "announcements") markAnnouncementsAsSeen();
+          handleSelectTab(newTab);
+          if (newTab === "announcements" && announcementsEnabled) markAnnouncementsAsSeen();
         }}
         framesDisabled={framesDisabled}
-        hasUnreadAnnouncements={hasUnreadAnnouncements}
+        studentAreas={studentAreas}
+        hasUnreadAnnouncements={announcementsEnabled && hasUnreadAnnouncements}
         isMentalist={isMentalistTheme}
       />
 
       {/* Special Announcement Pop-up Modal (appears automatically once on app load or on demand) */}
       <SpecialAnnouncementModal
-        announcement={specialModalAnnouncement}
-        isOpen={Boolean(specialModalAnnouncement)}
+        announcement={announcementsEnabled ? specialModalAnnouncement : null}
+        isOpen={announcementsEnabled && Boolean(specialModalAnnouncement)}
         onClose={handleCloseSpecialModal}
       />
 
       {/* AI Chat Dialog specifically bound to a task and its gabarito */}
-      {chatTask && (
+      {tasksEnabled && chatTask && (
         <AIChatDialog
           open={Boolean(chatTask)}
           onClose={() => setChatTask(null)}

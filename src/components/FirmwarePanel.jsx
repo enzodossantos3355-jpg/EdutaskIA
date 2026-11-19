@@ -39,18 +39,18 @@ const SYSTEM_FEATURES = [
     id: "ai-summaries-generator",
     emoji: "📝",
     Icon: FileText,
-    title: "Gerador de Resumos por IA",
-    category: "Inteligência Artificial",
-    description: "Síntese automática de matérias, fórmulas KaTeX, exemplos práticos e exportação em PDF, PNG e Markdown.",
+    title: "Biblioteca de Resumos Prontos",
+    category: "Estudos & Materiais",
+    description: "Organização de resumos prontos por matéria com fórmulas KaTeX, PDFs, imagens e exportação em PDF, PNG e Markdown.",
     status: "Ativo",
   },
   {
     id: "google-drive-sync",
     emoji: "☁️",
     Icon: Cloud,
-    title: "Integração com Google Drive",
-    category: "Armazenamento & Nuvem",
-    description: "Seleção direta de fontes de estudo, arquivos de resumos e fotos enviadas do Google Drive.",
+    title: "Backup Automático no Google Drive",
+    category: "Armazenamento & Backup",
+    description: "Envio automático agendado e manual de pacotes completos (.ZIP) para a pasta 'EduTask Backups' no Google Drive.",
     status: "Ativo",
   },
   {
@@ -239,8 +239,8 @@ function renderFirmwareToCanvas(canvas, appInfo, featuresState = {}) {
 export default function FirmwarePanel() {
   const [appInfo, setAppInfo] = useState({
     version: "1.3.0",
-    codename: "Edutask AI Resumos & Performance Engine",
-    release_notes: "Versão 1.3.0 com gerador de resumos por IA, renderização matemática KaTeX, integração com Google Drive, atalhos customizados e auditoria de segurança.",
+    codename: "Edutask Resumos Prontos & Backup Drive Edition",
+    release_notes: "Versão 1.3.0 com biblioteca de resumos prontos e renderização matemática KaTeX, backup automático no Google Drive, atalhos customizados e auditoria de segurança.",
     updated_at: new Date().toISOString(),
   });
   const [featuresState, setFeaturesState] = useState({

@@ -53,10 +53,13 @@ export interface WhatsAppTemplatesConfig {
   task_photo_id?: string | null;
   announcement_caption?: string;
   announcement_photo_id?: string | null;
+  summary_caption?: string;
+  summary_photo_id?: string | null;
   tomorrow_caption?: string;
   tomorrow_photo_id?: string | null;
   group1_task_extra?: string;
   group1_announcement_extra?: string;
+  group1_summary_extra?: string;
   group1_tomorrow_extra?: string; // Modelo pré-pronto de texto extra para lembretes do dia seguinte no Grupo 1
 }
 
@@ -111,6 +114,24 @@ export interface AnnouncementNotificationPayload {
   created_at?: string;
   recipients_label?: string;
   group1_extra?: string; // Parte extra para o Grupo 1
+  group2_caption?: string;
+  custom_caption_template?: string;
+  photo_buffer?: Buffer | null;
+  photo_content_type?: string | null;
+  group1_enabled?: boolean;
+  group2_enabled?: boolean;
+}
+
+export interface SummaryNotificationPayload {
+  subject: string;
+  topic: string;
+  summary_text?: string;
+  key_concepts?: string[];
+  formulas?: string[];
+  attachments_count?: number;
+  published_at?: string;
+  created_at?: string;
+  group1_extra?: string;
   group2_caption?: string;
   custom_caption_template?: string;
   photo_buffer?: Buffer | null;
@@ -1245,6 +1266,136 @@ class WhatsAppService {
       } catch (err: any) {
         const errMsg = `Falha no Grupo 2: ${err?.message || err}`;
         console.error(`[WhatsApp] ${errMsg}`);
+        results.errors.push(errMsg);
+      }
+    }
+
+    return results;
+  }
+
+  public async sendSummaryNotifications(summary: SummaryNotificationPayload): Promise<{
+    group1Sent: boolean;
+    group2Sent: boolean;
+    errors: string[];
+  }> {
+    const results = {
+      group1Sent: false,
+      group2Sent: false,
+      errors: [] as string[],
+    };
+
+    if (IS_PREVIEW_ENV) {
+      results.errors.push('WhatsApp bloqueado no ambiente Preview.');
+      return results;
+    }
+
+    if (this.status !== 'connected' || !this.sock) {
+      results.errors.push('WhatsApp não está conectado.');
+      return results;
+    }
+    if (!this.enabled) {
+      return results;
+    }
+
+    const sendG1 = summary.group1_enabled !== false;
+    const sendG2 = summary.group2_enabled !== false;
+
+    const formatDate = (isoStr?: string) => {
+      try {
+        if (!isoStr) return new Date().toLocaleDateString('pt-BR');
+        return new Date(isoStr).toLocaleDateString('pt-BR');
+      } catch {
+        return new Date().toLocaleDateString('pt-BR');
+      }
+    };
+
+    const formattedDate = formatDate(summary.published_at || summary.created_at);
+    const conceptsText = Array.isArray(summary.key_concepts) && summary.key_concepts.length > 0
+      ? summary.key_concepts.join(', ')
+      : '';
+    const attachCount = summary.attachments_count || 0;
+    const contentText = (summary.summary_text || '').trim()
+      || (attachCount > 0
+        ? `Material pronto com ${attachCount} arquivo(s) anexado(s) disponível no EduTask.`
+        : 'Confira o material completo na aba Estudos do EduTask.');
+
+    if (this.group1Jid && sendG1) {
+      try {
+        const target1 = this.group1Jid.includes('@') ? this.group1Jid : `${this.group1Jid}@g.us`;
+        const attachLine = attachCount > 0 ? `📎 *Arquivos Anexos:* ${attachCount} arquivo(s)\n` : '';
+        const conceptsLine = conceptsText ? `🔑 *Conceitos-Chave:* ${conceptsText}\n` : '';
+        const baseMsgG1 =
+          `📖 *NOVO RESUMO NO EDUTASK*\n\n` +
+          `📚 *Matéria:* ${summary.subject}\n` +
+          `📝 *Título:* ${summary.topic}\n` +
+          `📅 *Data:* ${formattedDate}\n` +
+          `${attachLine}` +
+          `${conceptsLine}` +
+          `\n📋 *Conteúdo / Observações:*\n${contentText}\n`;
+
+        let extraSectionG1 = '';
+        const rawExtra = (summary.group1_extra !== undefined && summary.group1_extra !== null
+          ? summary.group1_extra
+          : (this.templates?.group1_summary_extra || '')).trim();
+
+        if (rawExtra) {
+          const formattedExtra = rawExtra
+            .replace(/\{materia\}/gi, summary.subject || '')
+            .replace(/\{titulo\}/gi, summary.topic || '')
+            .replace(/\{data\}/gi, formattedDate)
+            .replace(/\{conceitos\}/gi, conceptsText);
+          extraSectionG1 = `\n${formattedExtra}\n`;
+        }
+
+        const msgG1 = `${baseMsgG1}${extraSectionG1}\n👉 _Acesse a aba Estudos no Edutask para estudar o resumo completo e baixar os arquivos!_`;
+
+        await this.sock.sendMessage(target1, { text: msgG1 });
+        results.group1Sent = true;
+        console.log(`[WhatsApp] Resumo enviado com sucesso para Grupo 1 (${this.group1Jid})`);
+      } catch (err: any) {
+        const errMsg = `Grupo 1: ${err?.message || err}`;
+        console.error(`[WhatsApp] Falha no envio de resumo - ${errMsg}`);
+        results.errors.push(errMsg);
+      }
+    }
+
+    if (this.group2Jid && sendG2) {
+      try {
+        const target2 = this.group2Jid.includes('@') ? this.group2Jid : `${this.group2Jid}@g.us`;
+        const summaryTemplate = (
+          summary.group2_caption && summary.group2_caption.trim() !== ''
+            ? summary.group2_caption
+            : summary.custom_caption_template ||
+              this.templates?.summary_caption ||
+              '📖 *RESUMO: {materia} — {titulo}*\n📅 *Data:* {data}\n\n📝 *Conteúdo:*\n{conteudo}'
+        ).trim();
+
+        const msgG2 = summaryTemplate
+          .replace(/\{materia\}/gi, summary.subject || '')
+          .replace(/\{subject\}/gi, summary.subject || '')
+          .replace(/\{titulo\}/gi, summary.topic || '')
+          .replace(/\{title\}/gi, summary.topic || '')
+          .replace(/\{data\}/gi, formattedDate)
+          .replace(/\{created_at\}/gi, formattedDate)
+          .replace(/\{conceitos\}/gi, conceptsText)
+          .replace(/\{conteudo\}/gi, contentText)
+          .replace(/\{descricao\}/gi, contentText)
+          .replace(/\{content\}/gi, contentText);
+
+        if (summary.photo_buffer && summary.photo_buffer.length > 0) {
+          await this.sock.sendMessage(target2, {
+            image: summary.photo_buffer,
+            caption: msgG2,
+            mimetype: summary.photo_content_type || 'image/jpeg',
+          });
+        } else {
+          await this.sock.sendMessage(target2, { text: msgG2 });
+        }
+        results.group2Sent = true;
+        console.log(`[WhatsApp] Resumo enviado com sucesso para Grupo 2 (${this.group2Jid})`);
+      } catch (err: any) {
+        const errMsg = `Grupo 2: ${err?.message || err}`;
+        console.error(`[WhatsApp] Falha no envio de resumo - ${errMsg}`);
         results.errors.push(errMsg);
       }
     }

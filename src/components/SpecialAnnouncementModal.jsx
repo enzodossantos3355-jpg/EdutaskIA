@@ -151,7 +151,7 @@ export default function SpecialAnnouncementModal({
                       title={att.original_filename}
                     >
                       <img
-                        src={`/api/files/${att.id}`}
+                        src={`/api/files/${att.id}?auth=${encodeURIComponent(token || "")}`}
                         alt={att.original_filename}
                         className="w-full h-full object-cover group-hover:opacity-80"
                       />

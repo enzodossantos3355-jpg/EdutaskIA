@@ -1090,3 +1090,13 @@ body.fx-no-spin .fx-spin,
   border: 2px solid #5b0e14 !important;
   box-shadow: 4px 4px 0px 0px #2b0909 !important;
 }
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

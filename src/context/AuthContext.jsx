@@ -227,6 +227,17 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    try {
+      const currentId = userRef.current?.id;
+      if (currentId) {
+        localStorage.removeItem(`edutask_preferred_tab_${currentId}`);
+      }
+      for (const k of Object.keys(localStorage)) {
+        if (k.startsWith("edutask_preferred_tab_")) {
+          localStorage.removeItem(k);
+        }
+      }
+    } catch {}
     localStorage.removeItem("auth_token");
     localStorage.removeItem("cached_user");
     userRef.current = null;

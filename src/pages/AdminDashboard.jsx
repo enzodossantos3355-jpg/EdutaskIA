@@ -24,8 +24,10 @@ import AnnualRankingPanel from "@/components/AnnualRankingPanel";
 import AdminResumosPanel from "@/components/AdminResumosPanel";
 import NotificationsAdminPanel from "@/components/NotificationsAdminPanel";
 import ScheduleAdminPanel from "@/components/ScheduleAdminPanel";
+import AdminStudentAreasPanel from "@/components/AdminStudentAreasPanel";
 import { useAIStatus } from "@/context/AIStatusContext";
 import { usePWA } from "@/context/PWAContext";
+import { useAutoDriveBackup } from "@/lib/autoBackupManager";
 import MolduraArtCenter from "@/components/MolduraArtCenter";
 import { effectClass, effectCardClass, getTheme, isDarkTheme, pullScreenToStore } from "@/lib/effects";
 import { getPriority, formatDateBR } from "@/lib/priority";
@@ -56,6 +58,7 @@ const TAB_LABELS = {
   ai: "IA",
   whatsapp: "WhatsApp",
   notifications: "Notificações",
+  student_areas: "Áreas dos Alunos",
   zip_transfer: "Dados ZIP",
 };
 
@@ -63,6 +66,7 @@ export default function AdminDashboard() {
   const { user, refresh, logout } = useAuth();
   const { framesDisabled } = useAIStatus();
   const { canInstallOrGuide, installApp } = usePWA();
+  useAutoDriveBackup(true);
   const [tab, setTab] = useState("tasks");
   const [annualCycle, setAnnualCycle] = useState(null);
   const [globalCleanupOpen, setGlobalCleanupOpen] = useState(false);
@@ -122,7 +126,6 @@ export default function AdminDashboard() {
   // Listener para evento customizado do botão superior da Loja
   useEffect(() => {
     const handleOpenStore = () => {
-      if (framesDisabled) return;
       setMainSection("estudos");
       setTab("store");
       setMobileMenuOpen(false);
@@ -130,7 +133,7 @@ export default function AdminDashboard() {
     };
     window.addEventListener("open-store-tab", handleOpenStore);
     return () => window.removeEventListener("open-store-tab", handleOpenStore);
-  }, [framesDisabled]);
+  }, []);
 
   const selectTab = (nextTab, sectionKey) => {
     setMainSection(sectionKey);
@@ -152,7 +155,15 @@ export default function AdminDashboard() {
     { key: "schedule", label: "Cronograma", icon: CalendarDays, testId: "tab-schedule", title: "Configurar matérias necessárias de Segunda a Sexta" },
     { key: "resumos", label: "Resumos", icon: BookOpen, testId: "tab-resumos", title: "Resumos de Estudo por Matéria" },
     { key: "ranking_annual", label: "Ranking Anual", icon: Trophy, testId: "tab-ranking-annual", title: "Ranking Anual dos Alunos e Controle do Ano Letivo" },
-    ...(!framesDisabled ? [{ key: "store", label: "Loja de Molduras", icon: ShoppingBag, testId: "tab-store", title: "Acessar Loja de Molduras" }] : []),
+    {
+      key: "store",
+      label: framesDisabled ? "Loja de Molduras (Desativada)" : "Loja de Molduras",
+      icon: ShoppingBag,
+      testId: "tab-store",
+      title: framesDisabled
+        ? "Loja desativada para os alunos — clique para gerenciar ou reativar"
+        : "Acessar Loja de Molduras",
+    },
     { key: "buttons", label: "Botões dos Alunos", icon: Link2, testId: "tab-buttons", title: "Criar e gerenciar botões para os alunos" },
   ];
 
@@ -164,6 +175,13 @@ export default function AdminDashboard() {
     { key: "ai", label: "IA", icon: Sparkles, testId: "tab-ai" },
     { key: "whatsapp", label: "WhatsApp", icon: MessageSquare, testId: "tab-whatsapp" },
     { key: "notifications", label: "Notificações", icon: Bell, testId: "tab-notifications" },
+    {
+      key: "student_areas",
+      label: "Áreas dos Alunos",
+      icon: Eye,
+      testId: "tab-student-areas",
+      title: "Ativar ou desativar Tarefas, Avisos e Resumos de Estudo para os alunos",
+    },
     { key: "zip_transfer", label: "Dados ZIP", icon: FileArchive, testId: "tab-zip-transfer" },
   ];
 
@@ -515,9 +533,10 @@ export default function AdminDashboard() {
           {tab === "firmware" && <FirmwarePanel />}
           {tab === "ai" && <AIAdminPanel />}
           {tab === "ranking_annual" && <AnnualRankingPanel />}
-          {tab === "store" && !framesDisabled && <StoreEffects user={user} refresh={refresh} />}
+          {tab === "store" && <StoreEffects user={user} refresh={refresh} />}
           {tab === "whatsapp" && <WhatsAppConfigPanel />}
           {tab === "notifications" && <NotificationsAdminPanel />}
+          {tab === "student_areas" && <AdminStudentAreasPanel />}
           {tab === "buttons" && <StudentButtonsPanel annualCycle={annualCycle} />}
           {tab === "zip_transfer" && <ZipDataTransferPanel />}
         </main>
@@ -2422,7 +2441,7 @@ function AnnouncementsPanel({ annualCycle }) {
                             title={att.original_filename}
                           >
                             <img
-                              src={`/api/files/${att.id}`}
+                              src={`/api/files/${att.id}?auth=${encodeURIComponent(token || "")}`}
                               alt={att.original_filename}
                               className="w-full h-full object-cover group-hover:opacity-80"
                             />

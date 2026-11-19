@@ -407,13 +407,13 @@ const DEFAULT_EFFECTS = [
 const DEFAULT_APP_INFO = {
   id: 'app_info',
   version: '1.3.0',
-  codename: 'Edutask AI Resumos & Performance Edition',
-  release_notes: 'Versão 1.3.0 com gerador de resumos por IA, renderização matemática KaTeX, integração com Google Drive, botões de atalho personalizados e disparador oficial no WhatsApp.',
+  codename: 'Edutask Resumos Prontos & Backup Drive Edition',
+  release_notes: 'Versão 1.3.0 com biblioteca de resumos prontos e renderização matemática KaTeX, backup automático no Google Drive, botões de atalho personalizados e disparador oficial no WhatsApp.',
   features: [
-    'Gerador de Resumos por IA com suporte KaTeX e exportação PDF/PNG/MD',
-    'Integração com Google Drive para importação de resumos e fotos',
+    'Biblioteca de Resumos Prontos com suporte KaTeX, anexos e exportação PDF/PNG/MD',
+    'Backup automático e manual completo (.ZIP) integrado ao Google Drive',
     'Atalhos & Botões Customizados para alunos',
-    'Disparador WhatsApp Oficial para comunicado e foto do firmware',
+    'Disparador WhatsApp Oficial para tarefas, resumos, comunicados e firmware',
     'Perfis estilo Netflix para Alunos e Admin',
     'Entrega de tarefas com anexos, respostas e prazos',
     'Gabarito inteligente gerado por IA através de fotos da tarefa',
@@ -761,6 +761,37 @@ function removeAvatarFile(userId: string) {
   }
 }
 
+export type StudentAreaKey = 'tasks' | 'announcements' | 'resumos';
+
+export interface StudentAreasConfig {
+  tasks: boolean;
+  announcements: boolean;
+  resumos: boolean;
+}
+
+export const VALID_STUDENT_AREA_KEYS: StudentAreaKey[] = ['tasks', 'announcements', 'resumos'];
+
+export const DEFAULT_STUDENT_AREAS: StudentAreasConfig = {
+  tasks: true,
+  announcements: true,
+  resumos: true,
+};
+
+export const LAST_AREA_REQUIRED_MESSAGE = 'Mantenha pelo menos uma área ativa para os alunos.';
+export const AREA_DISABLED_ERROR_MESSAGE = 'Esta área está temporariamente desativada pelo administrador.';
+
+export function normalizeStudentAreas(raw?: Partial<StudentAreasConfig> | null): StudentAreasConfig {
+  return {
+    tasks: raw?.tasks !== false,
+    announcements: raw?.announcements !== false,
+    resumos: raw?.resumos !== false,
+  };
+}
+
+export function hasAnyActiveStudentArea(areas: StudentAreasConfig): boolean {
+  return Boolean(areas.tasks || areas.announcements || areas.resumos);
+}
+
 class Database {
   users: Map<string, User> = new Map();
   subjects: Map<string, Subject> = new Map();
@@ -810,10 +841,13 @@ class Database {
       task_photo_id: string | null;
       announcement_caption: string;
       announcement_photo_id: string | null;
+      summary_caption: string;
+      summary_photo_id: string | null;
       tomorrow_caption: string;
       tomorrow_photo_id: string | null;
       group1_task_extra: string; // Modelo pré-pronto de texto extra para o Grupo 1 (adicionado ao texto oficial sem modificar o texto base)
       group1_announcement_extra: string; // Modelo pré-pronto de texto extra para avisos no Grupo 1
+      group1_summary_extra: string; // Modelo pré-pronto de texto extra para resumos no Grupo 1
       group1_tomorrow_extra: string; // Modelo pré-pronto de texto extra para lembrete do dia seguinte no Grupo 1
     };
     daily_reminder: {
@@ -840,10 +874,13 @@ class Database {
       task_photo_id: null,
       announcement_caption: '📣 *{titulo}*\n\n{mensagem}',
       announcement_photo_id: null,
+      summary_caption: '📖 *RESUMO: {materia} — {titulo}*\n📅 *Data:* {data}\n\n📝 *Conteúdo:*\n{conteudo}',
+      summary_photo_id: null,
       tomorrow_caption: '🚨 *LEMBRETE: TAREFAS PARA AMANHÃ ({data_amanha})*\n\nOlá turma! Não se esqueçam das tarefas marcadas para amanhã:\n\n{lista_tarefas}\n\n👉 Acessem o Edutask para conferir e responder no prazo!',
       tomorrow_photo_id: null,
       group1_task_extra: '📌 *Lembrete Extra da Turma:*\nFavor conferir os detalhes e responder dentro do prazo no portal!',
       group1_announcement_extra: '📌 *Observação Importante:*\nAcompanhem as atualizações e tirem dúvidas pelo Edutask!',
+      group1_summary_extra: '📌 *Dica de Estudo:*\nAcesse a aba Estudos no EduTask para visualizar o resumo completo e os anexos!',
       group1_tomorrow_extra: '📌 *Aviso Extra da Turma:*\nOrganizem seus horários para não deixar nada para a última hora!',
     },
     daily_reminder: {
@@ -865,6 +902,9 @@ class Database {
   ai_hidden: boolean = false;
   frames_disabled: boolean = false;
   frame_rotation_disabled: boolean = true;
+  student_areas: StudentAreasConfig = { ...DEFAULT_STUDENT_AREAS };
+  student_areas_updated_at: number = 0;
+  system_settings_updated_at: number = 0;
   annual_cycle: {
     active_year: number;
     is_closed: boolean;
@@ -911,6 +951,31 @@ class Database {
     created_at: string;
     updated_at: string;
   }> = [];
+  auto_backup_config: {
+    enabled: boolean;
+    interval_minutes: number;
+    backup_on_changes: boolean;
+    include_uploads: boolean;
+    last_backup_at: string | null;
+    last_backup_filename: string | null;
+    last_backup_status: 'idle' | 'success' | 'needs_auth' | 'error';
+    last_backup_error: string | null;
+    last_backup_file_id: string | null;
+    last_backup_web_link: string | null;
+    total_backups_sent: number;
+  } = {
+    enabled: false,
+    interval_minutes: 60,
+    backup_on_changes: true,
+    include_uploads: true,
+    last_backup_at: null,
+    last_backup_filename: null,
+    last_backup_status: 'idle',
+    last_backup_error: null,
+    last_backup_file_id: null,
+    last_backup_web_link: null,
+    total_backups_sent: 0,
+  };
 
   private firebaseSynced: boolean = false;
   private syncPromise: Promise<boolean> | null = null;
@@ -1253,7 +1318,22 @@ class Database {
         if (settings.whatsapp_config) {
           const prevReminderRunDate = this.whatsapp_config?.daily_reminder?.last_run_date;
           const prevAutoActivationRunDate = this.whatsapp_config?.auto_activation_schedule?.last_run_date;
-          this.whatsapp_config = { ...this.whatsapp_config, ...settings.whatsapp_config };
+          this.whatsapp_config = {
+            ...this.whatsapp_config,
+            ...settings.whatsapp_config,
+            templates: {
+              ...this.whatsapp_config.templates,
+              ...(settings.whatsapp_config.templates || {}),
+            },
+            daily_reminder: {
+              ...this.whatsapp_config.daily_reminder,
+              ...(settings.whatsapp_config.daily_reminder || {}),
+            },
+            auto_activation_schedule: {
+              ...this.whatsapp_config.auto_activation_schedule,
+              ...(settings.whatsapp_config.auto_activation_schedule || {}),
+            },
+          };
           if (prevReminderRunDate && this.whatsapp_config?.daily_reminder) {
             this.whatsapp_config.daily_reminder.last_run_date = prevReminderRunDate;
           }
@@ -1265,10 +1345,24 @@ class Database {
         if (settings.effect_overrides) this.effect_overrides = settings.effect_overrides;
         if (settings.ai_model) this.ai_model = normalizeGeminiModelId(settings.ai_model);
         if (settings.summary_ai_model) this.summary_ai_model = normalizeGeminiModelId(settings.summary_ai_model);
-        if (settings.ai_enabled !== undefined) this.ai_enabled = settings.ai_enabled;
-        if (settings.ai_hidden !== undefined) this.ai_hidden = settings.ai_hidden;
-        if (settings.frames_disabled !== undefined) this.frames_disabled = settings.frames_disabled;
-        if (settings.frame_rotation_disabled !== undefined) this.frame_rotation_disabled = settings.frame_rotation_disabled;
+        const remoteSystemUpdatedAt = Number(settings.settings_updated_at || 0);
+        if (!this.system_settings_updated_at || remoteSystemUpdatedAt >= this.system_settings_updated_at) {
+          if (settings.ai_enabled !== undefined) this.ai_enabled = settings.ai_enabled;
+          if (settings.ai_hidden !== undefined) this.ai_hidden = settings.ai_hidden;
+          if (settings.frames_disabled !== undefined) this.frames_disabled = settings.frames_disabled;
+          if (settings.frame_rotation_disabled !== undefined) this.frame_rotation_disabled = settings.frame_rotation_disabled;
+          if (remoteSystemUpdatedAt > 0) this.system_settings_updated_at = remoteSystemUpdatedAt;
+        }
+        if (settings.student_areas && typeof settings.student_areas === 'object') {
+          const remoteUpdatedAt = Number(settings.student_areas_updated_at || 0);
+          if (!this.student_areas_updated_at || remoteUpdatedAt >= this.student_areas_updated_at) {
+            const candidateAreas = normalizeStudentAreas(settings.student_areas);
+            if (hasAnyActiveStudentArea(candidateAreas)) {
+              this.student_areas = candidateAreas;
+              if (remoteUpdatedAt > 0) this.student_areas_updated_at = remoteUpdatedAt;
+            }
+          }
+        }
         if (settings.annual_cycle) this.annual_cycle = settings.annual_cycle;
         if (settings.annual_history) this.annual_history = settings.annual_history;
         if (Array.isArray(settings.student_buttons)) {
@@ -1288,6 +1382,9 @@ class Database {
         }
         if (settings.push_settings) {
           this.push_settings = { ...this.push_settings, ...settings.push_settings };
+        }
+        if (settings.auto_backup_config && typeof settings.auto_backup_config === 'object') {
+          this.auto_backup_config = { ...this.auto_backup_config, ...settings.auto_backup_config };
         }
         const remoteVapidEnv = settings.push_vapid_env;
         const vapidMatchesCurrentEnv = IS_PREVIEW_ENV
@@ -1405,6 +1502,9 @@ class Database {
         ai_hidden: this.ai_hidden,
         frames_disabled: this.frames_disabled,
         frame_rotation_disabled: this.frame_rotation_disabled,
+        student_areas: this.student_areas,
+        student_areas_updated_at: this.student_areas_updated_at,
+        system_settings_updated_at: this.system_settings_updated_at,
         annual_cycle: this.annual_cycle,
         annual_history: this.annual_history,
         ai_model: this.ai_model,
@@ -1417,6 +1517,7 @@ class Database {
         push_vapid_env: this.push_vapid_env,
         push_settings: this.push_settings,
         push_subscriptions: (this.push_subscriptions || []).filter(isSubAllowedInCurrentEnv),
+        auto_backup_config: this.auto_backup_config,
       };
       fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
     } catch (e) {
@@ -1446,12 +1547,41 @@ class Database {
         if (data.task_cleanup_config) this.task_cleanup_config = { ...this.task_cleanup_config, ...data.task_cleanup_config };
         if (data.student_buttons) this.student_buttons = new Map(data.student_buttons);
         if (data.weekly_schedule) this.weekly_schedule = normalizeWeeklyScheduleConfig(data.weekly_schedule);
-        if (data.whatsapp_config) this.whatsapp_config = { ...this.whatsapp_config, ...data.whatsapp_config };
+        if (data.whatsapp_config) {
+          this.whatsapp_config = {
+            ...this.whatsapp_config,
+            ...data.whatsapp_config,
+            templates: {
+              ...this.whatsapp_config.templates,
+              ...(data.whatsapp_config.templates || {}),
+            },
+            daily_reminder: {
+              ...this.whatsapp_config.daily_reminder,
+              ...(data.whatsapp_config.daily_reminder || {}),
+            },
+            auto_activation_schedule: {
+              ...this.whatsapp_config.auto_activation_schedule,
+              ...(data.whatsapp_config.auto_activation_schedule || {}),
+            },
+          };
+        }
         if (data.app_info) this.app_info = data.app_info;
         if (data.ai_enabled !== undefined) this.ai_enabled = data.ai_enabled;
         if (data.ai_hidden !== undefined) this.ai_hidden = data.ai_hidden;
         if (data.frames_disabled !== undefined) this.frames_disabled = data.frames_disabled;
         if (data.frame_rotation_disabled !== undefined) this.frame_rotation_disabled = data.frame_rotation_disabled;
+        if (data.student_areas && typeof data.student_areas === 'object') {
+          const loadedAreas = normalizeStudentAreas(data.student_areas);
+          if (hasAnyActiveStudentArea(loadedAreas)) {
+            this.student_areas = loadedAreas;
+          }
+        }
+        if (typeof data.student_areas_updated_at === 'number') {
+          this.student_areas_updated_at = data.student_areas_updated_at;
+        }
+        if (typeof data.system_settings_updated_at === 'number') {
+          this.system_settings_updated_at = data.system_settings_updated_at;
+        }
         if (data.annual_cycle) this.annual_cycle = data.annual_cycle;
         if (data.annual_history) this.annual_history = data.annual_history;
         if (data.ai_model) this.ai_model = normalizeGeminiModelId(data.ai_model);
@@ -1493,6 +1623,9 @@ class Database {
         }
         if (data.push_settings) {
           this.push_settings = { ...this.push_settings, ...data.push_settings };
+        }
+        if (data.auto_backup_config && typeof data.auto_backup_config === 'object') {
+          this.auto_backup_config = { ...this.auto_backup_config, ...data.auto_backup_config };
         }
         if (Array.isArray(data.push_subscriptions)) {
           this.push_subscriptions = data.push_subscriptions.filter(isSubAllowedInCurrentEnv);
@@ -1637,6 +1770,103 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
   }
   (req as any).user = user;
   next();
+}
+
+const systemEventsClients = new Set<express.Response>();
+
+function getPublicSettingsPayload() {
+  return {
+    student_areas: normalizeStudentAreas(db.student_areas),
+    student_areas_updated_at: db.student_areas_updated_at || 0,
+    settings_updated_at: db.system_settings_updated_at || 0,
+    frames_disabled: Boolean(db.frames_disabled),
+    frame_rotation_disabled: db.frame_rotation_disabled !== undefined ? db.frame_rotation_disabled : true,
+    ai_enabled: Boolean(db.ai_enabled),
+    ai_hidden: Boolean(db.ai_hidden),
+    ai_model: normalizeGeminiModelId(db.ai_model),
+  };
+}
+
+function broadcastSystemSettingsEvent() {
+  if (systemEventsClients.size === 0) return;
+  const payload = JSON.stringify(getPublicSettingsPayload());
+  const chunk = `event: settings\ndata: ${payload}\n\n`;
+  for (const clientRes of Array.from(systemEventsClients)) {
+    try {
+      clientRes.write(chunk);
+    } catch {
+      systemEventsClients.delete(clientRes);
+    }
+  }
+}
+
+function isStudentAreaDisabledForUser(user: User | null | undefined, area: StudentAreaKey): boolean {
+  if (user?.role === 'admin') return false;
+  const areas = normalizeStudentAreas(db.student_areas);
+  return areas[area] === false;
+}
+
+function sendAreaDisabled(res: express.Response, area: StudentAreaKey) {
+  return res.status(403).json({
+    detail: AREA_DISABLED_ERROR_MESSAGE,
+    area,
+    code: 'STUDENT_AREA_DISABLED',
+  });
+}
+
+function extractFileIds(items: any): string[] {
+  if (!Array.isArray(items)) return [];
+  const ids: string[] = [];
+  for (const item of items) {
+    if (!item) continue;
+    if (typeof item === 'string' && item.trim()) ids.push(item.trim());
+    else if (typeof item === 'object' && item.id) ids.push(String(item.id).trim());
+  }
+  return ids;
+}
+
+function getFileAreas(fileId: string): Set<StudentAreaKey> {
+  const areas = new Set<StudentAreaKey>();
+  const target = String(fileId || '').trim();
+  if (!target) return areas;
+
+  for (const t of db.tasks.values()) {
+    const ids = [...extractFileIds(t.attachments), ...extractFileIds((t as any).admin_photos)];
+    if (ids.includes(target)) {
+      areas.add('tasks');
+      break;
+    }
+  }
+
+  for (const a of db.announcements.values()) {
+    const ids = [...extractFileIds(a.attachments), ...extractFileIds(a.attachment_files)];
+    if (ids.includes(target)) {
+      areas.add('announcements');
+      break;
+    }
+  }
+
+  for (const s of db.summaries.values()) {
+    const ids = [
+      ...extractFileIds(s.attachment_ids),
+      ...extractFileIds(s.attachments),
+      ...extractFileIds(s.source_image_ids),
+    ];
+    if (ids.includes(target)) {
+      areas.add('resumos');
+      break;
+    }
+  }
+
+  return areas;
+}
+
+function isFileBlockedForUser(user: User | null | undefined, fileId: string): boolean {
+  if (user?.role === 'admin') return false;
+  const areas = getFileAreas(fileId);
+  if (areas.size === 0) return false;
+  const cfg = normalizeStudentAreas(db.student_areas);
+  return Array.from(areas).every((area) => cfg[area] === false);
 }
 
 function updateStudentStreak(userId: string) {
@@ -2738,6 +2968,9 @@ REGRAS DE EXTRAÇÃO:
 // ---------------------------------------------------------------------------
 api.get('/summaries', requireAuth, (req, res) => {
   const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'resumos')) {
+    return sendAreaDisabled(res, 'resumos');
+  }
   const { subject } = req.query;
   let allSummaries = Array.from(db.summaries.values())
     .filter((s) => hasSummaryContent(s))
@@ -3318,6 +3551,118 @@ api.post('/admin/summaries/:id/unpublish', requireAdmin, async (req, res) => {
   res.json({ ok: true, summary: summaryItem });
 });
 
+// Disparo manual de resumo para os grupos do WhatsApp (sempre acionado pelo administrador)
+api.post('/admin/summaries/:id/send-whatsapp', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const summaryItem = db.summaries.get(id);
+  if (!summaryItem) {
+    return res.status(404).json({ detail: 'Resumo não encontrado' });
+  }
+
+  const {
+    group1_enabled = true,
+    group2_enabled = true,
+    group1_extra,
+    group2_caption,
+    photo_id,
+    photo_data,
+  } = req.body || {};
+
+  if (IS_PREVIEW_ENV) {
+    return res.status(403).json({
+      detail: 'Disparo para grupos do WhatsApp bloqueado no ambiente Preview para não enviar mensagens aos grupos oficiais de Produção.',
+    });
+  }
+
+  const status = whatsappService.getStatus();
+  if (status.status !== 'connected') {
+    return res.status(400).json({ detail: 'WhatsApp não está conectado. Conecte na aba "WhatsApp" primeiro.' });
+  }
+  if (!status.group1Jid && !status.group2Jid) {
+    return res.status(400).json({ detail: 'Nenhum grupo do WhatsApp configurado. Configure o Grupo 1 ou Grupo 2 na aba WhatsApp.' });
+  }
+
+  let photoBuffer: Buffer | null = null;
+  let photoContentType: string | null = null;
+
+  if (photo_data && typeof photo_data === 'string' && photo_data.startsWith('data:')) {
+    try {
+      const [header, b64] = photo_data.split(',');
+      photoContentType = header.split(';')[0].replace('data:', '') || 'image/jpeg';
+      photoBuffer = Buffer.from(b64, 'base64');
+    } catch (e) {
+      console.warn('Erro ao decodificar photo_data para resumo:', e);
+    }
+  } else if (photo_id) {
+    const f = await resolveFileRecordAsync(photo_id);
+    if (f && f.data) {
+      photoBuffer = f.data;
+      photoContentType = f.content_type;
+    }
+  } else if (photo_id !== null) {
+    const candidateIds: string[] = [
+      ...(Array.isArray(summaryItem.attachment_ids) ? summaryItem.attachment_ids : []),
+      ...(Array.isArray(summaryItem.attachments)
+        ? summaryItem.attachments.map((a: any) => (typeof a === 'string' ? a : a?.id)).filter(Boolean)
+        : []),
+    ];
+    for (const fId of candidateIds) {
+      const f = await resolveFileRecordAsync(fId);
+      if (f && f.content_type?.startsWith('image/') && f.data && f.data.length > 0) {
+        photoBuffer = f.data;
+        photoContentType = f.content_type;
+        break;
+      }
+    }
+    if (!photoBuffer && db.whatsapp_config?.templates?.summary_photo_id) {
+      const f = await resolveFileRecordAsync(db.whatsapp_config.templates.summary_photo_id);
+      if (f && f.data) {
+        photoBuffer = f.data;
+        photoContentType = f.content_type;
+      }
+    }
+  }
+
+  const attachmentsCount = Math.max(
+    Array.isArray(summaryItem.attachment_ids) ? summaryItem.attachment_ids.length : 0,
+    Array.isArray(summaryItem.attachments) ? summaryItem.attachments.length : 0
+  );
+
+  const result = await whatsappService.sendSummaryNotifications({
+    subject: summaryItem.subject,
+    topic: summaryItem.topic,
+    summary_text: summaryItem.summary_text,
+    key_concepts: summaryItem.key_concepts,
+    formulas: summaryItem.formulas,
+    attachments_count: attachmentsCount,
+    published_at: summaryItem.published_at || undefined,
+    created_at: summaryItem.created_at,
+    group1_extra: typeof group1_extra === 'string' ? group1_extra : undefined,
+    group2_caption: group2_caption !== undefined ? group2_caption : undefined,
+    photo_buffer: photoBuffer,
+    photo_content_type: photoContentType,
+    custom_caption_template: db.whatsapp_config?.templates?.summary_caption,
+    group1_enabled: Boolean(group1_enabled),
+    group2_enabled: Boolean(group2_enabled),
+  });
+
+  const sentGroups = [];
+  if (result.group1Sent) sentGroups.push('Grupo 1 (Aviso Completo)');
+  if (result.group2Sent) sentGroups.push('Grupo 2 (Foto com Enunciado)');
+
+  if (sentGroups.length === 0) {
+    return res.status(500).json({
+      detail: result.errors.join('; ') || 'Falha ao enviar resumo pelo WhatsApp',
+    });
+  }
+
+  res.json({
+    ok: true,
+    message: `Resumo enviado com sucesso para: ${sentGroups.join(' e ')}!`,
+    details: result,
+  });
+});
+
 // Aliases legados de tópicos para retrocompatibilidade
 api.post('/admin/summaries/topics/:id/generate-summary', requireAdmin, async (req, res) => {
   try {
@@ -3478,33 +3823,14 @@ api.put('/admin/summaries/model', requireAdmin, async (req, res) => {
   res.json({ ok: true, summary_ai_model: db.summary_ai_model });
 });
 
-api.get('/summaries/drive', requireAuth, async (req, res) => {
-  await db.ensureFilesSynced();
-  const filesList = Array.from(db.files.values()).filter((f) =>
-    f.content_type?.startsWith('image/')
-  );
-  const topicsList = Array.from(db.summary_topics.values());
-  const summariesList = Array.from(db.summaries.values());
-  const driveItems = filesList.map((file) => {
-    const parentTopic = topicsList.find((t) => t.source_image_ids?.includes(file.id));
-    const parentSummary = summariesList.find((s) => s.source_image_ids?.includes(file.id));
-    const parent = parentTopic || parentSummary;
-    return {
-      id: file.id,
-      original_filename: file.original_filename,
-      content_type: file.content_type,
-      size: file.size,
-      created_at: file.created_at,
-      subject: parent ? parent.subject : 'Geral / Fontes',
-      topic: parent ? parent.topic : 'Material de Estudo',
-    };
-  });
-  res.json(driveItems);
-});
+// Resumos: gerenciados diretamente como resumos prontos (sem Google Drive nos resumos)
 
 // Bloqueado para alunos: apenas o admin gera resumos
 api.get('/summaries/history', requireAuth, (req, res) => {
   const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'resumos')) {
+    return sendAreaDisabled(res, 'resumos');
+  }
   if (user.role !== 'admin') {
     return res.json([]);
   }
@@ -3621,10 +3947,17 @@ api.post('/files/upload', requireAdmin, upload.single('file'), async (req, res) 
 
 api.get('/files/:file_id', async (req, res) => {
   const { file_id } = req.params;
+  const reqUser = verifyAuthToken(req);
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  if (isFileBlockedForUser(reqUser, file_id)) {
+    return res.status(403).json({
+      detail: AREA_DISABLED_ERROR_MESSAGE,
+      code: 'STUDENT_AREA_DISABLED',
+    });
+  }
   const file = await resolveFileRecordAsync(file_id);
   if (file && file.data) {
     res.setHeader('Content-Type', file.content_type || 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
     return res.send(file.data);
   }
 
@@ -3649,6 +3982,13 @@ api.get('/files/:file_id/download', async (req, res) => {
   }
 
   if (!user) return res.status(401).json({ detail: 'Não autenticado' });
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  if (isFileBlockedForUser(user, file_id)) {
+    return res.status(403).json({
+      detail: AREA_DISABLED_ERROR_MESSAGE,
+      code: 'STUDENT_AREA_DISABLED',
+    });
+  }
 
   let file = db.files.get(file_id);
   if (!file) {
@@ -3883,6 +4223,9 @@ function buildTaskResponseForStudent(task: TaskItem, userId: string) {
 
 api.get('/tasks', requireAuth, (req, res) => {
   const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'tasks')) {
+    return sendAreaDisabled(res, 'tasks');
+  }
   const allTasks = Array.from(db.tasks.values()).sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   if (user.role === 'admin') {
@@ -4227,6 +4570,9 @@ api.put('/tasks/:task_id', requireAdmin, async (req, res) => {
 
 api.post('/tasks/:task_id/mark-update-read', requireAuth, async (req, res) => {
   const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'tasks')) {
+    return sendAreaDisabled(res, 'tasks');
+  }
   const { task_id } = req.params;
   const task = db.tasks.get(task_id);
   if (!task) return res.status(404).json({ detail: 'Tarefa não encontrada' });
@@ -4245,10 +4591,13 @@ api.post('/tasks/:task_id/mark-update-read', requireAuth, async (req, res) => {
 
 // Student AI Task Answer Generation with selectable size & permanent persistence
 api.post('/tasks/:task_id/generate-answer', requireAuth, async (req, res) => {
+  const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'tasks')) {
+    return sendAreaDisabled(res, 'tasks');
+  }
   if (!db.ai_enabled) return res.status(503).json({ detail: 'Recursos de IA desativados' });
   const { task_id } = req.params;
   const { length = 'medium' } = req.body || {};
-  const user = (req as any).user as User;
 
   const task = db.tasks.get(task_id);
   if (!task) return res.status(404).json({ detail: 'Tarefa não encontrada' });
@@ -4597,6 +4946,9 @@ api.post('/admin/task-cleanup/run', requireAdmin, (req, res) => {
 api.post('/tasks/:task_id/complete', requireAuth, async (req, res) => {
   const { task_id } = req.params;
   const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'tasks')) {
+    return sendAreaDisabled(res, 'tasks');
+  }
   const task = db.tasks.get(task_id);
   if (!task) return res.status(404).json({ detail: 'Tarefa não encontrada' });
 
@@ -4664,6 +5016,9 @@ api.post('/tasks/:task_id/complete', requireAuth, async (req, res) => {
 api.post('/tasks/:task_id/uncomplete', requireAuth, async (req, res) => {
   const { task_id } = req.params;
   const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'tasks')) {
+    return sendAreaDisabled(res, 'tasks');
+  }
 
   const idx = db.completions.findIndex((c) => c.task_id === task_id && c.user_id === user.id);
   if (idx !== -1) {
@@ -4723,6 +5078,9 @@ function buildAnnouncementResponse(a: Announcement, studentsMap?: Map<string, st
 
 api.get('/announcements', requireAuth, (req, res) => {
   const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'announcements')) {
+    return sendAreaDisabled(res, 'announcements');
+  }
   const items = Array.from(db.announcements.values()).sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   if (user.role === 'admin') {
@@ -4986,6 +5344,10 @@ api.delete('/announcements/:ann_id', requireAdmin, async (req, res) => {
 });
 
 api.get('/announcements/:ann_id/comments', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'announcements')) {
+    return sendAreaDisabled(res, 'announcements');
+  }
   const { ann_id } = req.params;
   const comments = Array.from(db.comments.values())
     .filter((c) => c.announcement_id === ann_id)
@@ -4994,11 +5356,14 @@ api.get('/announcements/:ann_id/comments', requireAuth, (req, res) => {
 });
 
 api.post('/announcements/:ann_id/comments', requireAuth, async (req, res) => {
+  const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'announcements')) {
+    return sendAreaDisabled(res, 'announcements');
+  }
   const { ann_id } = req.params;
   const { text } = req.body || {};
   if (!text || !text.trim()) return res.status(400).json({ detail: 'Comentário vazio' });
 
-  const user = (req as any).user as User;
   const id = `comm-${Date.now()}`;
   const comment: Comment = {
     id,
@@ -5018,8 +5383,11 @@ api.post('/announcements/:ann_id/comments', requireAuth, async (req, res) => {
 });
 
 api.delete('/announcements/:ann_id/comments/:comment_id', requireAuth, async (req, res) => {
-  const { comment_id } = req.params;
   const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'announcements')) {
+    return sendAreaDisabled(res, 'announcements');
+  }
+  const { comment_id } = req.params;
   const comment = db.comments.get(comment_id);
   if (!comment) return res.status(404).json({ detail: 'Comentário não encontrado' });
 
@@ -5039,6 +5407,9 @@ api.delete('/announcements/:ann_id/comments/:comment_id', requireAuth, async (re
 // ---------------------------------------------------------------------------
 api.get('/student-buttons', requireAuth, (req, res) => {
   const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'tasks')) {
+    return sendAreaDisabled(res, 'tasks');
+  }
   let buttons = Array.from(db.student_buttons.values());
   if (user.role === 'aluno') {
     // Alunos só veem botões ativos
@@ -5131,6 +5502,10 @@ api.delete('/student-buttons/:btn_id', requireAdmin, (req, res) => {
 });
 
 api.post('/student-buttons/:btn_id/click', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'tasks')) {
+    return sendAreaDisabled(res, 'tasks');
+  }
   const { btn_id } = req.params;
   const btn = db.student_buttons.get(btn_id);
   if (btn) {
@@ -5173,6 +5548,10 @@ function getTodayScheduleContext() {
 }
 
 api.get('/schedule', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'tasks')) {
+    return sendAreaDisabled(res, 'tasks');
+  }
   const schedule = normalizeWeeklyScheduleConfig(db.weekly_schedule);
   db.weekly_schedule = schedule;
   res.json({
@@ -5249,6 +5628,9 @@ api.get('/app-status', (req, res) => {
     annual_cycle,
     frames_disabled: db.frames_disabled || false,
     frame_rotation_disabled: db.frame_rotation_disabled !== undefined ? db.frame_rotation_disabled : true,
+    student_areas: normalizeStudentAreas(db.student_areas),
+    student_areas_updated_at: db.student_areas_updated_at || 0,
+    settings_updated_at: db.system_settings_updated_at || 0,
     ai_enabled: db.ai_enabled || false,
     ai_hidden: db.ai_hidden || false,
     ai_model: normalizeGeminiModelId(db.ai_model),
@@ -5257,6 +5639,96 @@ api.get('/app-status', (req, res) => {
     collection_prefix: firebaseService.getCollectionPrefix(),
     firebase_synced: db.isFirebaseSynced(),
     top3,
+  });
+});
+
+// Real-time SSE stream for global system settings (student_areas, frames_disabled, ai flags)
+api.get('/system-events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (typeof (res as any).flushHeaders === 'function') {
+    (res as any).flushHeaders();
+  }
+
+  systemEventsClients.add(res);
+  try {
+    res.write(`event: settings\ndata: ${JSON.stringify(getPublicSettingsPayload())}\n\n`);
+  } catch {}
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch {
+      clearInterval(heartbeat);
+      systemEventsClients.delete(res);
+    }
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    systemEventsClients.delete(res);
+  });
+});
+
+api.get('/student-areas', requireAuth, (_req, res) => {
+  res.json({
+    ok: true,
+    student_areas: normalizeStudentAreas(db.student_areas),
+    updated_at: db.student_areas_updated_at || 0,
+  });
+});
+
+api.put('/admin/student-areas', requireAdmin, async (req, res) => {
+  const body = req.body || {};
+  const current = normalizeStudentAreas(db.student_areas);
+  let candidate: StudentAreasConfig = { ...current };
+
+  if (typeof body.area === 'string' && VALID_STUDENT_AREA_KEYS.includes(body.area as StudentAreaKey)) {
+    if (typeof body.enabled !== 'boolean') {
+      return res.status(400).json({ detail: 'Valor inválido para enabled.', student_areas: current });
+    }
+    candidate[body.area as StudentAreaKey] = body.enabled;
+  } else {
+    const incoming = body.student_areas && typeof body.student_areas === 'object' ? body.student_areas : body;
+    let hasKnownKey = false;
+    for (const key of VALID_STUDENT_AREA_KEYS) {
+      if (incoming[key] !== undefined) {
+        if (typeof incoming[key] !== 'boolean') {
+          return res.status(400).json({ detail: `Valor inválido para a área ${key}.`, student_areas: current });
+        }
+        candidate[key] = incoming[key];
+        hasKnownKey = true;
+      }
+    }
+    if (!hasKnownKey) {
+      return res.status(400).json({ detail: 'Nenhuma área válida informada.', student_areas: current });
+    }
+  }
+
+  // Atomic synchronous validation BEFORE any await so concurrent requests cannot disable all 3 areas
+  if (!hasAnyActiveStudentArea(candidate)) {
+    return res.status(400).json({
+      detail: LAST_AREA_REQUIRED_MESSAGE,
+      student_areas: current,
+    });
+  }
+
+  db.student_areas = candidate;
+  db.student_areas_updated_at = Date.now();
+  db.saveToDisk();
+  broadcastSystemSettingsEvent();
+
+  await Promise.race([
+    saveSystemSettingsToFirestore().catch(() => {}),
+    new Promise((resolve) => setTimeout(resolve, 1500)),
+  ]);
+
+  res.json({
+    ok: true,
+    student_areas: normalizeStudentAreas(db.student_areas),
+    updated_at: db.student_areas_updated_at,
   });
 });
 
@@ -5915,6 +6387,9 @@ function saveSystemSettingsToFirestore() {
     ai_hidden: db.ai_hidden,
     frames_disabled: db.frames_disabled,
     frame_rotation_disabled: db.frame_rotation_disabled,
+    student_areas: normalizeStudentAreas(db.student_areas),
+    student_areas_updated_at: db.student_areas_updated_at || 0,
+    settings_updated_at: db.system_settings_updated_at || 0,
     annual_cycle: db.annual_cycle,
     annual_history: db.annual_history,
     ai_model: db.ai_model,
@@ -5923,6 +6398,7 @@ function saveSystemSettingsToFirestore() {
     push_vapid_env: db.push_vapid_env || CURRENT_PUSH_ENV,
     push_settings: db.push_settings,
     push_subscriptions: (db.push_subscriptions || []).filter(isSubAllowedInCurrentEnv),
+    auto_backup_config: db.auto_backup_config,
   }).catch((err) => console.warn('[Firebase] Erro ao salvar configurações:', err));
 }
 
@@ -7025,6 +7501,78 @@ function escapeCsvField(field: any): string {
   return `"${str}"`;
 }
 
+// ---------------------------------------------------------------------------
+// Backup Automático no Google Drive (Configuração e Histórico)
+// ---------------------------------------------------------------------------
+api.get('/admin/auto-backup/config', requireAdmin, (_req, res) => {
+  res.json(db.auto_backup_config);
+});
+
+api.put('/admin/auto-backup/config', requireAdmin, (req, res) => {
+  const body = req.body || {};
+  const allowedIntervals = [15, 30, 60, 180, 360, 720, 1440];
+  const parsedInterval = Number(body.interval_minutes);
+  const nextInterval =
+    Number.isFinite(parsedInterval) && parsedInterval >= 5
+      ? allowedIntervals.includes(parsedInterval)
+        ? parsedInterval
+        : Math.min(1440, Math.max(5, Math.round(parsedInterval)))
+      : db.auto_backup_config.interval_minutes;
+
+  db.auto_backup_config = {
+    ...db.auto_backup_config,
+    enabled:
+      body.enabled !== undefined
+        ? Boolean(body.enabled)
+        : db.auto_backup_config.enabled,
+    interval_minutes: nextInterval,
+    backup_on_changes:
+      body.backup_on_changes !== undefined
+        ? Boolean(body.backup_on_changes)
+        : db.auto_backup_config.backup_on_changes,
+    include_uploads:
+      body.include_uploads !== undefined
+        ? Boolean(body.include_uploads)
+        : db.auto_backup_config.include_uploads,
+  };
+  db.saveToDisk();
+  saveSystemSettingsToFirestore();
+  res.json(db.auto_backup_config);
+});
+
+api.post('/admin/auto-backup/record', requireAdmin, (req, res) => {
+  const {
+    status = 'success',
+    filename = null,
+    file_id = null,
+    web_link = null,
+    error = null,
+    timestamp = null,
+  } = req.body || {};
+  const validStatus = ['idle', 'success', 'needs_auth', 'error'].includes(status)
+    ? status
+    : 'success';
+
+  const prev = db.auto_backup_config;
+  db.auto_backup_config = {
+    ...prev,
+    last_backup_status: validStatus,
+    last_backup_error: validStatus === 'success' ? null : error || null,
+    ...(validStatus === 'success'
+      ? {
+          last_backup_at: timestamp || new Date().toISOString(),
+          last_backup_filename: filename || prev.last_backup_filename,
+          last_backup_file_id: file_id || prev.last_backup_file_id,
+          last_backup_web_link: web_link || prev.last_backup_web_link,
+          total_backups_sent: (prev.total_backups_sent || 0) + 1,
+        }
+      : {}),
+  };
+  db.saveToDisk();
+  saveSystemSettingsToFirestore();
+  res.json(db.auto_backup_config);
+});
+
 api.get('/admin/zip/export', requireAdmin, async (req, res) => {
   try {
     const { include_uploads = 'true', type = 'full' } = req.query;
@@ -7078,11 +7626,14 @@ api.get('/admin/zip/export', requireAdmin, async (req, res) => {
         weekly_schedule: db.weekly_schedule,
         whatsapp_config: db.whatsapp_config,
         push_settings: db.push_settings,
+        auto_backup_config: db.auto_backup_config,
         app_info: db.app_info,
         ai_enabled: db.ai_enabled,
         ai_hidden: db.ai_hidden,
         frames_disabled: db.frames_disabled,
         frame_rotation_disabled: db.frame_rotation_disabled,
+        student_areas: normalizeStudentAreas(db.student_areas),
+        student_areas_updated_at: db.student_areas_updated_at || 0,
         ai_model: db.ai_model,
         task_student_answers: Array.from(db.task_student_answers.entries()),
       },
@@ -8148,6 +8699,13 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
         if (actualData.ai_enabled !== undefined) {
           db.ai_enabled = Boolean(actualData.ai_enabled);
         }
+        if (actualData.student_areas && typeof actualData.student_areas === 'object') {
+          const importedAreas = normalizeStudentAreas(actualData.student_areas);
+          if (hasAnyActiveStudentArea(importedAreas)) {
+            db.student_areas = importedAreas;
+            db.student_areas_updated_at = Date.now();
+          }
+        }
         if (actualData.task_cleanup_config) {
           db.task_cleanup_config = {
             ...db.task_cleanup_config,
@@ -8158,6 +8716,12 @@ api.post('/admin/zip/import', requireAdmin, upload.single('file'), async (req, r
           db.push_settings = {
             ...db.push_settings,
             ...actualData.push_settings,
+          };
+        }
+        if (actualData.auto_backup_config && typeof actualData.auto_backup_config === 'object') {
+          db.auto_backup_config = {
+            ...db.auto_backup_config,
+            ...actualData.auto_backup_config,
           };
         }
       }
@@ -8204,6 +8768,9 @@ api.get(['/ai/status', '/ai-status'], requireAuth, (req, res) => {
     hidden: db.ai_hidden || false,
     frames_disabled: db.frames_disabled || false,
     frame_rotation_disabled: db.frame_rotation_disabled !== undefined ? db.frame_rotation_disabled : true,
+    student_areas: normalizeStudentAreas(db.student_areas),
+    student_areas_updated_at: db.student_areas_updated_at || 0,
+    settings_updated_at: db.system_settings_updated_at || 0,
     model: db.ai_model || 'gemini-3.8-flash',
   });
 });
@@ -8224,14 +8791,19 @@ api.put(['/ai/status', '/ai-status'], requireAdmin, (req, res) => {
   if (req.body?.model && typeof req.body.model === 'string') {
     db.ai_model = req.body.model.trim();
   }
+  db.system_settings_updated_at = Math.max(Date.now(), (db.system_settings_updated_at || 0) + 1);
   db.saveToDisk();
   saveSystemSettingsToFirestore();
+  broadcastSystemSettingsEvent();
   res.json({
     ok: true,
     enabled: db.ai_enabled,
     hidden: db.ai_hidden || false,
     frames_disabled: db.frames_disabled || false,
     frame_rotation_disabled: db.frame_rotation_disabled !== undefined ? db.frame_rotation_disabled : true,
+    student_areas: normalizeStudentAreas(db.student_areas),
+    student_areas_updated_at: db.student_areas_updated_at || 0,
+    settings_updated_at: db.system_settings_updated_at || 0,
     model: db.ai_model || 'gemini-3.8-flash',
   });
 });
@@ -8560,6 +9132,10 @@ Questão 3: [Apenas a resposta direta necessária]`;
 });
 
 api.post('/ai/explain-task', requireAuth, async (req, res) => {
+  const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'tasks')) {
+    return sendAreaDisabled(res, 'tasks');
+  }
   if (!db.ai_enabled) return res.status(503).json({ detail: 'Recursos de IA desativados' });
   const { task_id } = req.body || {};
   const task = db.tasks.get(task_id);
@@ -8614,8 +9190,15 @@ api.post('/ai/chat', requireAuth, async (req, res) => {
   if (!message || !message.trim()) return res.status(400).json({ detail: 'Mensagem vazia' });
 
   const user = (req as any).user as User;
+  const tasksAreaDisabledForStudent = isStudentAreaDisabledForUser(user, 'tasks');
   const sid = session_id || `sess-${user.id}-${Date.now()}`;
-  let session = db.ai_chats.get(sid);
+  const existingSession = db.ai_chats.get(sid);
+  const candidateTaskId = task_id || existingSession?.task_id;
+  if (tasksAreaDisabledForStudent && candidateTaskId) {
+    return sendAreaDisabled(res, 'tasks');
+  }
+
+  let session = existingSession;
   if (!session) {
     session = {
       id: sid,
@@ -8633,14 +9216,16 @@ api.post('/ai/chat', requireAuth, async (req, res) => {
   const now = new Date().toISOString();
   session.messages.push({ role: 'user', content: message.trim(), ts: now });
 
-  // Gather student profile, tasks, and gabaritos
-  const assignedTasks = Array.from(db.tasks.values()).filter(
-    (t) => t.assigned_to.length === 0 || t.assigned_to.includes(user.id)
-  );
+  // Gather student profile, tasks, and gabaritos (respecting tasks area availability)
+  const assignedTasks = tasksAreaDisabledForStudent
+    ? []
+    : Array.from(db.tasks.values()).filter(
+        (t) => t.assigned_to.length === 0 || t.assigned_to.includes(user.id)
+      );
   const userCompletions = db.completions.filter((c) => c.user_id === user.id);
   const compSet = new Set(userCompletions.map((c) => c.task_id));
-  const pendingTasks = assignedTasks.filter((t) => !compSet.has(t.id));
-  const focusedTask = effectiveTaskId ? assignedTasks.find((t) => t.id === effectiveTaskId) : null;
+  const pendingTasks = tasksAreaDisabledForStudent ? [] : assignedTasks.filter((t) => !compSet.has(t.id));
+  const focusedTask = !tasksAreaDisabledForStudent && effectiveTaskId ? assignedTasks.find((t) => t.id === effectiveTaskId) : null;
 
   let reply = '';
   if (genAI) {
@@ -8652,21 +9237,30 @@ api.post('/ai/chat', requireAuth, async (req, res) => {
 
       let systemInstruction = '';
       if (user.role === 'aluno') {
-        const tasksListStr = assignedTasks.map((t) => {
-          const isDone = compSet.has(t.id);
-          return `• Tarefa ID: "${t.id}" | Título: "${t.title}" | Matéria: ${t.subject} | Prazo: ${t.due_date} | Status: ${isDone ? 'Concluída' : 'Pendente / Não feita'}
+        if (tasksAreaDisabledForStudent) {
+          systemInstruction = `Você é o Tutor Edutask, um assistente educacional amigável em português do Brasil.
+A área de Tarefas está temporariamente desativada pelo administrador: NÃO liste, revele ou consulte tarefas escolares nem gabaritos do aluno.
+Se o aluno perguntar sobre tarefas, pendências ou prazos, informe educadamente que a área de Tarefas está temporariamente desativada pelo administrador.
+Você pode tirar dúvidas conceituais gerais das matérias e responder sobre o perfil do aluno:
+- Nome: ${user.name}
+- Email: ${user.email}
+- Saldo de Pontos (Loja de Molduras): ${user.points || 0}`;
+        } else {
+          const tasksListStr = assignedTasks.map((t) => {
+            const isDone = compSet.has(t.id);
+            return `• Tarefa ID: "${t.id}" | Título: "${t.title}" | Matéria: ${t.subject} | Prazo: ${t.due_date} | Status: ${isDone ? 'Concluída' : 'Pendente / Não feita'}
   Descrição da tarefa: ${t.description}
   GABARITO / RESPOSTA OFICIAL: ${t.answer || 'Gabarito não cadastrado pelo professor.'}`;
-        }).join('\n\n');
+          }).join('\n\n');
 
-        const focusedTaskStr = focusedTask
-          ? `\n\n>>> O ALUNO ESTÁ PERGUNTANDO ESPECIFICAMENTE SOBRE A TAREFA: "${focusedTask.title}" (${focusedTask.subject})
+          const focusedTaskStr = focusedTask
+            ? `\n\n>>> O ALUNO ESTÁ PERGUNTANDO ESPECIFICAMENTE SOBRE A TAREFA: "${focusedTask.title}" (${focusedTask.subject})
 Descrição completa: ${focusedTask.description}
 Gabarito oficial: ${focusedTask.answer || 'Nenhum gabarito fornecido'}
 Status do aluno: ${compSet.has(focusedTask.id) ? 'Já marcada como concluída' : 'Pendente de conclusão'}\n<<<`
-          : '';
+            : '';
 
-        systemInstruction = `Você é o Tutor Edutask, um professor e assistente virtual amigável, atencioso e pedagógico em português do Brasil.
+          systemInstruction = `Você é o Tutor Edutask, um professor e assistente virtual amigável, atencioso e pedagógico em português do Brasil.
 Você tem acesso completo aos dados de perfil do aluno, a todas as suas tarefas escolares e aos gabaritos/respostas oficiais das tarefas.
 
 INFORMAÇÕES DO PERFIL DO ALUNO:
@@ -8686,6 +9280,7 @@ COMO RESPONDER ÀS DÚVIDAS DO ALUNO:
 3. Se o aluno perguntar sobre suas tarefas ("o que eu tenho que fazer?", "quais são minhas pendências?", "quais tarefas vencem hoje?"), consulte a lista acima e responda com clareza citando as matérias e prazos.
 4. Se o aluno perguntar sobre seu perfil, pontos ou progresso, utilize os dados do perfil acima.
 5. Seja encorajador, didático, claro e amigável.`;
+        }
       } else {
         systemInstruction = 'Você é um assistente pedagógico no Edutask para o professor. Ajude com sugestões de aula, rubricas e ideias educacionais.';
       }
@@ -8703,9 +9298,11 @@ COMO RESPONDER ÀS DÚVIDAS DO ALUNO:
 
   if (!reply) {
     const lower = message.toLowerCase();
-    if (focusedTask && (lower.includes('gabarito') || lower.includes('resposta') || lower.includes('como faz'))) {
+    if (tasksAreaDisabledForStudent && (lower.includes('tarefa') || lower.includes('pendente') || lower.includes('fazer') || lower.includes('hoje') || lower.includes('gabarito'))) {
+      reply = `Olá ${user.name}! A área de Tarefas está temporariamente desativada pelo administrador, então não posso consultar tarefas ou gabaritos no momento. Posso ajudar com dúvidas gerais de estudo ou sobre o seu perfil!`;
+    } else if (focusedTask && (lower.includes('gabarito') || lower.includes('resposta') || lower.includes('como faz'))) {
       reply = `Olá ${user.name}! Sobre a tarefa "${focusedTask.title}" (${focusedTask.subject}): ${focusedTask.answer ? `o gabarito oficial indica: "${focusedTask.answer}". Vamos entender o raciocínio por trás dessa resposta juntos!` : `ainda não há um gabarito anexado, mas posso te orientar sobre o enunciado: ${focusedTask.description.slice(0, 100)}...`}`;
-    } else if (lower.includes('tarefa') || lower.includes('pendente') || lower.includes('fazer') || lower.includes('hoje')) {
+    } else if (!tasksAreaDisabledForStudent && (lower.includes('tarefa') || lower.includes('pendente') || lower.includes('fazer') || lower.includes('hoje'))) {
       if (pendingTasks.length === 0) {
         reply = `Parabéns, ${user.name}! Você não tem nenhuma tarefa pendente no momento. Todas as suas atividades estão em dia! 🎉`;
       } else {
@@ -8713,9 +9310,13 @@ COMO RESPONDER ÀS DÚVIDAS DO ALUNO:
         reply = `Olá ${user.name}! Você tem ${pendingTasks.length} tarefa(s) pendente(s): ${listPreview}. Sobre qual delas você quer tirar dúvida?`;
       }
     } else if (lower.includes('perfil') || lower.includes('ponto') || lower.includes('moldura')) {
-      reply = `Olá ${user.name}! Seu perfil está ativo com ${user.points || 0} pontos acumulados para a Loja de Molduras. Você já completou ${userCompletions.length} tarefas. Em que mais posso ajudar nos seus estudos?`;
+      reply = tasksAreaDisabledForStudent
+        ? `Olá ${user.name}! Seu perfil está ativo com ${user.points || 0} pontos acumulados para a Loja de Molduras. Em que mais posso ajudar nos seus estudos?`
+        : `Olá ${user.name}! Seu perfil está ativo com ${user.points || 0} pontos acumulados para a Loja de Molduras. Você já completou ${userCompletions.length} tarefas. Em que mais posso ajudar nos seus estudos?`;
     } else {
-      reply = `Olá ${user.name}! Sou seu tutor do Edutask. Tenho acesso às suas tarefas e gabaritos escolares. Sobre "${message.slice(0, 35)}...", me diga como posso te ajudar a entender essa matéria! 💡`;
+      reply = tasksAreaDisabledForStudent
+        ? `Olá ${user.name}! Sou seu tutor do Edutask. Sobre "${message.slice(0, 35)}...", me diga qual conceito de estudo você gostaria de entender! 💡`
+        : `Olá ${user.name}! Sou seu tutor do Edutask. Tenho acesso às suas tarefas e gabaritos escolares. Sobre "${message.slice(0, 35)}...", me diga como posso te ajudar a entender essa matéria! 💡`;
     }
   }
 
@@ -8737,6 +9338,9 @@ api.get('/ai/chat/:session_id', requireAuth, (req, res) => {
   if (!session || session.user_id !== user.id) {
     return res.json({ session_id, messages: [] });
   }
+  if (session.task_id && isStudentAreaDisabledForUser(user, 'tasks')) {
+    return sendAreaDisabled(res, 'tasks');
+  }
   res.json({
     session_id,
     messages: session.messages,
@@ -8751,8 +9355,11 @@ api.delete('/ai/chat/:session_id', requireAuth, (req, res) => {
 });
 
 api.get('/ai/daily-summary', requireAuth, async (req, res) => {
-  if (!db.ai_enabled) return res.json({ summary: '', count: 0, disabled: true });
   const user = (req as any).user as User;
+  if (isStudentAreaDisabledForUser(user, 'tasks')) {
+    return sendAreaDisabled(res, 'tasks');
+  }
+  if (!db.ai_enabled) return res.json({ summary: '', count: 0, disabled: true });
 
   const myTasks = Array.from(db.tasks.values()).filter(
     (t) => (!t.assigned_to || t.assigned_to.length === 0 || t.assigned_to.includes(user.id)) &&

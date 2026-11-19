@@ -61,6 +61,10 @@ export default function WhatsAppConfigPanel() {
   const [announcementPhotoUrl, setAnnouncementPhotoUrl] = useState(null);
   const [uploadingAnnouncementPhoto, setUploadingAnnouncementPhoto] = useState(false);
 
+  const [summaryPhotoId, setSummaryPhotoId] = useState(null);
+  const [summaryPhotoUrl, setSummaryPhotoUrl] = useState(null);
+  const [uploadingSummaryPhoto, setUploadingSummaryPhoto] = useState(false);
+
   const [tomorrowPhotoId, setTomorrowPhotoId] = useState(null);
   const [tomorrowPhotoUrl, setTomorrowPhotoUrl] = useState(null);
   const [uploadingTomorrowPhoto, setUploadingTomorrowPhoto] = useState(false);
@@ -70,6 +74,9 @@ export default function WhatsAppConfigPanel() {
     "📚 *{materia} — {titulo}*\n📅 *Entrega:* {data_entrega}\n\n📝 *Enunciado:*\n{descricao}"
   );
   const [announcementCaption, setAnnouncementCaption] = useState("📣 *{titulo}*\n\n{mensagem}");
+  const [summaryCaption, setSummaryCaption] = useState(
+    "📖 *RESUMO: {materia} — {titulo}*\n📅 *Data:* {data}\n\n📝 *Conteúdo:*\n{conteudo}"
+  );
   const [tomorrowCaption, setTomorrowCaption] = useState(
     "🚨 *LEMBRETE: TAREFAS PARA AMANHÃ ({data_amanha})*\n\nOlá turma! Não se esqueçam das tarefas marcadas para amanhã:\n\n{lista_tarefas}\n\n👉 Acessem o Edutask para conferir e responder no prazo!"
   );
@@ -80,6 +87,9 @@ export default function WhatsAppConfigPanel() {
   );
   const [group1AnnouncementExtra, setGroup1AnnouncementExtra] = useState(
     "📌 *Observação Importante:*\nAcompanhem as atualizações e tirem dúvidas pelo Edutask!"
+  );
+  const [group1SummaryExtra, setGroup1SummaryExtra] = useState(
+    "📌 *Dica de Estudo:*\nAcesse a aba Estudos no EduTask para visualizar o resumo completo e os anexos!"
   );
   const [group1TomorrowExtra, setGroup1TomorrowExtra] = useState(
     "📌 *Aviso Extra da Turma:*\nOrganizem seus horários para não deixar nada para a última hora!"
@@ -114,6 +124,7 @@ export default function WhatsAppConfigPanel() {
 
   const taskPhotoInputRef = useRef(null);
   const announcementPhotoInputRef = useRef(null);
+  const summaryPhotoInputRef = useRef(null);
   const tomorrowPhotoInputRef = useRef(null);
   const prevStatusRef = useRef(null);
 
@@ -140,9 +151,11 @@ export default function WhatsAppConfigPanel() {
         if (cfg.templates) {
           if (cfg.templates.task_caption) setTaskCaption(cfg.templates.task_caption);
           if (cfg.templates.announcement_caption) setAnnouncementCaption(cfg.templates.announcement_caption);
+          if (cfg.templates.summary_caption) setSummaryCaption(cfg.templates.summary_caption);
           if (cfg.templates.tomorrow_caption) setTomorrowCaption(cfg.templates.tomorrow_caption);
           if (cfg.templates.group1_task_extra !== undefined) setGroup1TaskExtra(cfg.templates.group1_task_extra);
           if (cfg.templates.group1_announcement_extra !== undefined) setGroup1AnnouncementExtra(cfg.templates.group1_announcement_extra);
+          if (cfg.templates.group1_summary_extra !== undefined) setGroup1SummaryExtra(cfg.templates.group1_summary_extra);
           if (cfg.templates.group1_tomorrow_extra !== undefined) setGroup1TomorrowExtra(cfg.templates.group1_tomorrow_extra);
 
           if (cfg.templates.task_photo_id) {
@@ -152,6 +165,10 @@ export default function WhatsAppConfigPanel() {
           if (cfg.templates.announcement_photo_id) {
             setAnnouncementPhotoId(cfg.templates.announcement_photo_id);
             setAnnouncementPhotoUrl(buildFileUrl(cfg.templates.announcement_photo_id));
+          }
+          if (cfg.templates.summary_photo_id) {
+            setSummaryPhotoId(cfg.templates.summary_photo_id);
+            setSummaryPhotoUrl(buildFileUrl(cfg.templates.summary_photo_id));
           }
           if (cfg.templates.tomorrow_photo_id) {
             setTomorrowPhotoId(cfg.templates.tomorrow_photo_id);
@@ -334,10 +351,13 @@ export default function WhatsAppConfigPanel() {
           task_photo_id: taskPhotoId,
           announcement_caption: announcementCaption,
           announcement_photo_id: announcementPhotoId,
+          summary_caption: summaryCaption,
+          summary_photo_id: summaryPhotoId,
           tomorrow_caption: tomorrowCaption,
           tomorrow_photo_id: tomorrowPhotoId,
           group1_task_extra: group1TaskExtra,
           group1_announcement_extra: group1AnnouncementExtra,
+          group1_summary_extra: group1SummaryExtra,
           group1_tomorrow_extra: group1TomorrowExtra,
         },
         daily_reminder: {
@@ -1112,7 +1132,7 @@ export default function WhatsAppConfigPanel() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* 1. Foto Universal para Tarefas */}
           <div className="nb-card bg-sky-50/60 p-4 space-y-3 border-2 border-black flex flex-col justify-between">
             <div className="space-y-2">
@@ -1292,6 +1312,67 @@ export default function WhatsAppConfigPanel() {
               />
             </div>
           </div>
+
+          {/* 4. Foto Universal para Resumos */}
+          <div className="nb-card bg-emerald-50/60 p-4 space-y-3 border-2 border-black flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-heading font-black text-sm text-emerald-950 flex items-center gap-1.5">
+                  <BookOpen className="w-4 h-4 text-emerald-700" />
+                  4. Foto Universal de Resumos
+                </span>
+                <span className="nb-badge bg-emerald-200 text-emerald-900 text-[10px] font-bold">Resumos</span>
+              </div>
+              <p className="text-xs text-neutral-600">
+                Enviada quando você disparar um resumo pronto manualmente para o Grupo 2 sem outra imagem selecionada.
+              </p>
+
+              {summaryPhotoUrl ? (
+                <div className="relative rounded-xl border-2 border-black overflow-hidden bg-black/5 aspect-video flex items-center justify-center">
+                  <img src={summaryPhotoUrl} alt="Foto Universal Resumos" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSummaryPhotoId(null);
+                      setSummaryPhotoUrl(null);
+                    }}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 border border-black hover:bg-red-600 shadow"
+                    title="Remover foto universal de resumos"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="rounded-xl border-2 border-dashed border-emerald-400 bg-emerald-100/50 p-4 text-center text-xs text-neutral-500 aspect-video flex flex-col items-center justify-center">
+                  <ImageIcon className="w-6 h-6 text-emerald-500 mb-1" />
+                  <span>Nenhuma foto universal definida</span>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => summaryPhotoInputRef.current?.click()}
+                disabled={uploadingSummaryPhoto}
+                data-testid="upload-summary-photo-btn"
+                className="w-full nb-btn bg-white hover:bg-emerald-100 text-xs font-bold py-2 flex items-center justify-center gap-1.5 border-2 border-black"
+              >
+                <Upload className="w-3.5 h-3.5 text-emerald-700" />
+                {uploadingSummaryPhoto ? "Carregando..." : summaryPhotoId ? "Trocar Foto de Resumos" : "Definir Foto de Resumos"}
+              </button>
+              <input
+                ref={summaryPhotoInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  uploadPhotoHelper(e.target.files?.[0], setSummaryPhotoId, setSummaryPhotoUrl, setUploadingSummaryPhoto, "Foto universal de resumos");
+                  e.target.value = "";
+                }}
+                className="hidden"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1323,7 +1404,7 @@ export default function WhatsAppConfigPanel() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Tarefas */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
@@ -1441,6 +1522,48 @@ export default function WhatsAppConfigPanel() {
               </div>
             </div>
           </div>
+
+          {/* Resumos */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
+              <span className="inline-flex items-center gap-1"><BookOpen className="w-3.5 h-3.5 text-emerald-700" /> Modelo de Enunciado para Resumos</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setSummaryCaption(
+                    "📖 *RESUMO: {materia} — {titulo}*\n📅 *Data:* {data}\n\n📝 *Conteúdo:*\n{conteudo}"
+                  )
+                }
+                className="text-[10px] text-neutral-500 hover:text-black underline"
+              >
+                Padrão
+              </button>
+            </label>
+            <textarea
+              rows={5}
+              value={summaryCaption}
+              onChange={(e) => setSummaryCaption(e.target.value)}
+              className="nb-input bg-neutral-50 text-xs font-sans resize-y"
+              placeholder="Digite o modelo de resumos com tags..."
+              data-testid="input-summary-caption-template"
+            />
+            <p className="text-[10px] text-neutral-500">
+              Tags disponíveis: <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{materia}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{titulo}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{data}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{conteudo}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{conceitos}"}</code>
+            </p>
+
+            {/* Prévia Resumos */}
+            <div className="bg-neutral-900 text-neutral-100 p-3 rounded-xl text-xs space-y-1 font-mono">
+              <div className="text-[9px] uppercase font-bold text-emerald-400">Prévia no WhatsApp (Grupo 2):</div>
+              <div className="whitespace-pre-wrap font-sans text-xs pt-1">
+                {(summaryCaption || "")
+                  .replace(/\{materia\}/gi, "Biologia")
+                  .replace(/\{titulo\}/gi, "Célula Animal e Vegetal")
+                  .replace(/\{data\}/gi, "18/11/2026")
+                  .replace(/\{conceitos\}/gi, "Membrana Plasmática, Mitocôndria")
+                  .replace(/\{conteudo\}/gi, "Resumo pronto com comparação estrutural e PDF anexo na aba Estudos.")}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1472,7 +1595,7 @@ export default function WhatsAppConfigPanel() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Tarefas - Parte Extra do Grupo 1 */}
           <div className="space-y-2 bg-white p-4 rounded-xl border-2 border-black">
             <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
@@ -1604,6 +1727,51 @@ export default function WhatsAppConfigPanel() {
                  `🔹 *2. [História] Revolução*\n   🎁 *Pontos:* 15 pts\n\n` +
                  `👉 _Acessem o Edutask para responder no prazo!_\n` +
                  (group1TomorrowExtra ? `\n${group1TomorrowExtra}\n` : "")}
+              </div>
+            </div>
+          </div>
+
+          {/* Resumos - Parte Extra do Grupo 1 */}
+          <div className="space-y-2 bg-white p-4 rounded-xl border-2 border-black">
+            <label className="block text-xs font-bold text-neutral-800 flex items-center justify-between">
+              <span className="inline-flex items-center gap-1"><BookOpen className="w-3.5 h-3.5 text-emerald-700" /> Texto Extra: Resumos (Grupo 1)</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setGroup1SummaryExtra(
+                    "📌 *Dica de Estudo:*\nAcesse a aba Estudos no EduTask para visualizar o resumo completo e os anexos!"
+                  )
+                }
+                className="text-[10px] text-neutral-500 hover:text-black underline"
+              >
+                Padrão
+              </button>
+            </label>
+            <textarea
+              rows={4}
+              value={group1SummaryExtra}
+              onChange={(e) => setGroup1SummaryExtra(e.target.value)}
+              className="nb-input bg-neutral-50 text-xs font-sans resize-y"
+              placeholder="Digite a observação extra enviada ao disparar um resumo..."
+              data-testid="input-group1-summary-extra-template"
+            />
+            <p className="text-[10px] text-neutral-500">
+              Tags disponíveis: <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{materia}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{titulo}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{data}"}</code>, <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">{"{conceitos}"}</code>
+            </p>
+
+            {/* Prévia Grupo 1 */}
+            <div className="bg-neutral-900 text-neutral-100 p-3 rounded-xl text-xs space-y-1 font-mono">
+              <div className="text-[9px] uppercase font-bold text-emerald-400">
+                Prévia Completa (Grupo 1):
+              </div>
+              <div className="whitespace-pre-wrap font-sans text-xs pt-1">
+                {`📖 *NOVO RESUMO NO EDUTASK*\n\n` +
+                 `📚 *Matéria:* Biologia\n` +
+                 `📝 *Título:* Célula Animal e Vegetal\n` +
+                 `📅 *Data:* 18/11/2026\n\n` +
+                 `📋 *Conteúdo / Observações:*\nResumo pronto com comparação estrutural e PDF anexo na aba Estudos.\n` +
+                 (group1SummaryExtra ? `\n${group1SummaryExtra}\n` : "") +
+                 `\n👉 _Acesse a aba Estudos no Edutask para estudar o resumo completo e baixar os arquivos!_`}
               </div>
             </div>
           </div>

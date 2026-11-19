@@ -1,6 +1,13 @@
-import { CheckSquare, Megaphone, BookOpen, ShoppingBag, User } from "lucide-react";
+import { CheckSquare, Megaphone, BookOpen, ShoppingBag, User, Lock } from "lucide-react";
 
-export default function MobileBottomNav({ activeTab, onTabChange, framesDisabled, hasUnreadAnnouncements = false, isMentalist = false }) {
+export default function MobileBottomNav({
+  activeTab,
+  onTabChange,
+  framesDisabled,
+  studentAreas,
+  hasUnreadAnnouncements = false,
+  isMentalist = false,
+}) {
   const navItems = [
     { id: "tasks", label: "Tarefas", icon: CheckSquare },
     { id: "announcements", label: "Avisos", icon: Megaphone },
@@ -8,6 +15,8 @@ export default function MobileBottomNav({ activeTab, onTabChange, framesDisabled
     ...(!framesDisabled ? [{ id: "store", label: "Loja", icon: ShoppingBag }] : []),
     { id: "profile", label: "Perfil", icon: User },
   ];
+
+  const isAnnouncementsEnabled = studentAreas?.announcements !== false;
 
   return (
     <div
@@ -19,7 +28,11 @@ export default function MobileBottomNav({ activeTab, onTabChange, framesDisabled
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = activeTab === item.id;
-        const isUnreadAnnouncements = item.id === "announcements" && hasUnreadAnnouncements;
+        const isLocked =
+          ["tasks", "announcements", "resumos"].includes(item.id) &&
+          studentAreas?.[item.id] === false;
+        const isUnreadAnnouncements =
+          item.id === "announcements" && isAnnouncementsEnabled && !isLocked && hasUnreadAnnouncements;
 
         return (
           <button
@@ -27,9 +40,15 @@ export default function MobileBottomNav({ activeTab, onTabChange, framesDisabled
             onClick={() => onTabChange(item.id)}
             className={`mentalist-btn-keep flex-1 py-1.5 px-1 flex flex-col items-center justify-center gap-0.5 rounded-lg transition-all relative ${
               isActive
-                ? isMentalist
+                ? isLocked
+                  ? "bg-neutral-300 text-neutral-900 border-2 border-neutral-800 font-black shadow-[2px_2px_0_0_#262626] -translate-y-0.5"
+                  : isMentalist
                   ? "bg-[#e2b03a] text-[#1a0505] border-2 border-black font-black shadow-[2px_2px_0_0_#000] -translate-y-0.5"
                   : "bg-amber-300 text-black border-2 border-black font-black shadow-[2px_2px_0_0_#000] -translate-y-0.5"
+                : isLocked
+                ? isMentalist
+                  ? "text-[#e5d5b5]/75 font-bold hover:bg-white/10"
+                  : "text-neutral-500 font-bold hover:bg-neutral-100"
                 : isUnreadAnnouncements
                 ? "bg-violet-100 text-violet-950 border-2 border-violet-800 font-black shadow-[2px_2px_0_0_rgba(109,40,217,1)]"
                 : isMentalist
@@ -41,7 +60,13 @@ export default function MobileBottomNav({ activeTab, onTabChange, framesDisabled
             <div className="relative">
               <Icon
                 className={`w-5 h-5 ${
-                  isActive
+                  isLocked
+                    ? isActive
+                      ? "text-neutral-800"
+                      : isMentalist
+                      ? "text-[#e5d5b5]/75"
+                      : "text-neutral-500"
+                    : isActive
                     ? "text-black"
                     : isUnreadAnnouncements
                     ? "text-violet-900"
@@ -60,6 +85,12 @@ export default function MobileBottomNav({ activeTab, onTabChange, framesDisabled
             </div>
             <span className="text-[10px] leading-none uppercase font-heading flex items-center gap-0.5">
               {item.label}
+              {isLocked && (
+                <Lock
+                  className="w-2.5 h-2.5 flex-shrink-0"
+                  data-testid={`mobile-nav-lock-${item.id}`}
+                />
+              )}
               {isUnreadAnnouncements && !isActive && (
                 <span className="nb-badge bg-red-500 text-white text-[8px] font-black px-1 py-0 leading-tight border border-black">
                   !

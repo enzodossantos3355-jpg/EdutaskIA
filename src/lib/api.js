@@ -58,6 +58,22 @@ api.interceptors.response.use(
         return Promise.reject(new Error("API indisponível (resposta HTML recebida no lugar de JSON)"));
       }
     }
+    if (typeof window !== "undefined") {
+      const method = String(response.config?.method || "").toLowerCase();
+      const url = String(response.config?.url || "");
+      const isMutation = ["post", "put", "patch", "delete"].includes(method);
+      const isExcluded =
+        url.includes("/auth/") ||
+        url.includes("/admin/auto-backup") ||
+        url.includes("/admin/zip/") ||
+        url.includes("/ai/") ||
+        url.includes("/whatsapp/status");
+      if (isMutation && !isExcluded) {
+        window.dispatchEvent(
+          new CustomEvent("edutask:data-changed", { detail: { method, url } })
+        );
+      }
+    }
     return response;
   },
   (error) => {

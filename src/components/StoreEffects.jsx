@@ -299,75 +299,98 @@ export default function StoreEffects({ user: propUser, refresh: propRefresh }) {
 
       {/* Painel de Controle Admin para Loja & Giro */}
       {isAdmin && (
-        <div className="bg-amber-100 border-3 border-black rounded-2xl p-4 sm:p-5 shadow-[4px_4px_0_0_#000] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="nb-badge bg-amber-400 text-black border-2 border-black text-xs font-black">
-                PAINEL DA LOJA
-              </span>
+        <div className="bg-amber-100 border-3 border-black rounded-2xl p-4 sm:p-5 shadow-[4px_4px_0_0_#000] flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="nb-badge bg-amber-400 text-black border-2 border-black text-xs font-black">
+                  PAINEL DA LOJA
+                </span>
 
-              {framesDisabled ? (
-                <span className="nb-badge bg-red-500 text-white border-2 border-black text-xs font-black">
-                  Loja Desativada
-                </span>
-              ) : (
-                <span className="nb-badge bg-emerald-300 text-emerald-950 border-2 border-black text-xs font-black">
-                  Loja Ativa
-                </span>
-              )}
-              {frameRotationDisabled ? (
-                <span className="nb-badge bg-sky-200 text-sky-950 border-2 border-black text-xs font-black">
-                  Giro Desligado (Estático)
-                </span>
-              ) : (
-                <span className="nb-badge bg-amber-300 text-amber-950 border-2 border-black text-xs font-black flex items-center gap-1">
-                  <RotateCw className="w-3 h-3 animate-spin" /> Giro Ligado
-                </span>
-              )}
+                {framesDisabled ? (
+                  <span className="nb-badge bg-red-500 text-white border-2 border-black text-xs font-black">
+                    Loja Desativada
+                  </span>
+                ) : (
+                  <span className="nb-badge bg-emerald-300 text-emerald-950 border-2 border-black text-xs font-black">
+                    Loja Ativa
+                  </span>
+                )}
+                {frameRotationDisabled ? (
+                  <span className="nb-badge bg-sky-200 text-sky-950 border-2 border-black text-xs font-black">
+                    Giro Desligado (Estático)
+                  </span>
+                ) : (
+                  <span className="nb-badge bg-amber-300 text-amber-950 border-2 border-black text-xs font-black flex items-center gap-1">
+                    <RotateCw className="w-3 h-3 animate-spin" /> Giro Ligado
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-neutral-900 font-bold">
+                Controle o acesso dos alunos à loja, o efeito de rotação das molduras e cadastre novos itens.
+              </p>
             </div>
-            <p className="text-xs text-neutral-900 font-bold">
-              Controle o acesso dos alunos à loja, o efeito de rotação das molduras e cadastre novos itens.
-            </p>
+
+            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+              <button
+                onClick={() => setCreateModalOpen(true)}
+                className="nb-btn px-4 py-2 bg-emerald-400 hover:bg-emerald-500 text-emerald-950 text-xs font-black border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-2"
+                data-testid="btn-create-new-frame"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Nova Moldura</span>
+              </button>
+
+              <button
+                onClick={handleToggleFrames}
+                disabled={togglingFrames}
+                data-testid="toggle-frames-disabled-btn"
+                className={`nb-btn px-3.5 py-2 text-xs font-black border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5 ${
+                  framesDisabled
+                    ? "bg-emerald-300 hover:bg-emerald-400 text-emerald-950"
+                    : "bg-red-300 hover:bg-red-400 text-red-950"
+                }`}
+              >
+                <Palette className="w-4 h-4" />
+                <span>{togglingFrames ? "Aplicando..." : framesDisabled ? "Reativar Loja" : "Desativar Loja"}</span>
+              </button>
+
+              <button
+                onClick={handleToggleFrameRotation}
+                disabled={togglingRotation}
+                className="nb-btn px-3.5 py-2 bg-sky-300 hover:bg-sky-400 text-sky-950 text-xs font-black border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5"
+              >
+                <RotateCw className="w-4 h-4" />
+                <span>
+                  {togglingRotation
+                    ? "Aplicando..."
+                    : frameRotationDisabled
+                    ? "Ligar Giro de Molduras"
+                    : "Desligar Giro de Molduras"}
+                </span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-            <button
-              onClick={() => setCreateModalOpen(true)}
-              className="nb-btn px-4 py-2 bg-emerald-400 hover:bg-emerald-500 text-emerald-950 text-xs font-black border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-2"
-              data-testid="btn-create-new-frame"
+          {framesDisabled && (
+            <div
+              className="w-full p-3.5 rounded-xl bg-red-50 border-2 border-red-700 text-red-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              data-testid="admin-store-disabled-notice"
             >
-              <Plus className="w-4 h-4" />
-              <span>+ Nova Moldura</span>
-            </button>
-
-            <button
-              onClick={handleToggleFrames}
-              disabled={togglingFrames}
-              className={`nb-btn px-3.5 py-2 text-xs font-black border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5 ${
-                framesDisabled
-                  ? "bg-emerald-300 hover:bg-emerald-400 text-emerald-950"
-                  : "bg-red-300 hover:bg-red-400 text-red-950"
-              }`}
-            >
-              <Palette className="w-4 h-4" />
-              <span>{togglingFrames ? "Aplicando..." : framesDisabled ? "Reativar Loja" : "Desativar Loja"}</span>
-            </button>
-
-            <button
-              onClick={handleToggleFrameRotation}
-              disabled={togglingRotation}
-              className="nb-btn px-3.5 py-2 bg-sky-300 hover:bg-sky-400 text-sky-950 text-xs font-black border-2 border-black shadow-[2px_2px_0_0_#000] flex items-center gap-1.5"
-            >
-              <RotateCw className="w-4 h-4" />
-              <span>
-                {togglingRotation
-                  ? "Aplicando..."
-                  : frameRotationDisabled
-                  ? "Ligar Giro de Molduras"
-                  : "Desligar Giro de Molduras"}
-              </span>
-            </button>
-          </div>
+              <div className="text-xs font-bold">
+                A Loja de Molduras está desativada e oculta para os alunos. Você continua tendo acesso total aqui para gerenciar molduras ou reativar a loja.
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleFrames}
+                disabled={togglingFrames}
+                data-testid="reactivate-store-banner-btn"
+                className="nb-btn px-3.5 py-2 bg-emerald-300 hover:bg-emerald-400 text-emerald-950 text-xs font-black border-2 border-black shadow-[2px_2px_0_0_#000] flex-shrink-0"
+              >
+                {togglingFrames ? "Reativando..." : "Reativar Loja Agora"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

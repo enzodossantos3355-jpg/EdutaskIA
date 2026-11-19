@@ -9,14 +9,18 @@ import { useAIStatus } from "@/context/AIStatusContext";
  */
 export default function AIDailySummary() {
   const [summary, setSummary] = useState(null);
-  const { enabled, hidden, aiHidden } = useAIStatus();
+  const { enabled, hidden, aiHidden, studentAreas } = useAIStatus();
+  const tasksEnabled = studentAreas?.tasks !== false;
 
   useEffect(() => {
-    if (!enabled || hidden || aiHidden) return;
+    if (!enabled || hidden || aiHidden || !tasksEnabled) {
+      setSummary(null);
+      return;
+    }
     api.get("/ai/daily-summary").then(({ data }) => setSummary(data)).catch(() => {});
-  }, [enabled, hidden, aiHidden]);
+  }, [enabled, hidden, aiHidden, tasksEnabled]);
 
-  if (!enabled || hidden || aiHidden || !summary) return null;
+  if (!enabled || hidden || aiHidden || !tasksEnabled || !summary) return null;
 
   return (
     <div

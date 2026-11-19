@@ -28,20 +28,45 @@ import { formatDateBR } from "@/lib/priority";
 const API = import.meta.env.VITE_API_BASE_URL || "/api";
 
 // Helper para formatar a data ISO em DD/MM/AAAA
-const formatIsoDate = (isoStr) => {
+const formatAnyDateBR = (isoStr) => {
   try {
-    const [y, m, d] = (isoStr || "").split("-");
-    if (y && m && d) return `${d}/${m}/${y}`;
-    return isoStr || "";
+    if (!isoStr) return new Date().toLocaleDateString("pt-BR");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(isoStr))) {
+      const [y, m, d] = String(isoStr).split("-");
+      return `${d}/${m}/${y}`;
+    }
+    const dt = new Date(isoStr);
+    if (!Number.isNaN(dt.getTime())) return dt.toLocaleDateString("pt-BR");
+    return String(isoStr);
   } catch {
-    return isoStr || "";
+    return new Date().toLocaleDateString("pt-BR");
   }
+};
+
+const getSummaryContentPreview = (item) => {
+  if (!item) return "";
+  const txt = (item.summary_text || "").trim();
+  if (txt) return txt;
+  const attachCount = Math.max(
+    Array.isArray(item.attachments) ? item.attachments.length : 0,
+    Array.isArray(item.attachment_ids) ? item.attachment_ids.length : 0
+  );
+  if (attachCount > 0) {
+    return `Material pronto com ${attachCount} arquivo(s) anexado(s) disponível na aba Estudos do EduTask.`;
+  }
+  return "Confira o material completo na aba Estudos do EduTask.";
 };
 
 // Gera o enunciado padrão oficial a partir do modelo programado na aba WhatsApp
 const formatProgrammedCaption = (template, item, type) => {
   if (!item) return "";
-  const formattedDate = formatIsoDate(type === "task" ? item.due_date : (item.date || item.created_at));
+  const formattedDate = formatAnyDateBR(
+    type === "task"
+      ? item.due_date
+      : type === "summary"
+      ? item.published_at || item.updated_at || item.created_at
+      : item.date || item.created_at
+  );
 
   if (type === "task") {
     const tmpl = (
@@ -63,6 +88,25 @@ const formatProgrammedCaption = (template, item, type) => {
       .replace(/\{descricao\}/gi, item.description || "")
       .replace(/\{enunciado\}/gi, item.description || "")
       .replace(/\{description\}/gi, item.description || "");
+  } else if (type === "summary") {
+    const tmpl = (
+      template ||
+      "📖 *RESUMO: {materia} — {titulo}*\n📅 *Data:* {data}\n\n📝 *Conteúdo:*\n{conteudo}"
+    ).trim();
+    const contentText = getSummaryContentPreview(item);
+    const conceptsText = Array.isArray(item.key_concepts) ? item.key_concepts.join(", ") : "";
+
+    return tmpl
+      .replace(/\{materia\}/gi, item.subject || "")
+      .replace(/\{subject\}/gi, item.subject || "")
+      .replace(/\{titulo\}/gi, item.topic || item.title || "")
+      .replace(/\{title\}/gi, item.topic || item.title || "")
+      .replace(/\{data\}/gi, formattedDate)
+      .replace(/\{created_at\}/gi, formattedDate)
+      .replace(/\{conceitos\}/gi, conceptsText)
+      .replace(/\{conteudo\}/gi, contentText)
+      .replace(/\{descricao\}/gi, contentText)
+      .replace(/\{content\}/gi, contentText);
   } else {
     const tmpl = (
       template ||
@@ -127,24 +171,28 @@ export default function WhatsAppDispatchDialog({
     const fallbackTmpl =
       type === "task"
         ? "📚 *{materia} — {titulo}*\n📅 *Entrega:* {data_entrega}\n\n📝 *Enunciado:*\n{descricao}"
+        : type === "summary"
+        ? "📖 *RESUMO: {materia} — {titulo}*\n📅 *Data:* {data}\n\n📝 *Conteúdo:*\n{conteudo}"
         : "📣 *{titulo}*\n\n{mensagem}";
     setProgrammedTemplate(fallbackTmpl);
     setGroup2Caption(formatProgrammedCaption(fallbackTmpl, item, type));
 
-    // Identificar anexos públicos da tarefa (fotos fonte da IA admin_photos NÃO são enviadas para alunos)
+    // Identificar anexos públicos da tarefa ou resumo (fotos fonte admin_photos NÃO são enviadas)
     const photos = [];
     const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : "";
 
     if (item.attachments && item.attachments.length > 0) {
       item.attachments.forEach((a) => {
+        const attObj = typeof a === "string" ? { id: a, original_filename: "Anexo" } : a;
+        if (!attObj?.id) return;
         const isImg =
-          a.content_type?.startsWith("image/") ||
-          /\.(jpe?g|png|webp|gif)$/i.test(a.original_filename || a.filename || "");
-        if (isImg && !photos.some((p) => p.id === a.id)) {
+          attObj.content_type?.startsWith("image/") ||
+          /\.(jpe?g|png|webp|gif)$/i.test(attObj.original_filename || attObj.filename || "");
+        if (isImg && !photos.some((p) => p.id === attObj.id)) {
           photos.push({
-            id: a.id,
-            name: a.original_filename || a.filename || "Anexo Imagem",
-            url: `${API}/files/${a.id}/download?auth=${encodeURIComponent(token || "")}`,
+            id: attObj.id,
+            name: attObj.original_filename || attObj.filename || "Anexo Imagem",
+            url: `${API}/files/${attObj.id}/download?auth=${encodeURIComponent(token || "")}`,
           });
         }
       });
@@ -163,22 +211,26 @@ export default function WhatsAppDispatchDialog({
         const universalPhotoId =
           type === "task"
             ? cfg.templates?.task_photo_id
+            : type === "summary"
+            ? cfg.templates?.summary_photo_id
             : cfg.templates?.announcement_photo_id;
 
         const tmpl =
           type === "task"
-            ? (cfg.templates?.task_caption || fallbackTmpl)
-            : (cfg.templates?.announcement_caption || fallbackTmpl);
+            ? cfg.templates?.task_caption || fallbackTmpl
+            : type === "summary"
+            ? cfg.templates?.summary_caption || fallbackTmpl
+            : cfg.templates?.announcement_caption || fallbackTmpl;
 
         setProgrammedTemplate(tmpl);
-        // O enunciado do Grupo 2 é inicializado exatamente como programado na aba WhatsApp!
         setGroup2Caption(formatProgrammedCaption(tmpl, item, type));
 
-        // Modelo pré-pronto de parte extra para o Grupo 1 (o texto base completo nunca é alterado)
         const defaultExtra =
           type === "task"
-            ? (cfg.templates?.group1_task_extra || "")
-            : (cfg.templates?.group1_announcement_extra || "");
+            ? cfg.templates?.group1_task_extra || ""
+            : type === "summary"
+            ? cfg.templates?.group1_summary_extra || ""
+            : cfg.templates?.group1_announcement_extra || "";
         setGroup1DefaultExtra(defaultExtra);
         setGroup1Extra(defaultExtra);
 
@@ -255,6 +307,8 @@ export default function WhatsAppDispatchDialog({
       const endpoint =
         type === "task"
           ? `/tasks/${item.id}/send-whatsapp`
+          : type === "summary"
+          ? `/admin/summaries/${item.id}/send-whatsapp`
           : `/announcements/${item.id}/send-whatsapp`;
 
       const { data } = await api.post(endpoint, payload);
@@ -270,33 +324,45 @@ export default function WhatsAppDispatchDialog({
     }
   };
 
-  const formattedDueDate = formatDateBR(item.due_date || item.created_at);
+  const formattedDueDate =
+    type === "task"
+      ? formatDateBR(item.due_date || item.created_at)
+      : formatAnyDateBR(item.published_at || item.updated_at || item.created_at);
+  const displayTitle = type === "summary" ? (item.topic || item.title) : item.title;
+  const summaryAttachCount =
+    type === "summary"
+      ? Math.max(item.attachments?.length || 0, item.attachment_ids?.length || 0)
+      : 0;
 
   return (
     <ModalPortal>
       <div
-        className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs"
+        className="fixed inset-0 z-[70] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-xs"
         data-testid="whatsapp-dispatch-dialog"
       >
-      <div className="nb-card bg-white w-full max-w-2xl max-h-[94vh] overflow-y-auto p-5 sm:p-7 space-y-5">
+      <div className="nb-card bg-white w-full max-w-2xl max-h-[94vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl p-4 sm:p-7 space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between border-b-2 border-black pb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-300 text-emerald-950 border-2 border-black flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-emerald-300 text-emerald-950 border-2 border-black flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] shrink-0">
               <MessageSquare className="w-5 h-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="font-heading font-black text-xl sm:text-2xl leading-tight">
                 Disparo no WhatsApp
               </h3>
-              <p className="text-xs text-neutral-600">
-                {type === "task" ? "Disparar tarefa para os grupos" : "Disparar comunicado para os grupos"}
+              <p className="text-xs text-neutral-600 truncate">
+                {type === "task"
+                  ? "Disparar tarefa para os grupos"
+                  : type === "summary"
+                  ? "Disparar resumo pronto para os grupos"
+                  : "Disparar comunicado para os grupos"}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="nb-btn bg-white hover:bg-neutral-100 p-2"
+            className="nb-btn bg-white hover:bg-neutral-100 min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0"
             data-testid="close-whatsapp-dispatch-dialog"
           >
             <X className="w-4 h-4" />
@@ -346,7 +412,7 @@ export default function WhatsAppDispatchDialog({
               <Calendar className="w-3 h-3" /> {type === "task" ? `Entrega: ${formattedDueDate}` : `Data: ${formattedDueDate}`}
             </span>
           </div>
-          <h4 className="font-heading font-black text-lg">{item.title}</h4>
+          <h4 className="font-heading font-black text-lg">{displayTitle}</h4>
         </div>
 
         {/* Configuração do GRUPO 1 */}
@@ -424,7 +490,10 @@ export default function WhatsAppDispatchDialog({
                 data-testid="input-group1-extra"
               />
               <p className="text-[10px] text-neutral-500">
-                Esta parte extra será inserida antes do link de acesso. Suporta tags: <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{materia}"}</code>, <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{titulo}"}</code>, <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{data_entrega}"}</code>
+                Esta parte extra será inserida antes do link de acesso. Suporta tags:{" "}
+                <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{materia}"}</code>,{" "}
+                <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{"{titulo}"}</code>,{" "}
+                <code className="font-mono bg-white px-1 py-0.5 rounded border border-black/20">{type === "task" ? "{data_entrega}" : "{data}"}</code>
               </p>
 
               {showG1Preview && (
@@ -436,15 +505,24 @@ export default function WhatsAppDispatchDialog({
                     {type === "task" ? (
                       `📚 *NOVA TAREFA NO EDUTASK*\n\n` +
                       `📖 *Matéria:* ${item.subject || "Matéria"}\n` +
-                      `📝 *Título:* ${item.title}\n` +
+                      `📝 *Título:* ${displayTitle}\n` +
                       `📅 *Data de Entrega:* ${formattedDueDate}\n` +
                       `🎁 *Pontos:* ${item.points || 10} pts\n\n` +
                       `📋 *Descrição / Orientações:*\n${item.description || "Orientações..."}\n` +
                       (group1Extra ? `\n${group1Extra}\n` : "") +
                       `\n👉 _Acesse o Edutask para responder e visualizar os detalhes!_`
+                    ) : type === "summary" ? (
+                      `📖 *NOVO RESUMO NO EDUTASK*\n\n` +
+                      `📚 *Matéria:* ${item.subject || "Matéria"}\n` +
+                      `📝 *Título:* ${displayTitle}\n` +
+                      `📅 *Data:* ${formattedDueDate}\n` +
+                      (summaryAttachCount > 0 ? `📎 *Arquivos Anexos:* ${summaryAttachCount} arquivo(s)\n` : "") +
+                      `\n📋 *Conteúdo / Observações:*\n${getSummaryContentPreview(item)}\n` +
+                      (group1Extra ? `\n${group1Extra}\n` : "") +
+                      `\n👉 _Acesse a aba Estudos no Edutask para estudar o resumo completo e baixar os arquivos!_`
                     ) : (
                       `📢 *NOVO AVISO NO EDUTASK*\n\n` +
-                      `📌 *${item.title}*\n` +
+                      `📌 *${displayTitle}*\n` +
                       `📅 *Data:* ${formattedDueDate}\n\n` +
                       `💬 *Mensagem:*\n${item.message || "Mensagem..."}\n` +
                       (group1Extra ? `\n${group1Extra}\n` : "") +
@@ -638,11 +716,11 @@ export default function WhatsAppDispatchDialog({
         </div>
 
         {/* Footer com Ações */}
-        <div className="flex items-center justify-end gap-3 pt-2 border-t-2 border-black">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t-2 border-black">
           <button
             type="button"
             onClick={onClose}
-            className="nb-btn bg-white hover:bg-neutral-100 px-5 py-2.5 font-bold"
+            className="nb-btn bg-white hover:bg-neutral-100 px-5 min-h-[44px] font-bold"
             disabled={sending}
           >
             Cancelar
@@ -651,7 +729,7 @@ export default function WhatsAppDispatchDialog({
             type="button"
             onClick={handleSend}
             disabled={sending || !isConnected || (!sendG1 && !sendG2)}
-            className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 px-6 py-2.5 font-heading font-black flex items-center gap-2"
+            className="nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 px-6 min-h-[44px] font-heading font-black flex items-center justify-center gap-2"
             data-testid="confirm-whatsapp-dispatch-btn"
           >
             <Send className={`w-4 h-4 ${sending ? "animate-spin" : ""}`} />

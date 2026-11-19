@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import ModalPortal from "@/components/ModalPortal";
 import {
   FileArchive,
   Download,
@@ -7,38 +8,83 @@ import {
   CheckCircle2,
   AlertTriangle,
   FileSpreadsheet,
-  Users,
-  ListTodo,
   Image as ImageIcon,
   RefreshCw,
   Sparkles,
-  Info,
   Check,
-  ArrowRight,
   ShieldCheck,
   Database,
   CloudUpload,
   HardDrive,
   Clock,
-  FolderCheck
+  FolderCheck,
+  Trash2,
+  LogOut,
+  RotateCcw,
+  X,
 } from "lucide-react";
 import api from "@/lib/api";
-import { uploadBackupToDriveFolder } from "@/lib/googleDrive";
+import {
+  downloadDriveBackup,
+  deleteDriveBackup,
+  getDriveAccessToken,
+  listDriveBackups,
+} from "@/lib/googleDrive";
+import {
+  connectGoogleDriveAccount,
+  disconnectGoogleDriveAccount,
+  runGoogleDriveBackup,
+  updateAutoBackupConfig,
+  useAutoDriveBackup,
+} from "@/lib/autoBackupManager";
+
+const INTERVAL_OPTIONS = [
+  { value: 15, label: "A cada 15 minutos" },
+  { value: 30, label: "A cada 30 minutos" },
+  { value: 60, label: "A cada 1 hora" },
+  { value: 180, label: "A cada 3 horas" },
+  { value: 360, label: "A cada 6 horas" },
+  { value: 720, label: "A cada 12 horas" },
+  { value: 1440, label: "Diariamente (24 horas)" },
+];
+
+function formatBytesBR(bytesStr) {
+  const num = Number(bytesStr);
+  if (!Number.isFinite(num) || num <= 0) return "—";
+  if (num < 1024) return `${num} B`;
+  if (num < 1024 * 1024) return `${(num / 1024).toFixed(1)} KB`;
+  return `${(num / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function formatDateTimeBR(isoStr) {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    if (Number.isNaN(d.getTime())) return isoStr;
+    return `${d.toLocaleDateString("pt-BR")} às ${d.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
+  } catch {
+    return isoStr;
+  }
+}
 
 export default function ZipDataTransferPanel() {
-  // Drive & Export states
-  const [exporting, setExporting] = useState(false);
-  const [uploadingToDrive, setUploadingToDrive] = useState(false);
-  const [includeUploads, setIncludeUploads] = useState(true);
-  const [autoDriveBackup, setAutoDriveBackup] = useState(() => {
-    return localStorage.getItem("edutask_auto_drive_backup") === "true";
-  });
-  const [lastDriveBackup, setLastDriveBackup] = useState(() => {
-    return localStorage.getItem("edutask_last_drive_backup_time") || null;
-  });
+  // Shared Automatic Backup + Drive Auth state
+  const { config: autoConfig, backingUp, driveAuth } = useAutoDriveBackup(false);
 
-  // Check Drive access token
-  const driveToken = typeof window !== "undefined" ? localStorage.getItem("google_access_token") : null;
+  // Local Export & Drive list states
+  const [exporting, setExporting] = useState(false);
+  const [signingInDrive, setSigningInDrive] = useState(false);
+  const [includeUploads, setIncludeUploads] = useState(true);
+  const [savingAutoConfig, setSavingAutoConfig] = useState(false);
+
+  const [driveBackups, setDriveBackups] = useState([]);
+  const [loadingDriveList, setLoadingDriveList] = useState(false);
+  const [busyDriveFileId, setBusyDriveFileId] = useState(null);
+  const [confirmDeleteBackup, setConfirmDeleteBackup] = useState(null);
+  const [deletingDriveFile, setDeletingDriveFile] = useState(false);
 
   // Import states
   const [selectedFile, setSelectedFile] = useState(null);
@@ -64,61 +110,164 @@ export default function ZipDataTransferPanel() {
   const [optSettings, setOptSettings] = useState(true);
 
   const fileInputRef = useRef(null);
+  const importSectionRef = useRef(null);
 
-  // Toggle auto backup setting
-  const handleToggleAutoBackup = (val) => {
-    setAutoDriveBackup(val);
-    localStorage.setItem("edutask_auto_drive_backup", val ? "true" : "false");
-    toast.success(
-      val
-        ? "Backup automático para o Google Drive ATIVADO!"
-        : "Backup automático desativado."
-    );
-  };
-
-  // Upload backup directly to Google Drive ("EduTask Backups" folder)
-  const handleUploadToDrive = async () => {
-    const token = localStorage.getItem("google_access_token");
+  const refreshDriveBackups = useCallback(async (silent = false) => {
+    const token = getDriveAccessToken();
     if (!token) {
-      toast.error("Google Drive não está conectado nesta sessão. Conecte sua conta do Google primeiro.");
+      setDriveBackups([]);
       return;
     }
-
     try {
-      setUploadingToDrive(true);
-      toast.loading("Gerando pacote ZIP e enviando para a pasta 'EduTask Backups' no Google Drive...", { id: "drive-backup" });
-
-      const response = await api.get(
-        `/admin/zip/export?include_uploads=${includeUploads}&type=full`,
-        { responseType: "blob" }
-      );
-
-      const blob = new Blob([response.data], { type: "application/zip" });
-      const now = new Date();
-      const timestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}`;
-      const fileName = `edutask_backup_${timestampStr}.zip`;
-
-      const driveItem = await uploadBackupToDriveFolder(token, blob, fileName);
-
-      const timeFormatted = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-      const dateFormatted = now.toLocaleDateString("pt-BR");
-      const fullTimeStr = `${dateFormatted} às ${timeFormatted}`;
-
-      setLastDriveBackup(fullTimeStr);
-      localStorage.setItem("edutask_last_drive_backup_time", fullTimeStr);
-
-      toast.success(
-        `Backup enviado com sucesso para a pasta "EduTask Backups" no Google Drive! (${fileName})`,
-        { id: "drive-backup", duration: 5000 }
-      );
+      setLoadingDriveList(true);
+      const files = await listDriveBackups(token);
+      setDriveBackups(Array.isArray(files) ? files : []);
     } catch (err) {
-      console.error(err);
+      if (!silent) {
+        toast.error(err?.message || "Erro ao listar backups do Google Drive.");
+      }
+    } finally {
+      setLoadingDriveList(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (driveAuth.connected) {
+      refreshDriveBackups(true);
+    } else {
+      setDriveBackups([]);
+    }
+  }, [driveAuth.connected, refreshDriveBackups]);
+
+  useEffect(() => {
+    const onCompleted = () => {
+      if (driveAuth.connected) {
+        refreshDriveBackups(true);
+      }
+    };
+    window.addEventListener("edutask:drive-backup-completed", onCompleted);
+    return () => {
+      window.removeEventListener("edutask:drive-backup-completed", onCompleted);
+    };
+  }, [driveAuth.connected, refreshDriveBackups]);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setSigningInDrive(true);
+      const res = await connectGoogleDriveAccount();
+      toast.success(
+        `Google Drive conectado${res?.user?.email ? ` (${res.user.email})` : ""}!`
+      );
+      await refreshDriveBackups(true);
+    } catch (err) {
+      toast.error(err?.message || "Não foi possível conectar ao Google Drive.");
+    } finally {
+      setSigningInDrive(false);
+    }
+  };
+
+  const handleGoogleSignOut = async () => {
+    await disconnectGoogleDriveAccount();
+    setDriveBackups([]);
+    toast.info("Conta do Google Drive desconectada desta sessão.");
+  };
+
+  const handleUpdateAutoConfig = async (patch, successMsg) => {
+    try {
+      setSavingAutoConfig(true);
+      await updateAutoBackupConfig(patch);
+      if (successMsg) toast.success(successMsg);
+    } catch (err) {
       toast.error(
-        err.message || "Erro ao salvar backup no Google Drive. Verifique a conexão.",
-        { id: "drive-backup" }
+        err?.response?.data?.detail || "Erro ao salvar configuração de backup automático."
       );
     } finally {
-      setUploadingToDrive(false);
+      setSavingAutoConfig(false);
+    }
+  };
+
+  const handleUploadToDriveNow = async () => {
+    const result = await runGoogleDriveBackup("manual", includeUploads);
+    if (result.ok) {
+      await refreshDriveBackups(true);
+    }
+  };
+
+  const handleDownloadFromDrive = async (driveFile) => {
+    const token = getDriveAccessToken();
+    if (!token) {
+      toast.error("Conecte sua conta do Google Drive primeiro.");
+      return;
+    }
+    try {
+      setBusyDriveFileId(driveFile.id);
+      toast.loading(`Baixando "${driveFile.name}" do Google Drive...`, {
+        id: "drive-download",
+      });
+      const blob = await downloadDriveBackup(token, driveFile.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", driveFile.name || "edutask-backup.zip");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Backup baixado do Google Drive!", { id: "drive-download" });
+    } catch (err) {
+      toast.error(err?.message || "Erro ao baixar arquivo do Google Drive.", {
+        id: "drive-download",
+      });
+    } finally {
+      setBusyDriveFileId(null);
+    }
+  };
+
+  const handleLoadDriveBackupToRestore = async (driveFile) => {
+    const token = getDriveAccessToken();
+    if (!token) {
+      toast.error("Conecte sua conta do Google Drive primeiro.");
+      return;
+    }
+    try {
+      setBusyDriveFileId(driveFile.id);
+      toast.loading(`Carregando "${driveFile.name}" do Google Drive para inspeção...`, {
+        id: "drive-restore-preview",
+      });
+      const blob = await downloadDriveBackup(token, driveFile.id);
+      const zipFile = new File([blob], driveFile.name || "edutask_backup.zip", {
+        type: "application/zip",
+      });
+      toast.dismiss("drive-restore-preview");
+      await inspectSelectedZipFile(zipFile);
+      importSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (err) {
+      toast.error(err?.message || "Erro ao carregar backup do Google Drive.", {
+        id: "drive-restore-preview",
+      });
+    } finally {
+      setBusyDriveFileId(null);
+    }
+  };
+
+  const handleConfirmDeleteDriveBackup = async () => {
+    if (!confirmDeleteBackup) return;
+    const token = getDriveAccessToken();
+    if (!token) {
+      toast.error("Sessão do Google Drive expirada. Conecte-se novamente.");
+      setConfirmDeleteBackup(null);
+      return;
+    }
+    try {
+      setDeletingDriveFile(true);
+      await deleteDriveBackup(token, confirmDeleteBackup.id);
+      toast.success(`Backup "${confirmDeleteBackup.name}" excluído do Google Drive.`);
+      setConfirmDeleteBackup(null);
+      await refreshDriveBackups(true);
+    } catch (err) {
+      toast.error(err?.message || "Erro ao excluir backup no Google Drive.");
+    } finally {
+      setDeletingDriveFile(false);
     }
   };
 
@@ -153,16 +302,7 @@ export default function ZipDataTransferPanel() {
     }
   };
 
-  // Select and preview zip file
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.name.toLowerCase().endsWith(".zip")) {
-      toast.error("Por favor, selecione um arquivo no formato .zip");
-      return;
-    }
-
+  const inspectSelectedZipFile = async (file) => {
     setSelectedFile(file);
     setPreviewData(null);
     setImportResult(null);
@@ -189,6 +329,19 @@ export default function ZipDataTransferPanel() {
     } finally {
       setPreviewLoading(false);
     }
+  };
+
+  // Select and preview zip file
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      toast.error("Por favor, selecione um arquivo no formato .zip");
+      return;
+    }
+
+    await inspectSelectedZipFile(file);
   };
 
   // Perform import
@@ -247,118 +400,352 @@ export default function ZipDataTransferPanel() {
         <div className="min-w-0">
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-tight text-neutral-900">
-              Dados ZIP & Backup
+              Dados ZIP & Backup Automático
             </h1>
             <span className="nb-badge bg-emerald-100 text-emerald-950 font-bold text-xs inline-flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5" /> Compatibilidade Total
             </span>
           </div>
           <p className="text-sm text-neutral-600 mt-0.5 max-w-2xl">
-            Exporte seus dados em backup compactado <strong>.ZIP</strong> no Google Drive ou baixe diretamente no dispositivo.
+            Ative o backup automático no <strong>Google Drive</strong>, envie cópias instantâneas ou baixe pacotes <strong>.ZIP</strong> completos no dispositivo.
           </p>
         </div>
       </div>
 
-      {/* CARD ESPECIAL: BACKUP AUTOMÁTICO E MANUAL NO GOOGLE DRIVE */}
-      <div className="nb-card p-5 sm:p-6 bg-gradient-to-br from-amber-100 via-amber-50 to-yellow-100 border-2 border-black space-y-4" data-testid="drive-backup-section">
-        <div className="flex items-center justify-between gap-3 flex-wrap border-b-2 border-black/10 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-300 border-2 border-black flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#000]">
+      {/* CARD ESPECIAL: BACKUP AUTOMÁTICO E DIRETO NO GOOGLE DRIVE */}
+      <div
+        className="nb-card p-4 sm:p-6 bg-gradient-to-br from-amber-100 via-amber-50 to-yellow-100 border-2 border-black space-y-5"
+        data-testid="drive-backup-section"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-black/10 pb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-amber-300 border-2 border-black flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#000] flex-shrink-0">
               <HardDrive className="w-5 h-5 text-amber-950" />
             </div>
-            <div>
-              <h3 className="font-heading font-black text-lg text-neutral-900 flex items-center gap-2">
-                Backup Automático & Direto no Google Drive
+            <div className="min-w-0">
+              <h3 className="font-heading font-black text-lg text-neutral-900 leading-tight">
+                Backup Automático no Google Drive
               </h3>
-              <p className="text-xs text-neutral-700">
-                Cria e sincroniza automaticamente arquivos na pasta <strong>"EduTask Backups"</strong> no seu Google Drive.
+              <p className="text-xs text-neutral-700 mt-0.5">
+                Salva cópias automáticas e manuais na pasta <strong>"EduTask Backups"</strong> do seu Google Drive.
               </p>
             </div>
           </div>
 
-          <span className={`nb-badge ${driveToken ? "bg-emerald-300 text-emerald-950" : "bg-amber-200 text-amber-950"} border border-black text-xs font-black flex items-center gap-1.5`}>
-            {driveToken ? (
+          <div className="flex items-center gap-2 flex-wrap self-start sm:self-center">
+            {driveAuth.connected ? (
               <>
-                <FolderCheck className="w-4 h-4 text-emerald-900" />
-                Drive Conectado
+                <span
+                  className="nb-badge bg-emerald-300 text-emerald-950 border border-black text-xs font-black inline-flex items-center gap-1.5"
+                  data-testid="drive-connected-badge"
+                >
+                  <FolderCheck className="w-4 h-4 text-emerald-900" />
+                  {driveAuth.user?.email || "Google Drive Conectado"}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleGoogleSignOut}
+                  className="nb-btn bg-white hover:bg-rose-50 text-neutral-800 px-3 min-h-[40px] text-xs font-bold inline-flex items-center gap-1.5"
+                  data-testid="drive-signout-button"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Desconectar</span>
+                </button>
               </>
             ) : (
-              <>
-                <AlertTriangle className="w-4 h-4 text-amber-900" />
-                Drive Pronto / Selecionável
-              </>
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={signingInDrive}
+                className="gsi-material-button inline-flex items-center gap-2.5 bg-white hover:bg-neutral-50 text-neutral-900 border-2 border-black rounded-xl px-3.5 min-h-[44px] font-bold text-xs shadow-[2px_2px_0px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer disabled:opacity-60"
+                data-testid="google-drive-signin-button"
+              >
+                <span className="w-5 h-5 flex-shrink-0 inline-flex items-center justify-center">
+                  <svg
+                    version="1.1"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 48 48"
+                    style={{ display: "block", width: "18px", height: "18px" }}
+                  >
+                    <path
+                      fill="#EA4335"
+                      d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+                    />
+                    <path
+                      fill="#4285F4"
+                      d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+                    />
+                    <path fill="none" d="M0 0h48v48H0z" />
+                  </svg>
+                </span>
+                <span>
+                  {signingInDrive ? "Conectando Google..." : "Sign in with Google"}
+                </span>
+              </button>
             )}
-          </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Opção 1: Backup Direto no Drive */}
+          {/* Opção 1: Regras e Agendamento Automático */}
           <div className="bg-white p-4 rounded-xl border-2 border-black flex flex-col justify-between space-y-3">
-            <div>
-              <div className="flex items-center justify-between">
+            <div className="space-y-3">
+              <label className="flex items-center justify-between gap-3 cursor-pointer">
                 <span className="font-heading font-black text-sm text-neutral-900 flex items-center gap-1.5">
-                  <CloudUpload className="w-4 h-4 text-sky-600" />
-                  Enviar Backup para o Google Drive
+                  <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  Ativar Backup Automático no Drive
+                </span>
+                <input
+                  type="checkbox"
+                  checked={Boolean(autoConfig.enabled)}
+                  disabled={savingAutoConfig}
+                  onChange={(e) =>
+                    handleUpdateAutoConfig(
+                      { enabled: e.target.checked },
+                      e.target.checked
+                        ? "Backup automático no Google Drive ATIVADO!"
+                        : "Backup automático no Google Drive desativado."
+                    )
+                  }
+                  className="w-5 h-5 accent-amber-500 cursor-pointer flex-shrink-0"
+                  data-testid="toggle-auto-drive-backup"
+                />
+              </label>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="auto-backup-interval-select"
+                  className="block text-xs font-bold text-neutral-700"
+                >
+                  Frequência do envio automático:
+                </label>
+                <select
+                  id="auto-backup-interval-select"
+                  value={autoConfig.interval_minutes || 60}
+                  disabled={savingAutoConfig}
+                  onChange={(e) =>
+                    handleUpdateAutoConfig(
+                      { interval_minutes: Number(e.target.value) },
+                      "Frequência de backup automático atualizada!"
+                    )
+                  }
+                  className="nb-input w-full text-xs font-bold min-h-[42px]"
+                  data-testid="select-auto-backup-interval"
+                >
+                  {INTERVAL_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <label className="flex items-start gap-2 cursor-pointer text-xs text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={autoConfig.backup_on_changes !== false}
+                  disabled={savingAutoConfig}
+                  onChange={(e) =>
+                    handleUpdateAutoConfig(
+                      { backup_on_changes: e.target.checked },
+                      "Backup após alterações atualizado!"
+                    )
+                  }
+                  className="mt-0.5 w-4 h-4 accent-amber-500 cursor-pointer flex-shrink-0"
+                  data-testid="toggle-auto-backup-on-changes"
+                />
+                <span>
+                  Gerar backup automático após alterações importantes (tarefas, resumos, alunos e cronograma)
+                </span>
+              </label>
+
+              <label className="flex items-start gap-2 cursor-pointer text-xs text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={autoConfig.include_uploads !== false}
+                  disabled={savingAutoConfig}
+                  onChange={(e) =>
+                    handleUpdateAutoConfig(
+                      { include_uploads: e.target.checked },
+                      "Preferência de anexos no backup automático salva!"
+                    )
+                  }
+                  className="mt-0.5 w-4 h-4 accent-amber-500 cursor-pointer flex-shrink-0"
+                  data-testid="toggle-auto-backup-uploads"
+                />
+                <span>
+                  Incluir pasta <code className="bg-neutral-100 px-1 rounded">uploads/</code> (fotos, PDFs e anexos)
+                </span>
+              </label>
+            </div>
+
+            {autoConfig.enabled && !driveAuth.connected && (
+              <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-300 text-[11px] text-amber-950 font-semibold flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
+                <span>
+                  Backup automático está ligado. Clique em <strong>Sign in with Google</strong> acima para autorizar os envios automáticos nesta sessão.
                 </span>
               </div>
-              <p className="text-xs text-neutral-600 mt-1">
-                Envia um arquivo <code className="bg-amber-100 px-1 py-0.5 rounded font-bold">edutask_backup_*.zip</code> direto para a pasta <strong>EduTask Backups</strong> no seu Drive.
+            )}
+          </div>
+
+          {/* Opção 2: Envio Imediato & Último Status */}
+          <div className="bg-white p-4 rounded-xl border-2 border-black flex flex-col justify-between space-y-3">
+            <div className="space-y-2">
+              <span className="font-heading font-black text-sm text-neutral-900 flex items-center gap-1.5">
+                <CloudUpload className="w-4 h-4 text-sky-600" />
+                Enviar Backup para o Google Drive
+              </span>
+              <p className="text-xs text-neutral-600">
+                Envia imediatamente um pacote <code className="bg-amber-100 px-1 py-0.5 rounded font-bold">edutask_backup_*.zip</code> para a pasta <strong>EduTask Backups</strong> no seu Google Drive.
               </p>
-              {lastDriveBackup && (
-                <div className="mt-2 text-[11px] text-emerald-800 font-bold flex items-center gap-1 bg-emerald-50 p-1.5 rounded border border-emerald-200">
-                  <Clock className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Último envio: {lastDriveBackup}</span>
+
+              {autoConfig.last_backup_at ? (
+                <div
+                  className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-[11px] text-emerald-900 space-y-1"
+                  data-testid="last-drive-backup-info"
+                >
+                  <div className="font-bold flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0" />
+                    <span>Último backup: {formatDateTimeBR(autoConfig.last_backup_at)}</span>
+                  </div>
+                  {autoConfig.last_backup_filename && (
+                    <div className="truncate opacity-85">
+                      Arquivo: <strong>{autoConfig.last_backup_filename}</strong>
+                    </div>
+                  )}
+                  <div className="opacity-75">
+                    Total enviados no Drive: <strong>{autoConfig.total_backups_sent || 0}</strong>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-lg border border-neutral-200 bg-neutral-50 text-[11px] text-neutral-600">
+                  Nenhum backup enviado ao Google Drive ainda nesta base.
+                </div>
+              )}
+
+              {autoConfig.last_backup_status === "error" && autoConfig.last_backup_error && (
+                <div className="p-2 rounded-lg border border-rose-200 bg-rose-50 text-[11px] text-rose-800 font-medium">
+                  Último aviso: {autoConfig.last_backup_error}
                 </div>
               )}
             </div>
 
             <button
-              onClick={handleUploadToDrive}
-              disabled={uploadingToDrive}
-              className="w-full nb-btn bg-amber-300 hover:bg-amber-400 text-neutral-950 py-2.5 text-xs font-black flex items-center justify-center gap-2 border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-x-[1px] active:translate-y-[1px]"
+              type="button"
+              onClick={handleUploadToDriveNow}
+              disabled={backingUp}
+              className="w-full nb-btn bg-amber-300 hover:bg-amber-400 text-neutral-950 min-h-[44px] py-2.5 text-xs font-black flex items-center justify-center gap-2 border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-x-[1px] active:translate-y-[1px]"
               data-testid="upload-drive-backup-button"
             >
-              {uploadingToDrive ? (
+              {backingUp ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin text-amber-900" />
-                  Enviando para Pasta "EduTask Backups"...
+                  <span>Enviando para Pasta "EduTask Backups"...</span>
                 </>
               ) : (
                 <>
                   <CloudUpload className="w-4 h-4" />
-                  Fazer Backup no Google Drive Agora
+                  <span>Fazer Backup no Google Drive Agora</span>
                 </>
               )}
             </button>
           </div>
-
-          {/* Opção 2: Configuração de Sincronização Automática */}
-          <div className="bg-white p-4 rounded-xl border-2 border-black flex flex-col justify-between space-y-3">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="font-heading font-black text-sm text-neutral-900 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-amber-600" />
-                  Salvamento Automático no Drive
-                </span>
-                <input
-                  type="checkbox"
-                  checked={autoDriveBackup}
-                  onChange={(e) => handleToggleAutoBackup(e.target.checked)}
-                  className="w-4 h-4 accent-amber-500 cursor-pointer"
-                  data-testid="toggle-auto-drive-backup"
-                />
-              </div>
-              <p className="text-xs text-neutral-600 mt-1">
-                Quando ativado, cada atualização importante no sistema gera e envia a cópia para a pasta do Google Drive.
-              </p>
-            </div>
-
-            <div className="p-2 bg-amber-50 rounded-lg border border-amber-300 text-[11px] text-amber-950 font-medium flex items-center gap-1.5">
-              <Info className="w-3.5 h-3.5 text-amber-800 flex-shrink-0" />
-              <span>Você também pode guardar o arquivo localmente baixando o arquivo .ZIP no seu dispositivo abaixo!</span>
-            </div>
-          </div>
         </div>
+
+        {/* Lista de backups armazenados na pasta EduTask Backups (visível quando conectado) */}
+        {driveAuth.connected && (
+          <div className="bg-white p-4 rounded-xl border-2 border-black space-y-3" data-testid="drive-backups-list-card">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <h4 className="font-heading font-black text-sm text-neutral-900">
+                  Cópias na Pasta "EduTask Backups"
+                </h4>
+                <p className="text-[11px] text-neutral-600">
+                  Baixe ou restaure diretamente qualquer backup salvo no seu Google Drive.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => refreshDriveBackups(false)}
+                disabled={loadingDriveList}
+                className="nb-btn bg-neutral-100 hover:bg-neutral-200 text-neutral-900 px-3 min-h-[38px] text-xs font-bold inline-flex items-center gap-1.5"
+                data-testid="refresh-drive-backups-btn"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingDriveList ? "animate-spin" : ""}`} />
+                <span>Atualizar lista</span>
+              </button>
+            </div>
+
+            {loadingDriveList ? (
+              <div className="py-4 text-center text-xs font-bold text-neutral-500 flex items-center justify-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin" /> Carregando backups do Google Drive...
+              </div>
+            ) : driveBackups.length === 0 ? (
+              <div className="py-4 text-center text-xs text-neutral-500 bg-neutral-50 rounded-lg border border-dashed border-neutral-300">
+                Nenhum arquivo encontrado ainda na pasta "EduTask Backups".
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {driveBackups.map((item) => {
+                  const isBusy = busyDriveFileId === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-2.5 rounded-lg border border-neutral-200 bg-neutral-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs text-neutral-900 truncate">
+                          {item.name}
+                        </div>
+                        <div className="text-[11px] text-neutral-500">
+                          {item.createdTime ? formatDateTimeBR(item.createdTime) : "—"} · {formatBytesBR(item.size)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap flex-shrink-0">
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => handleLoadDriveBackupToRestore(item)}
+                          className="nb-btn bg-emerald-200 hover:bg-emerald-300 text-emerald-950 px-2.5 min-h-[36px] text-[11px] font-bold inline-flex items-center gap-1"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Restaurar</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => handleDownloadFromDrive(item)}
+                          className="nb-btn bg-white hover:bg-sky-50 text-neutral-900 px-2.5 min-h-[36px] text-[11px] font-bold inline-flex items-center gap-1"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Baixar</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => setConfirmDeleteBackup(item)}
+                          className="nb-btn bg-white hover:bg-rose-100 text-rose-700 px-2.5 min-h-[36px] text-[11px] font-bold inline-flex items-center gap-1"
+                          aria-label={`Excluir ${item.name}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -380,11 +767,11 @@ export default function ZipDataTransferPanel() {
               <ul className="text-xs space-y-2 text-neutral-700">
                 <li className="flex items-center gap-2">
                   <Database className="w-4 h-4 text-sky-600 flex-shrink-0" />
-                  <span><strong>edutask_backup.json</strong> (Alunos, Tarefas, Matérias, Resumos e Tópicos, Avisos e Comentários, Cronograma de Aula, Botões de Alunos, Molduras, Push/IA, WhatsApp, Ciclo Mensal/Anual e Ajustes de Pontos)</span>
+                  <span><strong>edutask_backup.json</strong> (Alunos, Tarefas, Matérias, Resumos, Avisos e Comentários, Cronograma de Aula, Botões de Alunos, Molduras, Push/IA, WhatsApp, Backup Automático, Ciclo Mensal/Anual e Ajustes de Pontos)</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                  <span><strong>Planilhas CSV</strong> (Alunos, Matérias, Tarefas, Entregas, Avisos, Resumos, Tópicos, Botões de Alunos, Cronograma Semanal e Ajustes de Pontos)</span>
+                  <span><strong>Planilhas CSV</strong> (Alunos, Matérias, Tarefas, Entregas, Avisos, Resumos, Botões de Alunos, Cronograma Semanal e Ajustes de Pontos)</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <ImageIcon className="w-4 h-4 text-amber-600 flex-shrink-0" />
@@ -401,7 +788,7 @@ export default function ZipDataTransferPanel() {
                   onChange={(e) => setIncludeUploads(e.target.checked)}
                   className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500"
                 />
-                <span>Incluir fotos de perfis e anexos de tarefas na pasta <code className="bg-neutral-200 px-1 py-0.5 rounded">uploads/</code></span>
+                <span>Incluir fotos de perfis e anexos na pasta <code className="bg-neutral-200 px-1 py-0.5 rounded">uploads/</code></span>
               </label>
             </div>
           </div>
@@ -410,7 +797,7 @@ export default function ZipDataTransferPanel() {
             <button
               onClick={handleExportZip}
               disabled={exporting}
-              className="w-full nb-btn bg-sky-400 hover:bg-sky-500 text-neutral-950 py-3 font-black text-sm flex items-center justify-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px]"
+              className="w-full nb-btn bg-sky-400 hover:bg-sky-500 text-neutral-950 min-h-[44px] py-3 font-black text-sm flex items-center justify-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px]"
               data-testid="export-zip-button"
             >
               {exporting ? (
@@ -432,7 +819,10 @@ export default function ZipDataTransferPanel() {
         </div>
 
         {/* SEÇÃO 2: IMPORTAÇÃO E MIGRAÇÃO ZIP */}
-        <div className="nb-card p-5 sm:p-6 bg-white space-y-5 border-2 border-black">
+        <div
+          ref={importSectionRef}
+          className="nb-card p-5 sm:p-6 bg-white space-y-5 border-2 border-black"
+        >
           <div className="flex items-center gap-2 pb-2 border-b-2 border-black/10">
             <div className="w-9 h-9 rounded-lg bg-emerald-200 border-2 border-black flex items-center justify-center font-black">
               <UploadCloud className="w-5 h-5 text-emerald-950" />
@@ -467,7 +857,7 @@ export default function ZipDataTransferPanel() {
           ) : (
             <div className="space-y-4">
               {/* Arquivo Selecionado */}
-              <div className="p-3 bg-neutral-100 rounded-xl border-2 border-black flex items-center justify-between">
+              <div className="p-3 bg-neutral-100 rounded-xl border-2 border-black flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5 overflow-hidden">
                   <FileArchive className="w-6 h-6 text-sky-600 flex-shrink-0" />
                   <div className="min-w-0">
@@ -477,7 +867,7 @@ export default function ZipDataTransferPanel() {
                 </div>
                 <button
                   onClick={resetImport}
-                  className="nb-btn bg-white hover:bg-red-100 text-neutral-700 px-2 py-1 text-xs"
+                  className="nb-btn bg-white hover:bg-red-100 text-neutral-700 px-3 min-h-[36px] text-xs flex-shrink-0"
                 >
                   Trocar arquivo
                 </button>
@@ -513,10 +903,6 @@ export default function ZipDataTransferPanel() {
                       <p className="text-[10px] text-neutral-500 font-bold">Resumos</p>
                     </div>
                     <div className="p-2 bg-white rounded-lg border border-black/10">
-                      <p className="font-black text-base text-fuchsia-600">{previewData.counts.summary_topics ?? 0}</p>
-                      <p className="text-[10px] text-neutral-500 font-bold">Tópicos</p>
-                    </div>
-                    <div className="p-2 bg-white rounded-lg border border-black/10">
                       <p className="font-black text-base text-rose-600">{previewData.counts.announcements ?? 0}</p>
                       <p className="text-[10px] text-neutral-500 font-bold">Avisos</p>
                     </div>
@@ -532,9 +918,9 @@ export default function ZipDataTransferPanel() {
                       <p className="font-black text-base text-orange-600">{previewData.counts.subjects ?? 0}</p>
                       <p className="text-[10px] text-neutral-500 font-bold">Matérias</p>
                     </div>
-                    <div className="p-2 bg-white rounded-lg border border-black/10">
+                    <div className="p-2 bg-white rounded-lg border border-black/10 col-span-2 sm:col-span-2">
                       <p className="font-black text-base text-emerald-600">{previewData.counts.uploads}</p>
-                      <p className="text-[10px] text-neutral-500 font-bold">Arquivos/Fotos</p>
+                      <p className="text-[10px] text-neutral-500 font-bold">Arquivos / Fotos / PDFs</p>
                     </div>
                   </div>
 
@@ -611,7 +997,7 @@ export default function ZipDataTransferPanel() {
                           onChange={(e) => setOptSummaries(e.target.checked)}
                           className="rounded text-purple-600"
                         />
-                        <span>Resumos e Tópicos ({previewData.counts.summaries ?? 0} res. / {previewData.counts.summary_topics ?? 0} tóp.)</span>
+                        <span>Resumos ({previewData.counts.summaries ?? 0})</span>
                       </label>
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input
@@ -692,7 +1078,7 @@ export default function ZipDataTransferPanel() {
                           onChange={(e) => setOptSettings(e.target.checked)}
                           className="rounded text-neutral-700"
                         />
-                        <span>Configurações do Sistema (Notificações Push, IA & Limpeza)</span>
+                        <span>Configurações do Sistema (Backup Automático, Notificações Push, IA & Limpeza)</span>
                       </label>
                     </div>
                   </div>
@@ -701,7 +1087,7 @@ export default function ZipDataTransferPanel() {
                   <button
                     onClick={handleImportZip}
                     disabled={importing}
-                    className="w-full nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 py-2.5 font-black text-sm flex items-center justify-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px]"
+                    className="w-full nb-btn bg-emerald-400 hover:bg-emerald-500 text-emerald-950 min-h-[44px] py-2.5 font-black text-sm flex items-center justify-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px]"
                     data-testid="confirm-import-zip-button"
                   >
                     {importing ? (
@@ -731,7 +1117,7 @@ export default function ZipDataTransferPanel() {
                     <p>• {importResult.imported.tasks} tarefas importadas.</p>
                     <p>• {importResult.imported.subjects} matérias organizadas.</p>
                     {importResult.imported.summaries !== undefined && (
-                      <p>• {importResult.imported.summaries} resumos e {importResult.imported.summary_topics ?? 0} tópicos restaurados.</p>
+                      <p>• {importResult.imported.summaries} resumos restaurados.</p>
                     )}
                     {importResult.imported.announcements !== undefined && (
                       <p>• {importResult.imported.announcements} avisos e {importResult.imported.comments ?? 0} comentários restaurados.</p>
@@ -747,16 +1133,16 @@ export default function ZipDataTransferPanel() {
                     )}
                     <p>• {importResult.imported.files} arquivos de mídia, PDFs e fotos extraídos.</p>
                   </div>
-                  <div className="flex gap-2 pt-1">
+                  <div className="flex gap-2 pt-1 flex-wrap">
                     <button
                       onClick={() => window.location.reload()}
-                      className="nb-btn bg-white hover:bg-emerald-50 text-emerald-950 px-3 py-1.5 text-xs font-bold flex items-center gap-1"
+                      className="nb-btn bg-white hover:bg-emerald-50 text-emerald-950 px-3 min-h-[40px] text-xs font-bold flex items-center gap-1"
                     >
                       <RefreshCw className="w-3.5 h-3.5" /> Atualizar Painel
                     </button>
                     <button
                       onClick={resetImport}
-                      className="nb-btn bg-emerald-200 hover:bg-emerald-300 text-emerald-950 px-3 py-1.5 text-xs font-bold"
+                      className="nb-btn bg-emerald-200 hover:bg-emerald-300 text-emerald-950 px-3 min-h-[40px] text-xs font-bold"
                     >
                       Importar outro arquivo
                     </button>
@@ -767,6 +1153,84 @@ export default function ZipDataTransferPanel() {
           )}
         </div>
       </div>
+
+      {/* Modal de Confirmação Explícita para Excluir Backup do Google Drive */}
+      {confirmDeleteBackup && (
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[1px] flex items-end sm:items-center justify-center p-0 sm:p-4"
+            data-testid="confirm-delete-drive-backup-modal"
+          >
+            <div className="nb-card bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 border-2 border-black shadow-[6px_6px_0_0_#000] space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-rose-100 border-2 border-black flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-rose-700" />
+                  </div>
+                  <div>
+                    <h3 className="font-heading font-black text-base text-neutral-900">
+                      Excluir backup do Google Drive?
+                    </h3>
+                    <p className="text-xs text-neutral-600">
+                      Esta ação removerá o arquivo da pasta "EduTask Backups".
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteBackup(null)}
+                  className="nb-btn bg-white hover:bg-neutral-100 p-2 min-w-[38px] min-h-[38px]"
+                  aria-label="Fechar"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 text-xs space-y-1">
+                <div className="font-bold text-neutral-900 break-all">
+                  {confirmDeleteBackup.name}
+                </div>
+                <div className="text-neutral-500">
+                  {confirmDeleteBackup.createdTime
+                    ? formatDateTimeBR(confirmDeleteBackup.createdTime)
+                    : "Data desconhecida"}{" "}
+                  · {formatBytesBR(confirmDeleteBackup.size)}
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteBackup(null)}
+                  disabled={deletingDriveFile}
+                  className="nb-btn bg-white hover:bg-neutral-100 text-neutral-900 px-4 min-h-[44px] text-xs font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteDriveBackup}
+                  disabled={deletingDriveFile}
+                  className="nb-btn bg-rose-500 hover:bg-rose-600 text-white px-4 min-h-[44px] text-xs font-black inline-flex items-center justify-center gap-1.5"
+                  data-testid="confirm-delete-drive-backup-btn"
+                >
+                  {deletingDriveFile ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Excluindo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Confirmar Exclusão</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
     </div>
   );
 }
